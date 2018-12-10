@@ -1,0 +1,66 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: k8s-athenz-istio-auth
+  name: k8s-athenz-istio-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-athenz-istio-auth
+  strategy:
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 50%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: k8s-athenz-istio-auth
+    spec:
+      initContainers:
+      - image: local/k8s-athenz-sia
+        imagePullPolicy: IfNotPresent
+        name: sia-init-v3
+        command: ["/usr/bin/athenz-sia"]
+        args: [ "--mode=init", "--endpoint=unix:///identity/connect/agent.sock" ]
+        env:
+        - { name: NAMESPACE, valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
+        - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+        - { name: POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+        - { name: SERVICEACCOUNT, valueFrom: { fieldRef: { fieldPath: spec.serviceAccountName } } }
+        - { name: POD_IP, valueFrom: { fieldRef: { fieldPath: status.podIP } } }
+        - { name: HOST_IP, valueFrom: { fieldRef: { fieldPath: status.hostIP } } }
+        - { name: NODE_NAME, valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }
+        resources: { limits: { cpu: 10m, memory: 100Mi}, requests: { cpu: 10m, memory: 100Mi }}
+        volumeMounts:
+        - { name: tls-certs, mountPath: /var/run/athenz }
+        - { name: sia-identity, mountPath: /identity, readOnly: true}
+      serviceAccountName: k8s-athenz-istio-auth
+      containers:
+      - image: local/k8s-athenz-sia
+        imagePullPolicy: IfNotPresent
+        name: sia-v3
+        command: ["/usr/bin/athenz-sia"]
+        args: [ "--mode=refresh", "--endpoint=unix:///identity/connect/agent.sock"]
+        env:
+        - { name: NAMESPACE, valueFrom: { fieldRef: { fieldPath: metadata.namespace } } }
+        - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+        - { name: POD_UID, valueFrom: { fieldRef: { fieldPath: metadata.uid } } }
+        - { name: SERVICEACCOUNT, valueFrom: { fieldRef: { fieldPath: spec.serviceAccountName } } }
+        - { name: POD_IP, valueFrom: { fieldRef: { fieldPath: status.podIP } } }
+        - { name: HOST_IP, valueFrom: { fieldRef: { fieldPath: status.hostIP } } }
+        - { name: NODE_NAME, valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }
+        resources: { limits: { cpu: 10m, memory: 100Mi}, requests: { cpu: 10m, memory: 100Mi }}
+        volumeMounts:
+        - { name: tls-certs, mountPath: /var/run/athenz }
+        - { name: sia-identity, mountPath: /identity, readOnly: true}
+      - name: k8s-athenz-istio-auth
+        image: local/k8s-athenz-istio-auth
+        args: [ "--zms-url=replace-me" ]
+        volumeMounts:
+        - { name: tls-certs, mountPath: /var/run/athenz, readOnly: true }
+      volumes:
+      - { name: tls-certs, emptyDir: {} }
+      - { name: sia-identity, flexVolume: { driver: "athenz.kubernetes.io/athenz-volume-driver", readOnly: true }}
