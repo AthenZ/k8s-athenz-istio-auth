@@ -128,12 +128,8 @@ make GET requests.
 
 Please refer to [the contributing.md file](Contributing.md) for information about how to get involved. We welcome issues, questions, and pull requests.
 
-## Maintainers
-Michael Cieplak: mcieplak@oath.com
-
-Mrunmayi Dhume: mdhume@oath.com
-
-Prabu Shyam: prabushyam@oath.com
+## Maintainers/Contacts
+Core Team : omega-core@oath.com
 
 ## License
 Copyright 2018 Oath Inc. Licensed under the terms of the 3-Clause BSD License.
