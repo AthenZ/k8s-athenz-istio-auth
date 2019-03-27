@@ -18,6 +18,8 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 )
 
+const emptyPath = "empty-path"
+
 var client *crd.Client
 
 func init() {
@@ -61,9 +63,20 @@ func createServiceRole(namespace, role string, policy *zms.Policy) (model.Config
 		Namespace: namespace,
 	}
 
-	methods := make([]string, 0)
+	pathToMethods := make(map[string][]string)
 	for _, assertion := range policy.Assertions {
-		methods = append(methods, strings.ToUpper(assertion.Action))
+		key := emptyPath
+		// split role and path from assertion resource, ex: role:/details*
+		path := strings.Split(assertion.Resource, ":")
+		if len(path) >= 2 && path[1] != "" {
+			key = path[1]
+		}
+
+		if methods, exists := pathToMethods[key]; !exists {
+			pathToMethods[key] = []string{strings.ToUpper(assertion.Action)}
+		} else {
+			pathToMethods[key] = append(methods, strings.ToUpper(assertion.Action))
+		}
 	}
 
 	// ex: sa.namespace.svc.cluster.local
@@ -78,8 +91,20 @@ func createServiceRole(namespace, role string, policy *zms.Policy) (model.Config
 	}
 
 	service := sa + "." + namespace + ".svc.cluster.local"
+
+	rules := make([]*v1alpha1.AccessRule, 0)
+	for path, methods := range pathToMethods {
+		var rule *v1alpha1.AccessRule
+		if path == emptyPath {
+			rule = &v1alpha1.AccessRule{Services: []string{service}, Methods: methods}
+		} else {
+			rule = &v1alpha1.AccessRule{Services: []string{service}, Methods: methods, Paths: []string{path}}
+		}
+		rules = append(rules, rule)
+	}
+
 	serviceRole := &v1alpha1.ServiceRole{
-		Rules: []*v1alpha1.AccessRule{{Services: []string{service}, Methods: methods}},
+		Rules: rules,
 	}
 
 	return configMeta, serviceRole, nil

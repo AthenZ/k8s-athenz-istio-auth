@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	certFile := flag.String("cert", "var/run/athenz/service.cert.pem",
+	certFile := flag.String("cert", "/var/run/athenz/service.cert.pem",
 		"path to X.509 certificate file to use for zms authentication")
 	keyFile := flag.String("key", "/var/run/athenz/service.key.pem",
 		"path to private key file for zms authentication")
