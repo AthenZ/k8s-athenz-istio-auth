@@ -20,6 +20,7 @@ import (
 type Controller struct {
 	NamespaceIndexer cache.Indexer
 	PollInterval     time.Duration
+	DNSSuffix        string
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -83,7 +84,7 @@ func (c *Controller) sync() error {
 			serviceRole, exists := serviceRoleMap[roleName+"-"+namespace]
 			if !exists {
 				log.Println("Service role", roleName, "does not exist, creating...")
-				err := servicerole.CreateServiceRole(namespace, roleName, role.Policy)
+				err := servicerole.CreateServiceRole(namespace, c.DNSSuffix, roleName, role.Policy)
 				if err != nil {
 					log.Println("Error creating service role:", err)
 					continue
@@ -94,7 +95,7 @@ func (c *Controller) sync() error {
 
 			log.Println("Service role", roleName, "already exists, updating...")
 			serviceRole.Processed = true
-			updated, err := servicerole.UpdateServiceRole(serviceRole.ServiceRole, roleName, role.Policy)
+			updated, err := servicerole.UpdateServiceRole(serviceRole.ServiceRole, c.DNSSuffix, roleName, role.Policy)
 			if err != nil {
 				log.Println("Error updating service role:", err)
 				continue

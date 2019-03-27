@@ -31,7 +31,7 @@ func TestCreateServiceRole(t *testing.T) {
 		},
 	}
 
-	configMeta, serviceRole, err := createServiceRole("my-domain", "my.domain.details", policy)
+	configMeta, serviceRole, err := createServiceRole("my-domain", "svc.cluster.local", "my.domain.details", policy)
 
 	a := assert.New(t)
 	a.Equal("my.domain.details", configMeta.Name)
@@ -41,9 +41,9 @@ func TestCreateServiceRole(t *testing.T) {
 	a.Equal(serviceRole.Rules[0].Paths, []string{"/details"})
 	a.Equal(nil, err)
 
-	_, _, err = createServiceRole("my-domain", "", policy)
+	_, _, err = createServiceRole("my-domain", "svc.cluster.local", "", policy)
 	a.Equal(errors.New("Error splitting on . character"), err)
 
-	_, _, err = createServiceRole("my-domain", "foobar.", policy)
+	_, _, err = createServiceRole("my-domain", "svc.cluster.local", "foobar.", policy)
 	a.Equal(errors.New("Could not get sa from role: foobar."), err)
 }
