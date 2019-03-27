@@ -18,8 +18,14 @@ func TestCreateServiceRole(t *testing.T) {
 		Assertions: []*zms.Assertion{
 			{
 				Role:     "my.domain.details:role.",
-				Resource: "my.domain.details:",
+				Resource: "my.domain.details:/details",
 				Action:   "get",
+				Effect:   &allow,
+			},
+			{
+				Role:     "my.domain.details:role.",
+				Resource: "my.domain.details:/details",
+				Action:   "post",
 				Effect:   &allow,
 			},
 		},
@@ -31,7 +37,8 @@ func TestCreateServiceRole(t *testing.T) {
 	a.Equal("my.domain.details", configMeta.Name)
 	a.Equal("my-domain", configMeta.Namespace)
 	a.Equal(serviceRole.Rules[0].Services, []string{"details.my-domain.svc.cluster.local"})
-	a.Equal(serviceRole.Rules[0].Methods, []string{"GET"})
+	a.Equal(serviceRole.Rules[0].Methods, []string{"GET", "POST"})
+	a.Equal(serviceRole.Rules[0].Paths, []string{"/details"})
 	a.Equal(nil, err)
 
 	_, _, err = createServiceRole("my-domain", "", policy)
