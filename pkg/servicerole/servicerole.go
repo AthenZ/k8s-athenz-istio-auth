@@ -54,7 +54,7 @@ func GetServiceRoleMap() (map[string]*ServiceRoleInfo, error) {
 }
 
 // createServiceRole will construct the config meta and service role objects
-func createServiceRole(namespace, role string, policy *zms.Policy) (model.ConfigMeta, *v1alpha1.ServiceRole, error) {
+func createServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) (model.ConfigMeta, *v1alpha1.ServiceRole, error) {
 	configMeta := model.ConfigMeta{
 		Type:      model.ServiceRole.Type,
 		Name:      role,
@@ -90,7 +90,7 @@ func createServiceRole(namespace, role string, policy *zms.Policy) (model.Config
 		return configMeta, nil, errors.New("Could not get sa from role: " + role)
 	}
 
-	service := sa + "." + namespace + ".svc.cluster.local"
+	service := sa + "." + namespace + "." + dnsSuffix
 
 	rules := make([]*v1alpha1.AccessRule, 0)
 	for path, methods := range pathToMethods {
@@ -111,8 +111,8 @@ func createServiceRole(namespace, role string, policy *zms.Policy) (model.Config
 }
 
 // CreateServiceRole is responsible for creating the service role object in the k8s cluster
-func CreateServiceRole(namespace, role string, policy *zms.Policy) error {
-	configMeta, serviceRole, err := createServiceRole(namespace, role, policy)
+func CreateServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) error {
+	configMeta, serviceRole, err := createServiceRole(namespace, dnsSuffix, role, policy)
 	if err != nil {
 		return err
 	}
@@ -125,13 +125,13 @@ func CreateServiceRole(namespace, role string, policy *zms.Policy) error {
 }
 
 // UpdateServiceRole is responsible for updating the service role object in the k8s cluster
-func UpdateServiceRole(serviceRole model.Config, role string, policy *zms.Policy) (bool, error) {
+func UpdateServiceRole(serviceRole model.Config, dnsSuffix, role string, policy *zms.Policy) (bool, error) {
 	currentServiceRole, ok := serviceRole.Spec.(*v1alpha1.ServiceRole)
 	if !ok {
 		return false, errors.New("Could not cast to ServiceRole")
 	}
 
-	configMeta, newServiceRole, err := createServiceRole(serviceRole.Namespace, role, policy)
+	configMeta, newServiceRole, err := createServiceRole(serviceRole.Namespace, dnsSuffix, role, policy)
 	if err != nil {
 		return false, err
 	}

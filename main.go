@@ -30,6 +30,7 @@ func main() {
 		"path to private key file for zms authentication")
 	zmsURL := flag.String("zms-url", "https://zms.url.com", "athenz full zms url including api path")
 	pollInterval := flag.String("poll-interval", "1m", "controller poll interval")
+	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	flag.Parse()
 
 	pi, err := time.ParseDuration(*pollInterval)
@@ -69,6 +70,7 @@ func main() {
 	c := controller.Controller{
 		NamespaceIndexer: namespaceIndexer,
 		PollInterval:     pi,
+		DNSSuffix:        *dnsSuffix,
 	}
 	go c.Run()
 
