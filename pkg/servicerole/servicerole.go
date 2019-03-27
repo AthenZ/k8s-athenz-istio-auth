@@ -66,6 +66,7 @@ func createServiceRole(namespace, role string, policy *zms.Policy) (model.Config
 	pathToMethods := make(map[string][]string)
 	for _, assertion := range policy.Assertions {
 		key := emptyPath
+		// split role and path from assertion resource, ex: role:/details*
 		path := strings.Split(assertion.Resource, ":")
 		if len(path) >= 2 && path[1] != "" {
 			key = path[1]
