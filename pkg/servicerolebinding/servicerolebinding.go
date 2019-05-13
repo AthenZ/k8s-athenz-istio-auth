@@ -5,6 +5,10 @@ package servicerolebinding
 
 import (
 	"errors"
+	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"log"
 	"reflect"
 	"strings"
@@ -24,6 +28,11 @@ const (
 )
 
 var client *crd.Client
+var resource = schema.GroupVersionResource{
+	Group:    "rbac.istio.io",
+	Version:  "v1alpha1",
+	Resource: "servicerolebindings",
+}
 
 type ServiceRoleBindingInfo struct {
 	ServiceRoleBinding model.Config
@@ -165,4 +174,31 @@ func UpdateServiceRoleBinding(serviceRoleBinding model.Config, namespace, role s
 // DeleteServiceRoleBinding is responsible for deleting the service role binding object in the k8s cluster
 func DeleteServiceRoleBinding(name, namespace string) error {
 	return client.Delete(model.ServiceRoleBinding.Type, name, namespace)
+}
+
+func PatchServiceRoleBinding(client dynamic.Interface, serviceRoleBinding model.Config, domain string, tag string) error {
+
+	ns := serviceRoleBinding.Namespace
+	name := serviceRoleBinding.Name
+
+	patchType := types.MergePatchType
+	patch := []byte(fmt.Sprintf(`
+		{
+			"metadata": {
+				"annotations": { 
+					"authz.athenz.io/controller": "true",
+					"authz.athenz.io/domain": %q,
+					"authz.athenz.io/e-tag": %q,
+					"authz.athenz.io/spec-hash": %q
+				}
+			}
+		}`, domain, tag, util.ComputeHash(serviceRoleBinding)))
+
+	log.Printf("Patch bytes: %s", string(patch))
+	res, err := client.Resource(resource).Namespace(ns).Patch(name, patchType, patch)
+	if err != nil {
+		return fmt.Errorf("error patching the servicerolebinding: %s", err.Error())
+	}
+	log.Printf("Patched resource: %+v", res)
+	return nil
 }

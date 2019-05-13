@@ -4,6 +4,7 @@
 package controller
 
 import (
+	"k8s.io/client-go/dynamic"
 	"log"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ type Controller struct {
 	NamespaceIndexer cache.Indexer
 	PollInterval     time.Duration
 	DNSSuffix        string
+	DomainsLister    *zms.DomainsLister
+	DynamicClientSet dynamic.Interface
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -49,6 +52,23 @@ func (c *Controller) getNamespaces() *v1.NamespaceList {
 // 5. The members of the role will be used to create or update the ServiceRoleBindings if there were any changes.
 // 6. Delete any ServiceRoles or ServiceRoleBindings which do not have a corresponding Athenz mapping.
 func (c *Controller) sync() error {
+
+	changedDomains, latestTimestamp, err := c.DomainsLister.GetChangedDomainsUntilNow()
+	if err != nil {
+		return err
+	}
+
+	lenDomains := 0
+	if changedDomains != nil && changedDomains.Domains != nil {
+		lenDomains = len(changedDomains.Domains)
+	}
+	log.Printf("#changed domains: %d, diff until timestamp: %s", lenDomains, latestTimestamp)
+	if lenDomains > 0 {
+		for i, domain := range changedDomains.Domains {
+			log.Printf("Domain[%d]: %s, Last modified: %s", i, domain.Domain.Name, domain.Domain.Modified.String())
+		}
+	}
+
 	serviceRoleMap, err := servicerole.GetServiceRoleMap()
 	if err != nil {
 		return err
@@ -102,6 +122,17 @@ func (c *Controller) sync() error {
 			}
 			if updated {
 				log.Println("Updated service role", roleName, "in namespace", namespace)
+				tag := latestTimestamp
+				for _, d := range changedDomains.Domains {
+					if string(d.Domain.Name) == domainName {
+						log.Printf("Using Domain: %s modified time: %s for ServiceRole: %s", domainName, d.Domain.Modified.String(), roleName)
+						tag = d.Domain.Modified.String()
+					}
+				}
+				err = util.AnnotateModifiedResource(c.DynamicClientSet, serviceRole.ServiceRole, domainName, tag)
+				if err != nil {
+					log.Printf("Error patching service role with timestamp %s: %s", roleName, err.Error())
+				}
 			} else {
 				log.Println("No difference found for service role", roleName, "in namespace", namespace,
 					"not updating")
@@ -133,6 +164,17 @@ func (c *Controller) sync() error {
 
 			if updated {
 				log.Println("Updated service role binding", roleName, "in namespace", namespace)
+				tag := latestTimestamp
+				for _, d := range changedDomains.Domains {
+					if string(d.Domain.Name) == domainName {
+						log.Printf("Using Domain: %s modified time: %s for ServiceRoleBinding: %s", domainName, d.Domain.Modified.String(), roleName)
+						tag = d.Domain.Modified.String()
+					}
+				}
+				err = util.AnnotateModifiedResource(c.DynamicClientSet, serviceRoleBinding.ServiceRoleBinding, domainName, tag)
+				if err != nil {
+					log.Printf("Error patching service role binding with timestamp %s: %s", roleName, err.Error())
+				}
 			} else {
 				log.Println("No difference found for service role binding", roleName, "in namespace", namespace,
 					"not updating")

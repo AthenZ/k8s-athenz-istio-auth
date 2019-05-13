@@ -5,8 +5,10 @@ package zms
 
 import (
 	"crypto/tls"
+	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -78,4 +80,43 @@ func GetServiceMapping(domainName string) (*Domain, error) {
 	}
 
 	return domain, err
+}
+
+type DomainsLister struct {
+	latestTag string
+	tagLock   *sync.Mutex
+}
+
+func NewDomainsLister() *DomainsLister {
+	return &DomainsLister{
+		latestTag: "",
+		tagLock:   &sync.Mutex{},
+	}
+}
+
+func GetSignedDomains(domain zms.DomainName, matchingTag string) (*zms.SignedDomains, string, error) {
+
+	domains, eTag, err := client.GetSignedDomains(domain, "true", "", matchingTag)
+	if err != nil {
+		return nil, "", err
+	}
+	return domains, eTag, nil
+}
+
+func (dl *DomainsLister) GetChangedDomainsUntilNow() (*zms.SignedDomains, string, error) {
+	dl.tagLock.Lock()
+	defer dl.tagLock.Unlock()
+	currentTag := dl.latestTag
+	log.Printf("Setting current tag: %s", currentTag)
+
+	changedDomains, newTag, err := GetSignedDomains("", currentTag)
+	if err != nil {
+		return nil, currentTag, err
+	}
+
+	if newTag != "" {
+		dl.latestTag = newTag
+	}
+
+	return changedDomains, newTag, nil
 }

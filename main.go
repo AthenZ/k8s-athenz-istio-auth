@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"k8s.io/client-go/dynamic"
 	"log"
 	"os"
 	"os/signal"
@@ -54,6 +55,11 @@ func main() {
 		log.Panicln(err.Error())
 	}
 
+	dynClientSet, err := dynamic.NewForConfig(config)
+	if err != nil {
+		log.Panicln(err.Error())
+	}
+
 	namespaceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "namespaces",
 		v1.NamespaceAll, fields.Everything())
 	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
@@ -71,6 +77,8 @@ func main() {
 		NamespaceIndexer: namespaceIndexer,
 		PollInterval:     pi,
 		DNSSuffix:        *dnsSuffix,
+		DynamicClientSet: dynClientSet,
+		DomainsLister:    zms.NewDomainsLister(),
 	}
 	go c.Run()
 
