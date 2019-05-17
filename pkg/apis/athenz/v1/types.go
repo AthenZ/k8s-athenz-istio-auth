@@ -25,7 +25,7 @@ type AthenzDomain struct {
 
 // AthenzDomainSpec contains the SignedDomain object https://github.com/yahoo/athenz/clients/go/zms
 type AthenzDomainSpec struct {
-	SignedDomain zms.SignedDomain `json:",inline"`
+	zms.SignedDomain `json:",inline"`
 }
 
 // DeepCopy copies the object and returns a clone
@@ -43,7 +43,7 @@ func (in *AthenzDomainSpec) DeepCopy() *AthenzDomainSpec {
 
 // AthenzDomainStatus stores status information about the current resource
 type AthenzDomainStatus struct {
-	Message string
+	Message string `json:"message,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
