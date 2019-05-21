@@ -67,11 +67,11 @@ func main() {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
-	c := controller.Controller{
-		NamespaceIndexer: namespaceIndexer,
-		PollInterval:     pi,
-		DNSSuffix:        *dnsSuffix,
+	c, err := controller.NewController(namespaceIndexer, pi, *dnsSuffix)
+	if err != nil {
+		log.Panicln(err)
 	}
+
 	go c.Run()
 
 	signalChan := make(chan os.Signal, 1)

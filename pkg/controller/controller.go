@@ -11,8 +11,12 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/servicerole"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/servicerolebinding"
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pilot/pkg/serviceregistry/kube"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 )
@@ -21,6 +25,8 @@ type Controller struct {
 	NamespaceIndexer cache.Indexer
 	PollInterval     time.Duration
 	DNSSuffix        string
+	srMgr            *servicerole.ServiceRoleMgr
+	srbMgr           *servicerolebinding.ServiceRoleBindingMgr
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -49,13 +55,13 @@ func (c *Controller) getNamespaces() *v1.NamespaceList {
 // 5. The members of the role will be used to create or update the ServiceRoleBindings if there were any changes.
 // 6. Delete any ServiceRoles or ServiceRoleBindings which do not have a corresponding Athenz mapping.
 func (c *Controller) sync() error {
-	serviceRoleMap, err := servicerole.GetServiceRoleMap()
+	serviceRoleMap, err := c.srMgr.GetServiceRoleMap()
 	if err != nil {
 		return err
 	}
 	log.Println("serviceRoleMap:", serviceRoleMap)
 
-	serviceRoleBindingMap, err := servicerolebinding.GetServiceRoleBindingMap()
+	serviceRoleBindingMap, err := c.srbMgr.GetServiceRoleBindingMap()
 	if err != nil {
 		return err
 	}
@@ -84,7 +90,7 @@ func (c *Controller) sync() error {
 			serviceRole, exists := serviceRoleMap[roleName+"-"+namespace]
 			if !exists {
 				log.Println("Service role", roleName, "does not exist, creating...")
-				err := servicerole.CreateServiceRole(namespace, c.DNSSuffix, roleName, role.Policy)
+				err := c.srMgr.CreateServiceRole(namespace, c.DNSSuffix, roleName, role.Policy)
 				if err != nil {
 					log.Println("Error creating service role:", err)
 					continue
@@ -95,7 +101,7 @@ func (c *Controller) sync() error {
 
 			log.Println("Service role", roleName, "already exists, updating...")
 			serviceRole.Processed = true
-			updated, err := servicerole.UpdateServiceRole(serviceRole.ServiceRole, c.DNSSuffix, roleName, role.Policy)
+			updated, err := c.srMgr.UpdateServiceRole(serviceRole.ServiceRole, c.DNSSuffix, roleName, role.Policy)
 			if err != nil {
 				log.Println("Error updating service role:", err)
 				continue
@@ -114,7 +120,7 @@ func (c *Controller) sync() error {
 
 			serviceRoleBinding, exists := serviceRoleBindingMap[roleName+"-"+namespace]
 			if !exists {
-				err = servicerolebinding.CreateServiceRoleBinding(namespace, roleName, role.Role.Members)
+				err = c.srbMgr.CreateServiceRoleBinding(namespace, roleName, role.Role.Members)
 				if err != nil {
 					log.Println("Error creating service role binding:", err)
 					continue
@@ -124,7 +130,7 @@ func (c *Controller) sync() error {
 			}
 			log.Println("Service role binding", roleName, "already exists, updating...")
 			serviceRoleBinding.Processed = true
-			updated, err = servicerolebinding.UpdateServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding,
+			updated, err = c.srbMgr.UpdateServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding,
 				namespace, roleName, role.Role.Members)
 			if err != nil {
 				log.Println("Error updating service role binding:", err)
@@ -149,7 +155,7 @@ func (c *Controller) sync() error {
 		}
 
 		if !serviceRole.Processed {
-			err := servicerole.DeleteServiceRole(serviceRole.ServiceRole.Name, serviceRole.ServiceRole.Namespace)
+			err := c.srMgr.DeleteServiceRole(serviceRole.ServiceRole.Name, serviceRole.ServiceRole.Namespace)
 			if err != nil {
 				log.Println("Error deleting service role:", err)
 				continue
@@ -168,7 +174,7 @@ func (c *Controller) sync() error {
 		}
 
 		if !serviceRoleBinding.Processed {
-			err := servicerolebinding.DeleteServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding.Name,
+			err := c.srbMgr.DeleteServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding.Name,
 				serviceRoleBinding.ServiceRoleBinding.Namespace)
 			if err != nil {
 				log.Println("Error deleting service role binding:", err)
@@ -180,6 +186,34 @@ func (c *Controller) sync() error {
 	}
 
 	return nil
+}
+
+func NewController(namespaceIndexer cache.Indexer, pi time.Duration, dnsSuffix string) (*Controller, error) {
+	configDescriptor := model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
+	}
+
+	c, err := crd.NewClient("", "", configDescriptor, dnsSuffix)
+	if err != nil {
+		return nil, err
+	}
+
+	store := crd.NewController(c, kube.ControllerOptions{})
+	srMgr := servicerole.NewServiceRoleMgr(c, store)
+	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(c, store)
+
+	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
+	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
+
+	return &Controller{
+		NamespaceIndexer: namespaceIndexer,
+		PollInterval:     pi,
+		DNSSuffix:        dnsSuffix,
+		srMgr:            srMgr,
+		srbMgr:           srbMgr,
+	}, nil
 }
 
 // Run starts the main controller loop running sync at every poll interval
