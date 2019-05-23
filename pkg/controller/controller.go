@@ -9,24 +9,32 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/clusterrbacconfig"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 )
 
+// TODO, make these private
 type Controller struct {
-	NamespaceIndexer cache.Indexer
-	PollInterval     time.Duration
-	DNSSuffix        string
-	srMgr            *servicerole.ServiceRoleMgr
-	srbMgr           *servicerolebinding.ServiceRoleBindingMgr
+	PollInterval      time.Duration
+	DNSSuffix         string
+	srMgr             *servicerole.ServiceRoleMgr
+	srbMgr            *servicerolebinding.ServiceRoleBindingMgr
+	NamespaceIndexer  cache.Indexer
+	NamespaceInformer cache.Controller
+	serviceInformer   cache.Controller
+	store             model.ConfigStoreCache
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -188,14 +196,14 @@ func (c *Controller) sync() error {
 	return nil
 }
 
-func NewController(namespaceIndexer cache.Indexer, pi time.Duration, dnsSuffix string) (*Controller, error) {
+func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	configDescriptor := model.ConfigDescriptor{
 		model.ServiceRole,
 		model.ServiceRoleBinding,
 		model.ClusterRbacConfig,
 	}
 
-	c, err := crd.NewClient("", "", configDescriptor, dnsSuffix)
+	c, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
 	if err != nil {
 		return nil, err
 	}
@@ -203,21 +211,65 @@ func NewController(namespaceIndexer cache.Indexer, pi time.Duration, dnsSuffix s
 	store := crd.NewController(c, kube.ControllerOptions{})
 	srMgr := servicerole.NewServiceRoleMgr(c, store)
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(c, store)
+	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(c, store)
 
+	// TODO, handle resync if object gets modified?
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
 	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
 
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Panicln("failed to create InClusterConfig: " + err.Error())
+	}
+
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Panicln(err.Error())
+	}
+
+	namespaceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "namespaces",
+		v1.NamespaceAll, fields.Everything())
+	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
+		cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
+
+	serviceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	_, serviceInformer := cache.NewInformer(serviceListWatch, &v1.Service{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			crcMgr.SyncService(cache.Added, obj)
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			crcMgr.SyncService(cache.Updated, new)
+		},
+		DeleteFunc: func(obj interface{}) {
+			crcMgr.SyncService(cache.Deleted, obj)
+		},
+	})
+
 	return &Controller{
-		NamespaceIndexer: namespaceIndexer,
-		PollInterval:     pi,
-		DNSSuffix:        dnsSuffix,
-		srMgr:            srMgr,
-		srbMgr:           srbMgr,
+		PollInterval:      pi,
+		DNSSuffix:         dnsSuffix,
+		srMgr:             srMgr,
+		srbMgr:            srbMgr,
+		serviceInformer:   serviceInformer,
+		NamespaceIndexer:  namespaceIndexer,
+		NamespaceInformer: namespaceInformer,
+		store:             store,
 	}, nil
 }
 
 // Run starts the main controller loop running sync at every poll interval
-func (c *Controller) Run() {
+func (c *Controller) Run(stop chan struct{}) {
+	go c.serviceInformer.Run(stop)
+	go c.NamespaceInformer.Run(stop)
+	go c.store.Run(stop)
+
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.NamespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
+		// TODO
+		//runtime.HandleError(errors.New("Timed out waiting for namespace cache to sync"))
+		log.Panicln("Timed out waiting for namespace cache to sync.")
+	}
+
 	for {
 		err := c.sync()
 		if err != nil {
