@@ -6,6 +6,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
+	"k8s.io/client-go/tools/cache"
 )
 
 var crcMgr = NewClusterRbacConfigMgr(nil, nil, "svc.yahoo.local")
@@ -119,4 +120,15 @@ func TestDeleteService(t *testing.T) {
 			assert.Equal(t, tt.expectedArray, tt.clusterRbacConfig.Inclusion.Services, "clusterRbacConfig service list should contain expected services")
 		})
 	}
+}
+
+func TestSyncService(t *testing.T) {
+	existingService := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service",
+			Namespace: "test-namespace",
+		},
+	}
+
+	crcMgr.SyncService(cache.Added, existingService)
 }
