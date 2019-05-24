@@ -8,36 +8,41 @@ import (
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/client-go/tools/cache"
-)
+	)
 
 type ClusterRbacConfigMgr struct {
 	client *crd.Client
 	store  model.ConfigStoreCache
+	dnsSuffix string
 }
 
-func NewClusterRbacConfigMgr(client *crd.Client, store model.ConfigStoreCache) *ClusterRbacConfigMgr {
+func NewClusterRbacConfigMgr(client *crd.Client, store model.ConfigStoreCache, dnsSuffix string) *ClusterRbacConfigMgr {
 	return &ClusterRbacConfigMgr{
 		client: client,
 		store:  store,
+		dnsSuffix: dnsSuffix,
 	}
 }
 
-func (crcMgr *ClusterRbacConfigMgr) addService(clusterRbacConfig *v1alpha1.RbacConfig, service *v1.Service) bool {
+func (crcMgr *ClusterRbacConfigMgr) addService(service *v1.Service, clusterRbacConfig *v1alpha1.RbacConfig) bool {
+	dns := service.Name + "." + service.Namespace + "." + crcMgr.dnsSuffix
 	for _, svc := range clusterRbacConfig.Inclusion.Services {
-		if svc == service.Name {
+		if svc == dns {
 			log.Println("service is already added, skipping")
 			return false
 		}
 	}
 
-	clusterRbacConfig.Inclusion.Services = append(clusterRbacConfig.Inclusion.Services, service.Name)
+	clusterRbacConfig.Inclusion.Services = append(clusterRbacConfig.Inclusion.Services, dns)
 	return true
 }
 
-func (crcMgr *ClusterRbacConfigMgr) deleteService(clusterRbacConfig *v1alpha1.RbacConfig, service *v1.Service) bool {
+func (crcMgr *ClusterRbacConfigMgr) deleteService(service *v1.Service, clusterRbacConfig *v1alpha1.RbacConfig) bool {
 	var indexToRemove = -1
+	dns := service.Name + "." + service.Namespace + "." + crcMgr.dnsSuffix
 	for i, svc := range clusterRbacConfig.Inclusion.Services {
-		if svc == service.Name {
+		// TODO, add cluster dns suffix here
+		if svc == dns {
 			indexToRemove = i
 			break
 		}
@@ -72,9 +77,9 @@ func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj inter
 	key, exists := service.Annotations["authz.istio.io/enable"]
 	if !exists || key != "true" || delta == cache.Deleted {
 		log.Println("authz.istio.io/enable not set, skipping...")
-		updated = crcMgr.deleteService(clusterRbacConfig, service)
+		updated = crcMgr.deleteService(service, clusterRbacConfig)
 	} else {
-		updated = crcMgr.addService(clusterRbacConfig, service)
+		updated = crcMgr.addService(service, clusterRbacConfig)
 	}
 
 	if updated {

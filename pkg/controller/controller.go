@@ -203,7 +203,7 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 		model.ClusterRbacConfig,
 	}
 
-	c, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
+	c, err := crd.NewClient("", "", configDescriptor, dnsSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	store := crd.NewController(c, kube.ControllerOptions{})
 	srMgr := servicerole.NewServiceRoleMgr(c, store)
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(c, store)
-	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(c, store)
+	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(c, store, dnsSuffix)
 
 	// TODO, handle resync if object gets modified?
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
