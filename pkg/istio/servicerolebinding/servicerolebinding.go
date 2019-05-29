@@ -44,6 +44,7 @@ func NewServiceRoleBindingMgr(client *crd.Client, store model.ConfigStoreCache) 
 // quick lookup
 func (srbMgr *ServiceRoleBindingMgr) GetServiceRoleBindingMap() (map[string]*ServiceRoleBindingInfo, error) {
 	serviceRoleBindingMap := make(map[string]*ServiceRoleBindingInfo)
+	// TODO, use the store
 	serviceRoleBindingList, err := srbMgr.client.List(model.ServiceRoleBinding.Type, v1.NamespaceAll)
 	if err != nil {
 		return serviceRoleBindingMap, err

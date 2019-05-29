@@ -169,35 +169,80 @@ func TestSyncService(t *testing.T) {
 		},
 	}
 
-	//clusterRbacConfig := &v1alpha1.RbacConfig{
-	//	Inclusion: &v1alpha1.RbacConfig_Target{
-	//		Services: []string{"service.test-namespace.svc.yahoo.local", "service-two.test-namespace.svc.yahoo.local"},
-	//	},
-	//}
-	//
-	//clusterRbacConfigTwo := &v1alpha1.RbacConfig{
-	//	Inclusion: &v1alpha1.RbacConfig_Target{
-	//		Services: []string{"service-two.test-namespace.svc.yahoo.local"},
-	//	},
-	//}
+	inputClusterRbacConfig := &model.Config{
+		ConfigMeta: model.ConfigMeta{
+			Type:    model.ClusterRbacConfig.Type,
+			Name:    "default",
+			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Version: model.ClusterRbacConfig.Version,
+		},
+		Spec: &v1alpha1.RbacConfig{
+			Inclusion: &v1alpha1.RbacConfig_Target{
+				Services: []string{"service.test-namespace.svc.yahoo.local"},
+			},
+		},
+	}
 
 	tests := []struct {
-		name              string
-		inputService      *v1.Service
-		clusterRbacConfig *v1alpha1.RbacConfig
+		name                   string
+		inputService           *v1.Service
+		inputDelta             cache.DeltaType
+		inputClusterRbacConfig *model.Config
+		expectedError          error
+		expectedArray          []string
 	}{
 		{
-			name:              "test deleting service",
-			inputService:      existingService,
-			clusterRbacConfig: nil,
+			name:                   "test adding a service when cluster rbac config does not exist",
+			inputService:           existingService,
+			inputDelta:             cache.Added,
+			inputClusterRbacConfig: nil,
+			expectedError:          nil,
+			expectedArray:          []string{"service.test-namespace.svc.yahoo.local"},
+		},
+		{
+			name:                   "test updating a service when cluster rbac config does not exist",
+			inputService:           existingService,
+			inputDelta:             cache.Updated,
+			inputClusterRbacConfig: nil,
+			expectedError:          nil,
+			expectedArray:          []string{"service.test-namespace.svc.yahoo.local"},
+		},
+		{
+			name:                   "test deleting a service when there is only one entry in the cluster rbac config",
+			inputService:           existingService,
+			inputDelta:             cache.Deleted,
+			inputClusterRbacConfig: inputClusterRbacConfig,
+			expectedError:          nil,
+			expectedArray:          []string{""},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			crcMgr.SyncService(cache.Added, tt.inputService)
+			store := memory.Make(model.IstioConfigTypes)
+			controller := memory.NewController(store)
+			// TODO, remove client?
+			crcMgr = NewClusterRbacConfigMgr(nil, controller, "svc.yahoo.local")
+
+			if tt.inputClusterRbacConfig != nil {
+				_, err := crcMgr.store.Create(*tt.inputClusterRbacConfig)
+				if err != nil {
+					log.Panicln("err creating:", err)
+				}
+			}
+
+			err := crcMgr.syncClusterRbacConfig(tt.inputDelta, tt.inputService)
+			assert.Equal(t, tt.expectedError, err)
+
 			config := crcMgr.store.Get(model.ClusterRbacConfig.Type, "default", "")
-			log.Println("config:", config)
+			if config != nil && len(tt.expectedArray) > 0 {
+				clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
+				if !ok {
+					log.Panicln("cannot cast to rbac config")
+				}
+				log.Println("config:", config)
+				assert.Equal(t, tt.expectedArray, clusterRbacConfig.Inclusion.Services, "clusterRbacConfig service list should contain expected services")
+			}
 		})
 	}
 }

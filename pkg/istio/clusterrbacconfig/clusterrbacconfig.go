@@ -1,6 +1,7 @@
 package clusterrbacconfig
 
 import (
+	"errors"
 	"k8s.io/api/core/v1"
 	"log"
 
@@ -9,6 +10,8 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/client-go/tools/cache"
 )
+
+const authzEnabledAnnotation = "authz.istio.io/enable"
 
 type ClusterRbacConfigMgr struct {
 	client    *crd.Client
@@ -76,38 +79,23 @@ func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service)
 	return err
 }
 
-func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj interface{}) {
-	service, ok := obj.(*v1.Service)
-	if !ok {
-		log.Println("failed to cast to service")
-		return
-	}
-	log.Printf("service: %+v", service)
-
-	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, "default", "")
-	key, exists := service.Annotations["authz.istio.io/enable"]
+func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType, service *v1.Service) error {
+	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	key, exists := service.Annotations[authzEnabledAnnotation]
 	if config == nil && exists && key == "true" {
-		err := crcMgr.createClusterRbacConfig(service)
-		if err != nil {
-			log.Println(err)
-		}
-		return
+		return crcMgr.createClusterRbacConfig(service)
 	} else if config == nil {
-		log.Println("config doesn't exist and annotation is not set")
-		return
+		return errors.New("config doesn't exist and annotation is not set")
 	}
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
-		log.Println("Could not cast to ClusterRbacConfig")
-		return
+		return errors.New("Could not cast to ClusterRbacConfig")
 	}
 
 	updated := false
-	// TODO, test all combinations
-	key, exists = service.Annotations["authz.istio.io/enable"]
+	key, exists = service.Annotations[authzEnabledAnnotation]
 	if !exists || key != "true" || delta == cache.Deleted {
-		log.Println("authz.istio.io/enable not set, skipping...")
 		updated = crcMgr.deleteService(service, clusterRbacConfig)
 	} else {
 		updated = crcMgr.addService(service, clusterRbacConfig)
@@ -116,20 +104,30 @@ func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj inter
 	if updated {
 		var err error
 		if len(clusterRbacConfig.Inclusion.Services) == 0 {
-			err = crcMgr.store.Delete(model.ClusterRbacConfig.Type, "default", "")
-		} else {
-			log.Println("updating")
-			_, err = crcMgr.store.Update(model.Config{
-				ConfigMeta: config.ConfigMeta,
-				Spec:       clusterRbacConfig,
-			})
+			return crcMgr.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 		}
 
-		if err != nil {
-			log.Println("error creating clusterrbaconfig", err)
-			return
-		}
-		log.Println("updated clusterrbacconfig")
+		_, err = crcMgr.store.Update(model.Config{
+			ConfigMeta: config.ConfigMeta,
+			Spec:       clusterRbacConfig,
+		})
+		return err
+	}
+
+	return nil
+}
+
+func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj interface{}) {
+	service, ok := obj.(*v1.Service)
+	if !ok {
+		log.Println("failed to cast to service")
+		return
+	}
+	log.Printf("service: %+v", service)
+
+	err := crcMgr.syncClusterRbacConfig(delta, service)
+	if err != nil {
+		log.Println(err)
 	}
 }
 
