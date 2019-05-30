@@ -222,7 +222,7 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(c, store)
 	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(c, store, dnsSuffix)
 
-	// TODO, handle resync if object gets modified?
+	// TODO, handle resync if object gets modified
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
 	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
 
@@ -278,8 +278,6 @@ func (c *Controller) Run(stop chan struct{}) {
 	go c.store.Run(stop)
 
 	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
-		// TODO
-		//runtime.HandleError(errors.New("Timed out waiting for namespace cache to sync"))
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
