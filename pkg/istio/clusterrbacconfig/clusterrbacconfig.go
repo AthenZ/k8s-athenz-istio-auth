@@ -64,11 +64,10 @@ func (crcMgr *ClusterRbacConfigMgr) deleteService(service *v1.Service, clusterRb
 func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:      model.ClusterRbacConfig.Type,
-			Name:      "default",
-			Namespace: "default",
-			Group:     model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Version:   model.ClusterRbacConfig.Version,
+			Type:    model.ClusterRbacConfig.Type,
+			Name:    "default",
+			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Version: model.ClusterRbacConfig.Version,
 		},
 		Spec: &v1alpha1.RbacConfig{
 			Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION,
@@ -83,10 +82,10 @@ func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service)
 // object based on a service create / update / delete action and if it has the authz enabled
 // annotation set.
 func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType, service *v1.Service) error {
-	log.Println("in here")
 	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	key, exists := service.Annotations[authzEnabledAnnotation]
 	if config == nil && exists && key == "true" && delta != cache.Deleted {
+		log.Println("creating cluster rbac config")
 		clusterRbacConfig := crcMgr.createClusterRbacConfig(service)
 		_, err := crcMgr.store.Create(clusterRbacConfig)
 		return err
