@@ -12,6 +12,7 @@ import (
 	"k8s.io/api/core/v1"
 
 	"github.com/yahoo/athenz/clients/go/zms"
+
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -24,6 +25,12 @@ type ServiceRoleMgr struct {
 	store  model.ConfigStoreCache
 }
 
+type ServiceRoleInfo struct {
+	ServiceRole model.Config
+	Processed   bool
+}
+
+// NewServiceRoleMgr initializes the ServiceRoleMgr object
 func NewServiceRoleMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleMgr {
 	return &ServiceRoleMgr{
 		client: client,
@@ -31,16 +38,11 @@ func NewServiceRoleMgr(client *crd.Client, store model.ConfigStoreCache) *Servic
 	}
 }
 
-type ServiceRoleInfo struct {
-	ServiceRole model.Config
-	Processed   bool
-}
-
 // GetServiceRoleMap creates a map of the form servicerolename-namespace:servicerole for quick lookup
 func (srMgr *ServiceRoleMgr) GetServiceRoleMap() (map[string]*ServiceRoleInfo, error) {
 	serviceRoleMap := make(map[string]*ServiceRoleInfo)
 
-	serviceRoleList, err := srMgr.client.List(model.ServiceRole.Type, v1.NamespaceAll)
+	serviceRoleList, err := srMgr.store.List(model.ServiceRole.Type, v1.NamespaceAll)
 	if err != nil {
 		return serviceRoleMap, err
 	}

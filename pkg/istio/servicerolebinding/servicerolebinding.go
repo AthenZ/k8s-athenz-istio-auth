@@ -33,6 +33,7 @@ type ServiceRoleBindingInfo struct {
 	Processed          bool
 }
 
+// NewServiceRoleBindingMgr initializes the ServiceRoleBindingMgr object
 func NewServiceRoleBindingMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleBindingMgr {
 	return &ServiceRoleBindingMgr{
 		client: client,
@@ -45,7 +46,7 @@ func NewServiceRoleBindingMgr(client *crd.Client, store model.ConfigStoreCache) 
 func (srbMgr *ServiceRoleBindingMgr) GetServiceRoleBindingMap() (map[string]*ServiceRoleBindingInfo, error) {
 	serviceRoleBindingMap := make(map[string]*ServiceRoleBindingInfo)
 	// TODO, use the store
-	serviceRoleBindingList, err := srbMgr.client.List(model.ServiceRoleBinding.Type, v1.NamespaceAll)
+	serviceRoleBindingList, err := srbMgr.store.List(model.ServiceRoleBinding.Type, v1.NamespaceAll)
 	if err != nil {
 		return serviceRoleBindingMap, err
 	}

@@ -2,13 +2,14 @@ package clusterrbacconfig
 
 import (
 	"errors"
-	"k8s.io/api/core/v1"
 	"log"
+
+	"k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/cache"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
-	"k8s.io/client-go/tools/cache"
 )
 
 const authzEnabledAnnotation = "authz.istio.io/enable"
@@ -19,6 +20,7 @@ type ClusterRbacConfigMgr struct {
 	dnsSuffix string
 }
 
+// NewClusterRbacConfigMgr initializes the ClusterRbacConfigMgr object
 func NewClusterRbacConfigMgr(client *crd.Client, store model.ConfigStoreCache, dnsSuffix string) *ClusterRbacConfigMgr {
 	return &ClusterRbacConfigMgr{
 		client:    client,
@@ -27,24 +29,23 @@ func NewClusterRbacConfigMgr(client *crd.Client, store model.ConfigStoreCache, d
 	}
 }
 
+// addService will add a service to the ClusterRbacConfig object
 func (crcMgr *ClusterRbacConfigMgr) addService(service *v1.Service, clusterRbacConfig *v1alpha1.RbacConfig) bool {
 	dns := service.Name + "." + service.Namespace + "." + crcMgr.dnsSuffix
 	for _, svc := range clusterRbacConfig.Inclusion.Services {
 		if svc == dns {
-			log.Println("service is already added, skipping")
 			return false
 		}
 	}
-
 	clusterRbacConfig.Inclusion.Services = append(clusterRbacConfig.Inclusion.Services, dns)
 	return true
 }
 
+// deleteService will delete a service from the ClusterRbacConfig object
 func (crcMgr *ClusterRbacConfigMgr) deleteService(service *v1.Service, clusterRbacConfig *v1alpha1.RbacConfig) bool {
 	var indexToRemove = -1
 	dns := service.Name + "." + service.Namespace + "." + crcMgr.dnsSuffix
 	for i, svc := range clusterRbacConfig.Inclusion.Services {
-		// TODO, add cluster dns suffix here
 		if svc == dns {
 			indexToRemove = i
 			break
@@ -52,7 +53,6 @@ func (crcMgr *ClusterRbacConfigMgr) deleteService(service *v1.Service, clusterRb
 	}
 
 	if indexToRemove == -1 {
-		log.Println("entry not found, skipping...")
 		return false
 	}
 
@@ -60,13 +60,15 @@ func (crcMgr *ClusterRbacConfigMgr) deleteService(service *v1.Service, clusterRb
 	return true
 }
 
-func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service) error {
-	modelConfig := model.Config{
+// createClusterRbacConfig creates the ClusterRbacConfig object
+func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service) model.Config {
+	return model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:    model.ClusterRbacConfig.Type,
-			Name:    "default",
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Version: model.ClusterRbacConfig.Version,
+			Type:      model.ClusterRbacConfig.Type,
+			Name:      "default",
+			Namespace: "default",
+			Group:     model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Version:   model.ClusterRbacConfig.Version,
 		},
 		Spec: &v1alpha1.RbacConfig{
 			Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION,
@@ -75,15 +77,19 @@ func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service)
 			},
 		},
 	}
-	_, err := crcMgr.store.Create(modelConfig)
-	return err
 }
 
+// syncClusterRbacConfig decides whether to create / update / delete the ClusterRbacConfig
+// object based on a service create / update / delete action and if it has the authz enabled
+// annotation set.
 func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType, service *v1.Service) error {
-	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	log.Println("in here")
+	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "default")
 	key, exists := service.Annotations[authzEnabledAnnotation]
-	if config == nil && exists && key == "true" {
-		return crcMgr.createClusterRbacConfig(service)
+	if config == nil && exists && key == "true" && delta != cache.Deleted {
+		clusterRbacConfig := crcMgr.createClusterRbacConfig(service)
+		_, err := crcMgr.store.Create(clusterRbacConfig)
+		return err
 	} else if config == nil {
 		return errors.New("config doesn't exist and annotation is not set")
 	}
@@ -94,19 +100,20 @@ func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType,
 	}
 
 	updated := false
-	key, exists = service.Annotations[authzEnabledAnnotation]
-	if !exists || key != "true" || delta == cache.Deleted {
-		updated = crcMgr.deleteService(service, clusterRbacConfig)
-	} else {
+	if exists && key == "true" && delta != cache.Deleted {
 		updated = crcMgr.addService(service, clusterRbacConfig)
+	} else {
+		updated = crcMgr.deleteService(service, clusterRbacConfig)
 	}
 
 	if updated {
 		var err error
 		if len(clusterRbacConfig.Inclusion.Services) == 0 {
-			return crcMgr.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+			log.Println("deleting cluster rbac config")
+			return crcMgr.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "default")
 		}
 
+		log.Println("updating cluster rbac config")
 		_, err = crcMgr.store.Update(model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
@@ -117,6 +124,7 @@ func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType,
 	return nil
 }
 
+// SyncService will cast the service object and call syncClusterRbacConfig
 func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj interface{}) {
 	service, ok := obj.(*v1.Service)
 	if !ok {
@@ -131,9 +139,8 @@ func (crcMgr *ClusterRbacConfigMgr) SyncService(delta cache.DeltaType, obj inter
 	}
 }
 
+// remove removes an element from an array at the given index
 func remove(s []string, i int) []string {
 	s[len(s)-1], s[i] = s[i], s[len(s)-1]
 	return s[:len(s)-1]
 }
-
-// TODO, handle create or update

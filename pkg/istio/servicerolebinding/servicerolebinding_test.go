@@ -10,25 +10,27 @@ import (
 	"github.com/yahoo/athenz/clients/go/zms"
 )
 
+var srbMgr = NewServiceRoleBindingMgr(nil, nil)
+
 func TestGetSubjects(t *testing.T) {
-	subjects := getSubjects([]zms.MemberName{"domain.one.application1", "domain.two.application2"})
+	subjects := srbMgr.getSubjects([]zms.MemberName{"domain.one.application1", "domain.two.application2"})
 
 	a := assert.New(t)
 	a.Equal("domain.one/sa/application1", subjects[0].User)
 	a.Equal("domain.two/sa/application2", subjects[1].User)
 
-	subjects = getSubjects([]zms.MemberName{"user.*"})
+	subjects = srbMgr.getSubjects([]zms.MemberName{"user.*"})
 	a.Equal("*", subjects[0].User)
 
-	subjects = getSubjects([]zms.MemberName{"domain"})
+	subjects = srbMgr.getSubjects([]zms.MemberName{"domain"})
 	a.Equal(0, len(subjects))
 
-	subjects = getSubjects([]zms.MemberName{"domain."})
+	subjects = srbMgr.getSubjects([]zms.MemberName{"domain."})
 	a.Equal(0, len(subjects))
 }
 
 func TestCreateServiceRoleBinding(t *testing.T) {
-	configMeta, serviceRoleBinding := createServiceRoleBinding("my-domain", "my.domain.details",
+	configMeta, serviceRoleBinding := srbMgr.createServiceRoleBinding("my-domain", "my.domain.details",
 		[]zms.MemberName{"domain.one.application1", "domain.two.application2"})
 
 	a := assert.New(t)

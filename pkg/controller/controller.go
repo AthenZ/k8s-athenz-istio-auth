@@ -25,14 +25,13 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 )
 
-// TODO, make these private
 type Controller struct {
-	PollInterval      time.Duration
-	DNSSuffix         string
+	pollInterval      time.Duration
+	dnsSuffix         string
 	srMgr             *servicerole.ServiceRoleMgr
 	srbMgr            *servicerolebinding.ServiceRoleBindingMgr
-	NamespaceIndexer  cache.Indexer
-	NamespaceInformer cache.Controller
+	namespaceIndexer  cache.Indexer
+	namespaceInformer cache.Controller
 	serviceInformer   cache.Controller
 	store             model.ConfigStoreCache
 }
@@ -40,7 +39,7 @@ type Controller struct {
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
 func (c *Controller) getNamespaces() *v1.NamespaceList {
 	namespaceList := v1.NamespaceList{}
-	nList := c.NamespaceIndexer.List()
+	nList := c.namespaceIndexer.List()
 
 	for _, n := range nList {
 		namespace, ok := n.(*v1.Namespace)
@@ -98,7 +97,7 @@ func (c *Controller) sync() error {
 			serviceRole, exists := serviceRoleMap[roleName+"-"+namespace]
 			if !exists {
 				log.Println("Service role", roleName, "does not exist, creating...")
-				err := c.srMgr.CreateServiceRole(namespace, c.DNSSuffix, roleName, role.Policy)
+				err := c.srMgr.CreateServiceRole(namespace, c.dnsSuffix, roleName, role.Policy)
 				if err != nil {
 					log.Println("Error creating service role:", err)
 					continue
@@ -109,7 +108,7 @@ func (c *Controller) sync() error {
 
 			log.Println("Service role", roleName, "already exists, updating...")
 			serviceRole.Processed = true
-			updated, err := c.srMgr.UpdateServiceRole(serviceRole.ServiceRole, c.DNSSuffix, roleName, role.Policy)
+			updated, err := c.srMgr.UpdateServiceRole(serviceRole.ServiceRole, c.dnsSuffix, roleName, role.Policy)
 			if err != nil {
 				log.Println("Error updating service role:", err)
 				continue
@@ -196,6 +195,16 @@ func (c *Controller) sync() error {
 	return nil
 }
 
+// NewController is responsible for creating the main controller object and
+// all of its dependencies:
+// 1. Istio custom resource client for service role, service role bindings, and clusterrbacconfig
+// 2. Istio custom resource store for service role, service role bindings, and clusterrbacconfig
+// 3. srMgr responsible for creating / updating / deleting service role objects based on Athenz data
+// 4. srbMgr responsible for creating / updating / deleting service role binding objects based on Athenz data
+// 5. crcMgr responsible creating / updating / deleting the clusterrbacconfig object based on a service label
+// 6. Kubernetes clientset
+// 7. Namespace informer / indexer
+// 8. Service informer
 func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	configDescriptor := model.ConfigDescriptor{
 		model.ServiceRole,
@@ -247,24 +256,28 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	})
 
 	return &Controller{
-		PollInterval:      pi,
-		DNSSuffix:         dnsSuffix,
+		pollInterval:      pi,
+		dnsSuffix:         dnsSuffix,
 		srMgr:             srMgr,
 		srbMgr:            srbMgr,
 		serviceInformer:   serviceInformer,
-		NamespaceIndexer:  namespaceIndexer,
-		NamespaceInformer: namespaceInformer,
+		namespaceIndexer:  namespaceIndexer,
+		namespaceInformer: namespaceInformer,
 		store:             store,
 	}, nil
 }
 
-// Run starts the main controller loop running sync at every poll interval
+// Run starts the main controller loop running sync at every poll interval. It
+// also starts the following controller dependencies:
+// 1. Service informer
+// 2. Namespace informer
+// 3. Istio custom resource informer
 func (c *Controller) Run(stop chan struct{}) {
 	go c.serviceInformer.Run(stop)
-	go c.NamespaceInformer.Run(stop)
+	go c.namespaceInformer.Run(stop)
 	go c.store.Run(stop)
 
-	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.NamespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
 		// TODO
 		//runtime.HandleError(errors.New("Timed out waiting for namespace cache to sync"))
 		log.Panicln("Timed out waiting for namespace cache to sync.")
@@ -275,7 +288,7 @@ func (c *Controller) Run(stop chan struct{}) {
 		if err != nil {
 			log.Println("Error running sync:", err)
 		}
-		log.Println("Sleeping for", c.PollInterval)
-		time.Sleep(c.PollInterval)
+		log.Println("Sleeping for", c.pollInterval)
+		time.Sleep(c.pollInterval)
 	}
 }
