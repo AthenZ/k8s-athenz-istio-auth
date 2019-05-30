@@ -84,7 +84,7 @@ func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service)
 // annotation set.
 func (crcMgr *ClusterRbacConfigMgr) syncClusterRbacConfig(delta cache.DeltaType, service *v1.Service) error {
 	log.Println("in here")
-	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "default")
+	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	key, exists := service.Annotations[authzEnabledAnnotation]
 	if config == nil && exists && key == "true" && delta != cache.Deleted {
 		clusterRbacConfig := crcMgr.createClusterRbacConfig(service)
