@@ -9,24 +9,36 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/servicerole"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/servicerolebinding"
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pilot/pkg/serviceregistry/kube"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/clusterrbacconfig"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 )
 
 type Controller struct {
-	NamespaceIndexer cache.Indexer
-	PollInterval     time.Duration
-	DNSSuffix        string
+	pollInterval      time.Duration
+	dnsSuffix         string
+	srMgr             *servicerole.ServiceRoleMgr
+	srbMgr            *servicerolebinding.ServiceRoleBindingMgr
+	namespaceIndexer  cache.Indexer
+	namespaceInformer cache.Controller
+	serviceInformer   cache.Controller
+	store             model.ConfigStoreCache
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
 func (c *Controller) getNamespaces() *v1.NamespaceList {
 	namespaceList := v1.NamespaceList{}
-	nList := c.NamespaceIndexer.List()
+	nList := c.namespaceIndexer.List()
 
 	for _, n := range nList {
 		namespace, ok := n.(*v1.Namespace)
@@ -49,13 +61,13 @@ func (c *Controller) getNamespaces() *v1.NamespaceList {
 // 5. The members of the role will be used to create or update the ServiceRoleBindings if there were any changes.
 // 6. Delete any ServiceRoles or ServiceRoleBindings which do not have a corresponding Athenz mapping.
 func (c *Controller) sync() error {
-	serviceRoleMap, err := servicerole.GetServiceRoleMap()
+	serviceRoleMap, err := c.srMgr.GetServiceRoleMap()
 	if err != nil {
 		return err
 	}
 	log.Println("serviceRoleMap:", serviceRoleMap)
 
-	serviceRoleBindingMap, err := servicerolebinding.GetServiceRoleBindingMap()
+	serviceRoleBindingMap, err := c.srbMgr.GetServiceRoleBindingMap()
 	if err != nil {
 		return err
 	}
@@ -84,7 +96,7 @@ func (c *Controller) sync() error {
 			serviceRole, exists := serviceRoleMap[roleName+"-"+namespace]
 			if !exists {
 				log.Println("Service role", roleName, "does not exist, creating...")
-				err := servicerole.CreateServiceRole(namespace, c.DNSSuffix, roleName, role.Policy)
+				err := c.srMgr.CreateServiceRole(namespace, c.dnsSuffix, roleName, role.Policy)
 				if err != nil {
 					log.Println("Error creating service role:", err)
 					continue
@@ -95,7 +107,7 @@ func (c *Controller) sync() error {
 
 			log.Println("Service role", roleName, "already exists, updating...")
 			serviceRole.Processed = true
-			updated, err := servicerole.UpdateServiceRole(serviceRole.ServiceRole, c.DNSSuffix, roleName, role.Policy)
+			updated, err := c.srMgr.UpdateServiceRole(serviceRole.ServiceRole, c.dnsSuffix, roleName, role.Policy)
 			if err != nil {
 				log.Println("Error updating service role:", err)
 				continue
@@ -114,7 +126,7 @@ func (c *Controller) sync() error {
 
 			serviceRoleBinding, exists := serviceRoleBindingMap[roleName+"-"+namespace]
 			if !exists {
-				err = servicerolebinding.CreateServiceRoleBinding(namespace, roleName, role.Role.Members)
+				err = c.srbMgr.CreateServiceRoleBinding(namespace, roleName, role.Role.Members)
 				if err != nil {
 					log.Println("Error creating service role binding:", err)
 					continue
@@ -124,7 +136,7 @@ func (c *Controller) sync() error {
 			}
 			log.Println("Service role binding", roleName, "already exists, updating...")
 			serviceRoleBinding.Processed = true
-			updated, err = servicerolebinding.UpdateServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding,
+			updated, err = c.srbMgr.UpdateServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding,
 				namespace, roleName, role.Role.Members)
 			if err != nil {
 				log.Println("Error updating service role binding:", err)
@@ -149,7 +161,7 @@ func (c *Controller) sync() error {
 		}
 
 		if !serviceRole.Processed {
-			err := servicerole.DeleteServiceRole(serviceRole.ServiceRole.Name, serviceRole.ServiceRole.Namespace)
+			err := c.srMgr.DeleteServiceRole(serviceRole.ServiceRole.Name, serviceRole.ServiceRole.Namespace)
 			if err != nil {
 				log.Println("Error deleting service role:", err)
 				continue
@@ -168,7 +180,7 @@ func (c *Controller) sync() error {
 		}
 
 		if !serviceRoleBinding.Processed {
-			err := servicerolebinding.DeleteServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding.Name,
+			err := c.srbMgr.DeleteServiceRoleBinding(serviceRoleBinding.ServiceRoleBinding.Name,
 				serviceRoleBinding.ServiceRoleBinding.Namespace)
 			if err != nil {
 				log.Println("Error deleting service role binding:", err)
@@ -182,14 +194,77 @@ func (c *Controller) sync() error {
 	return nil
 }
 
-// Run starts the main controller loop running sync at every poll interval
-func (c *Controller) Run() {
+// NewController is responsible for creating the main controller object and
+// all of its dependencies:
+// 1. Istio custom resource client for service role, service role bindings, and clusterrbacconfig
+// 2. Istio custom resource store for service role, service role bindings, and clusterrbacconfig
+// 3. srMgr responsible for creating / updating / deleting service role objects based on Athenz data
+// 4. srbMgr responsible for creating / updating / deleting service role binding objects based on Athenz data
+// 5. crcMgr responsible creating / updating / deleting the clusterrbacconfig object based on a service label
+// 6. Kubernetes clientset
+// 7. Namespace informer / indexer
+// 8. Service informer
+func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
+	store := crd.NewController(istioClient, kube.ControllerOptions{})
+	srMgr := servicerole.NewServiceRoleMgr(istioClient, store)
+	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(istioClient, store)
+	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(istioClient, store, dnsSuffix)
+
+	// TODO, handle resync if object gets modified
+	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
+	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
+
+	namespaceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "namespaces",
+		v1.NamespaceAll, fields.Everything())
+	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
+		cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
+
+	// TODO, handle multithreading
+	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	_, serviceInformer := cache.NewInformer(serviceListWatch, &v1.Service{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			crcMgr.SyncService(cache.Added, obj)
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			crcMgr.SyncService(cache.Updated, new)
+		},
+		DeleteFunc: func(obj interface{}) {
+			crcMgr.SyncService(cache.Deleted, obj)
+		},
+	})
+
+	return &Controller{
+		pollInterval:      pollInterval,
+		dnsSuffix:         dnsSuffix,
+		srMgr:             srMgr,
+		srbMgr:            srbMgr,
+		serviceInformer:   serviceInformer,
+		namespaceIndexer:  namespaceIndexer,
+		namespaceInformer: namespaceInformer,
+		store:             store,
+	}
+}
+
+// Run starts the main controller loop running sync at every poll interval. It
+// also starts the following controller dependencies:
+// 1. Service informer
+// 2. Namespace informer
+// 3. Istio custom resource informer
+func (c *Controller) Run(stop chan struct{}) {
+	go c.serviceInformer.Run(stop)
+	go c.namespaceInformer.Run(stop)
+	go c.store.Run(stop)
+
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
+		log.Panicln("Timed out waiting for namespace cache to sync.")
+	}
+
 	for {
 		err := c.sync()
 		if err != nil {
 			log.Println("Error running sync:", err)
 		}
-		log.Println("Sleeping for", c.PollInterval)
-		time.Sleep(c.PollInterval)
+		log.Println("Sleeping for", c.pollInterval)
+		time.Sleep(c.pollInterval)
 	}
 }

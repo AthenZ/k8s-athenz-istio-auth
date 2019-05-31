@@ -23,26 +23,30 @@ const (
 	allUsers = "user.*"
 )
 
-var client *crd.Client
+type ServiceRoleBindingMgr struct {
+	client *crd.Client
+	store  model.ConfigStoreCache
+}
 
 type ServiceRoleBindingInfo struct {
 	ServiceRoleBinding model.Config
 	Processed          bool
 }
 
-func init() {
-	var err error
-	client, err = crd.NewClient("", "", model.IstioConfigTypes, "svc.cluster.local")
-	if err != nil {
-		log.Panicln(err)
+// NewServiceRoleBindingMgr initializes the ServiceRoleBindingMgr object
+func NewServiceRoleBindingMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleBindingMgr {
+	return &ServiceRoleBindingMgr{
+		client: client,
+		store:  store,
 	}
 }
 
 // GetServiceRoleBindingMap creates a map of the form servicerolebindingname-namespace:servicerolebinding for
 // quick lookup
-func GetServiceRoleBindingMap() (map[string]*ServiceRoleBindingInfo, error) {
+func (srbMgr *ServiceRoleBindingMgr) GetServiceRoleBindingMap() (map[string]*ServiceRoleBindingInfo, error) {
 	serviceRoleBindingMap := make(map[string]*ServiceRoleBindingInfo)
-	serviceRoleBindingList, err := client.List(model.ServiceRoleBinding.Type, v1.NamespaceAll)
+	// TODO, use the store
+	serviceRoleBindingList, err := srbMgr.store.List(model.ServiceRoleBinding.Type, v1.NamespaceAll)
 	if err != nil {
 		return serviceRoleBindingMap, err
 	}
@@ -58,7 +62,7 @@ func GetServiceRoleBindingMap() (map[string]*ServiceRoleBindingInfo, error) {
 
 // getSubjects processes the members of a role and creates the corresponding subject object which will be used in the
 // service role binding
-func getSubjects(members []zms.MemberName) []*v1alpha1.Subject {
+func (srbMgr *ServiceRoleBindingMgr) getSubjects(members []zms.MemberName) []*v1alpha1.Subject {
 	subjects := make([]*v1alpha1.Subject, 0)
 
 	// return * subject if one of the members is user.*
@@ -105,7 +109,7 @@ func getSubjects(members []zms.MemberName) []*v1alpha1.Subject {
 }
 
 // createServiceRoleBinding will construct the config meta and service role binding objects
-func createServiceRoleBinding(namespace, role string, members []zms.MemberName) (model.ConfigMeta, *v1alpha1.ServiceRoleBinding) {
+func (srbMgr *ServiceRoleBindingMgr) createServiceRoleBinding(namespace, role string, members []zms.MemberName) (model.ConfigMeta, *v1alpha1.ServiceRoleBinding) {
 	configMeta := model.ConfigMeta{
 		Type:      model.ServiceRoleBinding.Type,
 		Name:      role,
@@ -114,7 +118,7 @@ func createServiceRoleBinding(namespace, role string, members []zms.MemberName) 
 		Namespace: namespace,
 	}
 
-	subjects := getSubjects(members)
+	subjects := srbMgr.getSubjects(members)
 
 	// cluster.local/ns/namespace/sa/serviceaccountname
 	serviceRoleBinding := &v1alpha1.ServiceRoleBinding{
@@ -129,9 +133,9 @@ func createServiceRoleBinding(namespace, role string, members []zms.MemberName) 
 }
 
 // CreateServiceRoleBinding is responsible for creating the service role binding object in the k8s cluster
-func CreateServiceRoleBinding(namespace, role string, members []zms.MemberName) error {
-	configMeta, serviceRoleBinding := createServiceRoleBinding(namespace, role, members)
-	_, err := client.Create(model.Config{
+func (srbMgr *ServiceRoleBindingMgr) CreateServiceRoleBinding(namespace, role string, members []zms.MemberName) error {
+	configMeta, serviceRoleBinding := srbMgr.createServiceRoleBinding(namespace, role, members)
+	_, err := srbMgr.client.Create(model.Config{
 		ConfigMeta: configMeta,
 		Spec:       serviceRoleBinding,
 	})
@@ -139,17 +143,17 @@ func CreateServiceRoleBinding(namespace, role string, members []zms.MemberName) 
 }
 
 // UpdateServiceRoleBinding is responsible for updating the service role binding object in the k8s cluster
-func UpdateServiceRoleBinding(serviceRoleBinding model.Config, namespace, role string, members []zms.MemberName) (bool, error) {
+func (srbMgr *ServiceRoleBindingMgr) UpdateServiceRoleBinding(serviceRoleBinding model.Config, namespace, role string, members []zms.MemberName) (bool, error) {
 	needsUpdate := false
 	currentServiceRoleBinding, ok := serviceRoleBinding.Spec.(*v1alpha1.ServiceRoleBinding)
 	if !ok {
 		return needsUpdate, errors.New("Could not cast to ServiceRoleBinding")
 	}
 
-	configMeta, newServiceRoleBinding := createServiceRoleBinding(namespace, role, members)
+	configMeta, newServiceRoleBinding := srbMgr.createServiceRoleBinding(namespace, role, members)
 	if !reflect.DeepEqual(currentServiceRoleBinding, newServiceRoleBinding) {
 		configMeta.ResourceVersion = serviceRoleBinding.ResourceVersion
-		_, err := client.Update(model.Config{
+		_, err := srbMgr.client.Update(model.Config{
 			ConfigMeta: configMeta,
 			Spec:       newServiceRoleBinding,
 		})
@@ -163,6 +167,11 @@ func UpdateServiceRoleBinding(serviceRoleBinding model.Config, namespace, role s
 }
 
 // DeleteServiceRoleBinding is responsible for deleting the service role binding object in the k8s cluster
-func DeleteServiceRoleBinding(name, namespace string) error {
-	return client.Delete(model.ServiceRoleBinding.Type, name, namespace)
+func (srbMgr *ServiceRoleBindingMgr) DeleteServiceRoleBinding(name, namespace string) error {
+	return srbMgr.client.Delete(model.ServiceRoleBinding.Type, name, namespace)
+}
+
+func (srbMgr *ServiceRoleBindingMgr) EventHandler(config model.Config, e model.Event) {
+	// TODO, add to workqueue
+	log.Printf("Received %s update for servicerolebinding: %+v", e.String(), config)
 }

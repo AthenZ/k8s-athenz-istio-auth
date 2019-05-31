@@ -20,14 +20,9 @@ import (
 
 const emptyPath = "empty-path"
 
-var client *crd.Client
-
-func init() {
-	var err error
-	client, err = crd.NewClient("", "", model.IstioConfigTypes, "svc.cluster.local")
-	if err != nil {
-		log.Panicln(err)
-	}
+type ServiceRoleMgr struct {
+	client *crd.Client
+	store  model.ConfigStoreCache
 }
 
 type ServiceRoleInfo struct {
@@ -35,11 +30,19 @@ type ServiceRoleInfo struct {
 	Processed   bool
 }
 
+// NewServiceRoleMgr initializes the ServiceRoleMgr object
+func NewServiceRoleMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleMgr {
+	return &ServiceRoleMgr{
+		client: client,
+		store:  store,
+	}
+}
+
 // GetServiceRoleMap creates a map of the form servicerolename-namespace:servicerole for quick lookup
-func GetServiceRoleMap() (map[string]*ServiceRoleInfo, error) {
+func (srMgr *ServiceRoleMgr) GetServiceRoleMap() (map[string]*ServiceRoleInfo, error) {
 	serviceRoleMap := make(map[string]*ServiceRoleInfo)
 
-	serviceRoleList, err := client.List(model.ServiceRole.Type, v1.NamespaceAll)
+	serviceRoleList, err := srMgr.store.List(model.ServiceRole.Type, v1.NamespaceAll)
 	if err != nil {
 		return serviceRoleMap, err
 	}
@@ -54,7 +57,7 @@ func GetServiceRoleMap() (map[string]*ServiceRoleInfo, error) {
 }
 
 // createServiceRole will construct the config meta and service role objects
-func createServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) (model.ConfigMeta, *v1alpha1.ServiceRole, error) {
+func (srMgr *ServiceRoleMgr) createServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) (model.ConfigMeta, *v1alpha1.ServiceRole, error) {
 	configMeta := model.ConfigMeta{
 		Type:      model.ServiceRole.Type,
 		Name:      role,
@@ -111,13 +114,13 @@ func createServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) (m
 }
 
 // CreateServiceRole is responsible for creating the service role object in the k8s cluster
-func CreateServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) error {
-	configMeta, serviceRole, err := createServiceRole(namespace, dnsSuffix, role, policy)
+func (srMgr *ServiceRoleMgr) CreateServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) error {
+	configMeta, serviceRole, err := srMgr.createServiceRole(namespace, dnsSuffix, role, policy)
 	if err != nil {
 		return err
 	}
 
-	_, err = client.Create(model.Config{
+	_, err = srMgr.client.Create(model.Config{
 		ConfigMeta: configMeta,
 		Spec:       serviceRole,
 	})
@@ -125,20 +128,20 @@ func CreateServiceRole(namespace, dnsSuffix, role string, policy *zms.Policy) er
 }
 
 // UpdateServiceRole is responsible for updating the service role object in the k8s cluster
-func UpdateServiceRole(serviceRole model.Config, dnsSuffix, role string, policy *zms.Policy) (bool, error) {
+func (srMgr *ServiceRoleMgr) UpdateServiceRole(serviceRole model.Config, dnsSuffix, role string, policy *zms.Policy) (bool, error) {
 	currentServiceRole, ok := serviceRole.Spec.(*v1alpha1.ServiceRole)
 	if !ok {
 		return false, errors.New("Could not cast to ServiceRole")
 	}
 
-	configMeta, newServiceRole, err := createServiceRole(serviceRole.Namespace, dnsSuffix, role, policy)
+	configMeta, newServiceRole, err := srMgr.createServiceRole(serviceRole.Namespace, dnsSuffix, role, policy)
 	if err != nil {
 		return false, err
 	}
 
 	if !reflect.DeepEqual(currentServiceRole, newServiceRole) {
 		configMeta.ResourceVersion = serviceRole.ResourceVersion
-		_, err := client.Update(model.Config{
+		_, err := srMgr.client.Update(model.Config{
 			ConfigMeta: configMeta,
 			Spec:       newServiceRole,
 		})
@@ -152,6 +155,11 @@ func UpdateServiceRole(serviceRole model.Config, dnsSuffix, role string, policy 
 }
 
 // DeleteServiceRole is responsible for deleting the service role object in the k8s cluster
-func DeleteServiceRole(name, namespace string) error {
-	return client.Delete(model.ServiceRole.Type, name, namespace)
+func (srMgr *ServiceRoleMgr) DeleteServiceRole(name, namespace string) error {
+	return srMgr.client.Delete(model.ServiceRole.Type, name, namespace)
+}
+
+func (srMgr *ServiceRoleMgr) EventHandler(config model.Config, e model.Event) {
+	// TODO, add to workqueue
+	log.Printf("Received %s update for servicerole: %+v", e.String(), config)
 }

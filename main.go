@@ -4,7 +4,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"log"
 	"os"
@@ -12,15 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
-
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func main() {
@@ -44,35 +42,31 @@ func main() {
 		log.Panicln("Error creating zms client:", err.Error())
 	}
 
+	configDescriptor := model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
+	}
+
+	istioClient, err := crd.NewClient("", "", configDescriptor, *dnsSuffix)
+	if err != nil {
+		log.Panicln("Error creating istio crd client:", err.Error())
+	}
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Panicln("Failed to create InClusterConfig:", err.Error())
+		log.Panicln("Error creating kubernetes in cluster config: " + err.Error())
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Panicln(err.Error())
+		log.Panicln("Error creating k8s client:", err.Error())
 	}
 
-	namespaceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "namespaces",
-		v1.NamespaceAll, fields.Everything())
-	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
-		cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
+	c := controller.NewController(pi, *dnsSuffix, istioClient, k8sClient)
 
 	stopChan := make(chan struct{})
-	go namespaceInformer.Run(stopChan)
-
-	if !cache.WaitForCacheSync(stopChan, namespaceInformer.HasSynced) {
-		runtime.HandleError(errors.New("Timed out waiting for namespace cache to sync"))
-		log.Panicln("Timed out waiting for namespace cache to sync.")
-	}
-
-	c := controller.Controller{
-		NamespaceIndexer: namespaceIndexer,
-		PollInterval:     pi,
-		DNSSuffix:        *dnsSuffix,
-	}
-	go c.Run()
+	go c.Run(stopChan)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
