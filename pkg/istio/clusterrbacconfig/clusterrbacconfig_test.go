@@ -152,7 +152,7 @@ func TestSyncService(t *testing.T) {
 			Name:      "service",
 			Namespace: "test-namespace",
 			Annotations: map[string]string{
-				"authz.istio.io/enable": "true",
+				"authz.istio.io/enabled": "true",
 			},
 		},
 	}
@@ -162,7 +162,7 @@ func TestSyncService(t *testing.T) {
 			Name:      "service-two",
 			Namespace: "test-namespace",
 			Annotations: map[string]string{
-				"authz.istio.io/enable": "true",
+				"authz.istio.io/enabled": "true",
 			},
 		},
 	}
@@ -172,7 +172,7 @@ func TestSyncService(t *testing.T) {
 			Name:      "service",
 			Namespace: "test-namespace",
 			Annotations: map[string]string{
-				"authz.istio.io/enable": "false",
+				"authz.istio.io/enabled": "false",
 			},
 		},
 	}
