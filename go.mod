@@ -4,7 +4,6 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.32.0 // indirect
-	github.com/ardielle/ardielle-tools v1.14.15 // indirect
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/envoyproxy/go-control-plane v0.6.1 // indirect
@@ -44,7 +43,6 @@ require (
 	golang.org/x/oauth2 v0.0.0-20181102003913-e0f2c55a7fc7 // indirect
 	golang.org/x/sys v0.0.0-20181031143558-9b800f95dbbc // indirect
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2 // indirect
-	golang.org/x/tools v0.0.0-20181012201414-c0eb142035b5 // indirect
 	google.golang.org/appengine v1.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20181101192439-c830210a61df // indirect
 	google.golang.org/grpc v1.16.0 // indirect
