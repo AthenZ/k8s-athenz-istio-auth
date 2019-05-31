@@ -13,6 +13,12 @@ import (
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func main() {
@@ -36,10 +42,28 @@ func main() {
 		log.Panicln("Error creating zms client:", err.Error())
 	}
 
-	c, err := controller.NewController(pi, *dnsSuffix)
-	if err != nil {
-		log.Panicln(err)
+	configDescriptor := model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
 	}
+
+	istioClient, err := crd.NewClient("", "", configDescriptor, *dnsSuffix)
+	if err != nil {
+		log.Panicln("Error creating istio crd client:", err.Error())
+	}
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Panicln("Error creating kubernetes in cluster config: " + err.Error())
+	}
+
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Panicln("Error creating k8s client:", err.Error())
+	}
+
+	c := controller.NewController(pi, *dnsSuffix, istioClient, k8sClient)
 
 	stopChan := make(chan struct{})
 	go c.Run(stopChan)

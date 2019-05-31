@@ -12,7 +12,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 )
 
-const authzEnabledAnnotation = "authz.istio.io/enable"
+const authzEnabledAnnotation = "authz.istio.io/enabled"
 
 type ClusterRbacConfigMgr struct {
 	client    *crd.Client
@@ -65,7 +65,7 @@ func (crcMgr *ClusterRbacConfigMgr) createClusterRbacConfig(service *v1.Service)
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
-			Name:    "default",
+			Name:    model.DefaultRbacConfigName,
 			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
 			Version: model.ClusterRbacConfig.Version,
 		},

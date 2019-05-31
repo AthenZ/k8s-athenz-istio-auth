@@ -11,7 +11,6 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
@@ -205,44 +204,23 @@ func (c *Controller) sync() error {
 // 6. Kubernetes clientset
 // 7. Namespace informer / indexer
 // 8. Service informer
-func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
-	configDescriptor := model.ConfigDescriptor{
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-		model.ClusterRbacConfig,
-	}
-
-	c, err := crd.NewClient("", "", configDescriptor, dnsSuffix)
-	if err != nil {
-		return nil, err
-	}
-
-	store := crd.NewController(c, kube.ControllerOptions{})
-	srMgr := servicerole.NewServiceRoleMgr(c, store)
-	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(c, store)
-	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(c, store, dnsSuffix)
+func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
+	store := crd.NewController(istioClient, kube.ControllerOptions{})
+	srMgr := servicerole.NewServiceRoleMgr(istioClient, store)
+	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(istioClient, store)
+	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(istioClient, store, dnsSuffix)
 
 	// TODO, handle resync if object gets modified
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
 	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
 
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Panicln("failed to create InClusterConfig: " + err.Error())
-	}
-
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Panicln(err.Error())
-	}
-
-	namespaceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "namespaces",
+	namespaceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "namespaces",
 		v1.NamespaceAll, fields.Everything())
 	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
 		cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
 
-	serviceListWatch := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	// TODO, handle multithreading
+	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	_, serviceInformer := cache.NewInformer(serviceListWatch, &v1.Service{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			crcMgr.SyncService(cache.Added, obj)
@@ -256,7 +234,7 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 	})
 
 	return &Controller{
-		pollInterval:      pi,
+		pollInterval:      pollInterval,
 		dnsSuffix:         dnsSuffix,
 		srMgr:             srMgr,
 		srbMgr:            srbMgr,
@@ -264,7 +242,7 @@ func NewController(pi time.Duration, dnsSuffix string) (*Controller, error) {
 		namespaceIndexer:  namespaceIndexer,
 		namespaceInformer: namespaceInformer,
 		store:             store,
-	}, nil
+	}
 }
 
 // Run starts the main controller loop running sync at every poll interval. It
