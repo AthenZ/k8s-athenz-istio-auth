@@ -14,15 +14,13 @@ import (
 	"github.com/yahoo/athenz/clients/go/zms"
 
 	"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 )
 
 const emptyPath = "empty-path"
 
 type ServiceRoleMgr struct {
-	client *crd.Client
-	store  model.ConfigStoreCache
+	store model.ConfigStoreCache
 }
 
 type ServiceRoleInfo struct {
@@ -31,10 +29,9 @@ type ServiceRoleInfo struct {
 }
 
 // NewServiceRoleMgr initializes the ServiceRoleMgr object
-func NewServiceRoleMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleMgr {
+func NewServiceRoleMgr(store model.ConfigStoreCache) *ServiceRoleMgr {
 	return &ServiceRoleMgr{
-		client: client,
-		store:  store,
+		store: store,
 	}
 }
 
@@ -120,7 +117,7 @@ func (srMgr *ServiceRoleMgr) CreateServiceRole(namespace, dnsSuffix, role string
 		return err
 	}
 
-	_, err = srMgr.client.Create(model.Config{
+	_, err = srMgr.store.Create(model.Config{
 		ConfigMeta: configMeta,
 		Spec:       serviceRole,
 	})
@@ -141,7 +138,7 @@ func (srMgr *ServiceRoleMgr) UpdateServiceRole(serviceRole model.Config, dnsSuff
 
 	if !reflect.DeepEqual(currentServiceRole, newServiceRole) {
 		configMeta.ResourceVersion = serviceRole.ResourceVersion
-		_, err := srMgr.client.Update(model.Config{
+		_, err := srMgr.store.Update(model.Config{
 			ConfigMeta: configMeta,
 			Spec:       newServiceRole,
 		})
@@ -156,7 +153,7 @@ func (srMgr *ServiceRoleMgr) UpdateServiceRole(serviceRole model.Config, dnsSuff
 
 // DeleteServiceRole is responsible for deleting the service role object in the k8s cluster
 func (srMgr *ServiceRoleMgr) DeleteServiceRole(name, namespace string) error {
-	return srMgr.client.Delete(model.ServiceRole.Type, name, namespace)
+	return srMgr.store.Delete(model.ServiceRole.Type, name, namespace)
 }
 
 func (srMgr *ServiceRoleMgr) EventHandler(config model.Config, e model.Event) {

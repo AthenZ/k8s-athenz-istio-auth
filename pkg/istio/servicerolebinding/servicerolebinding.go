@@ -15,7 +15,6 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 
 	"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 )
 
@@ -24,8 +23,7 @@ const (
 )
 
 type ServiceRoleBindingMgr struct {
-	client *crd.Client
-	store  model.ConfigStoreCache
+	store model.ConfigStoreCache
 }
 
 type ServiceRoleBindingInfo struct {
@@ -34,10 +32,9 @@ type ServiceRoleBindingInfo struct {
 }
 
 // NewServiceRoleBindingMgr initializes the ServiceRoleBindingMgr object
-func NewServiceRoleBindingMgr(client *crd.Client, store model.ConfigStoreCache) *ServiceRoleBindingMgr {
+func NewServiceRoleBindingMgr(store model.ConfigStoreCache) *ServiceRoleBindingMgr {
 	return &ServiceRoleBindingMgr{
-		client: client,
-		store:  store,
+		store: store,
 	}
 }
 
@@ -135,7 +132,7 @@ func (srbMgr *ServiceRoleBindingMgr) createServiceRoleBinding(namespace, role st
 // CreateServiceRoleBinding is responsible for creating the service role binding object in the k8s cluster
 func (srbMgr *ServiceRoleBindingMgr) CreateServiceRoleBinding(namespace, role string, members []zms.MemberName) error {
 	configMeta, serviceRoleBinding := srbMgr.createServiceRoleBinding(namespace, role, members)
-	_, err := srbMgr.client.Create(model.Config{
+	_, err := srbMgr.store.Create(model.Config{
 		ConfigMeta: configMeta,
 		Spec:       serviceRoleBinding,
 	})
@@ -153,7 +150,7 @@ func (srbMgr *ServiceRoleBindingMgr) UpdateServiceRoleBinding(serviceRoleBinding
 	configMeta, newServiceRoleBinding := srbMgr.createServiceRoleBinding(namespace, role, members)
 	if !reflect.DeepEqual(currentServiceRoleBinding, newServiceRoleBinding) {
 		configMeta.ResourceVersion = serviceRoleBinding.ResourceVersion
-		_, err := srbMgr.client.Update(model.Config{
+		_, err := srbMgr.store.Update(model.Config{
 			ConfigMeta: configMeta,
 			Spec:       newServiceRoleBinding,
 		})
@@ -168,7 +165,7 @@ func (srbMgr *ServiceRoleBindingMgr) UpdateServiceRoleBinding(serviceRoleBinding
 
 // DeleteServiceRoleBinding is responsible for deleting the service role binding object in the k8s cluster
 func (srbMgr *ServiceRoleBindingMgr) DeleteServiceRoleBinding(name, namespace string) error {
-	return srbMgr.client.Delete(model.ServiceRoleBinding.Type, name, namespace)
+	return srbMgr.store.Delete(model.ServiceRoleBinding.Type, name, namespace)
 }
 
 func (srbMgr *ServiceRoleBindingMgr) EventHandler(config model.Config, e model.Event) {

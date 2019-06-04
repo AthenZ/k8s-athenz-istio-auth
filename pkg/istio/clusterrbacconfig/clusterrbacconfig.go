@@ -8,22 +8,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 )
 
 const authzEnabledAnnotation = "authz.istio.io/enabled"
 
 type ClusterRbacConfigMgr struct {
-	client    *crd.Client
 	store     model.ConfigStoreCache
 	dnsSuffix string
 }
 
 // NewClusterRbacConfigMgr initializes the ClusterRbacConfigMgr object
-func NewClusterRbacConfigMgr(client *crd.Client, store model.ConfigStoreCache, dnsSuffix string) *ClusterRbacConfigMgr {
+func NewClusterRbacConfigMgr(store model.ConfigStoreCache, dnsSuffix string) *ClusterRbacConfigMgr {
 	return &ClusterRbacConfigMgr{
-		client:    client,
 		store:     store,
 		dnsSuffix: dnsSuffix,
 	}
