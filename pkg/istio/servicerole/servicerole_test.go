@@ -31,7 +31,7 @@ func TestCreateServiceRole(t *testing.T) {
 		},
 	}
 
-	srMgr := NewServiceRoleMgr(nil, nil)
+	srMgr := NewServiceRoleMgr(nil)
 	configMeta, serviceRole, err := srMgr.createServiceRole("my-domain", "svc.cluster.local", "my.domain.details", policy)
 
 	a := assert.New(t)

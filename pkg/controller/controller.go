@@ -206,9 +206,9 @@ func (c *Controller) sync() error {
 // 8. Service informer
 func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
-	srMgr := servicerole.NewServiceRoleMgr(istioClient, store)
-	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(istioClient, store)
-	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(istioClient, store, dnsSuffix)
+	srMgr := servicerole.NewServiceRoleMgr(store)
+	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(store)
+	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(store, dnsSuffix)
 
 	// TODO, handle resync if object gets modified
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)

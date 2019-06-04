@@ -10,7 +10,7 @@ import (
 	"github.com/yahoo/athenz/clients/go/zms"
 )
 
-var srbMgr = NewServiceRoleBindingMgr(nil, nil)
+var srbMgr = NewServiceRoleBindingMgr(nil)
 
 func TestGetSubjects(t *testing.T) {
 	subjects := srbMgr.getSubjects([]zms.MemberName{"domain.one.application1", "domain.two.application2"})

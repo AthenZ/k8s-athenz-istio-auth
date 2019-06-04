@@ -16,7 +16,7 @@ import (
 )
 
 func TestAddService(t *testing.T) {
-	crcMgr := NewClusterRbacConfigMgr(nil, nil, "svc.cluster.local")
+	crcMgr := NewClusterRbacConfigMgr(nil, "svc.cluster.local")
 
 	newService := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -77,7 +77,7 @@ func TestAddService(t *testing.T) {
 }
 
 func TestDeleteService(t *testing.T) {
-	crcMgr := NewClusterRbacConfigMgr(nil, nil, "svc.cluster.local")
+	crcMgr := NewClusterRbacConfigMgr(nil, "svc.cluster.local")
 
 	existingService := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -300,7 +300,7 @@ func initCrcMgr(clusterRbacConfig *model.Config) *ClusterRbacConfigMgr {
 
 	store := memory.Make(configDescriptor)
 	controller := memory.NewController(store)
-	crcMgr := NewClusterRbacConfigMgr(nil, controller, "svc.cluster.local")
+	crcMgr := NewClusterRbacConfigMgr(controller, "svc.cluster.local")
 
 	log.Println("crc", clusterRbacConfig)
 
