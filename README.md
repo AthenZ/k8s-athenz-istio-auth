@@ -1,6 +1,7 @@
 > A controller that polls Athenz to update the ServiceRole and ServiceRoleBinding Istio custom resources.
 
-# K8s-athenz-istio-auth
+
+# K8s-athenz-istio-auth [![Build Status](https://api.travis-ci.com/yahoo/k8s-athenz-istio-auth.svg?branch=master)](https://travis-ci.com/yahoo/k8s-athenz-istio-auth)
 K8s-athenz-istio-auth is a controller that polls Athenz to update the ServiceRole and ServiceRoleBinding Istio custom 
 resources; it watches all namespaces and looks up the corresponding Athenz domains associated with them. 
 
