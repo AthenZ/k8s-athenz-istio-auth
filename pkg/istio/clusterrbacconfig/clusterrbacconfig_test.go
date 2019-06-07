@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -14,6 +13,14 @@ import (
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 )
+
+func createClusterRbacConfig(services ...string) *v1alpha1.RbacConfig {
+	return &v1alpha1.RbacConfig{
+		Inclusion: &v1alpha1.RbacConfig_Target{
+			Services: services,
+		},
+	}
+}
 
 func TestAddService(t *testing.T) {
 	crcMgr := NewClusterRbacConfigMgr(nil, "svc.cluster.local")
@@ -24,25 +31,11 @@ func TestAddService(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 	}
+	existingService := newService.DeepCopy()
+	existingService.Name = "existing-service"
 
-	existingService := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "existing-service",
-			Namespace: "test-namespace",
-		},
-	}
-
-	clusterRbacConfig := &v1alpha1.RbacConfig{
-		Inclusion: &v1alpha1.RbacConfig_Target{
-			Services: []string{"existing-service.test-namespace.svc.cluster.local"},
-		},
-	}
-
-	clusterRbacConfigTwo := &v1alpha1.RbacConfig{
-		Inclusion: &v1alpha1.RbacConfig_Target{
-			Services: []string{"existing-service.test-namespace.svc.cluster.local"},
-		},
-	}
+	clusterRbacConfig := createClusterRbacConfig("existing-service.test-namespace.svc.cluster.local")
+	clusterRbacConfigTwo := createClusterRbacConfig("existing-service.test-namespace.svc.cluster.local")
 
 	tests := []struct {
 		name              string
@@ -86,17 +79,8 @@ func TestDeleteService(t *testing.T) {
 		},
 	}
 
-	clusterRbacConfig := &v1alpha1.RbacConfig{
-		Inclusion: &v1alpha1.RbacConfig_Target{
-			Services: []string{"service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local"},
-		},
-	}
-
-	clusterRbacConfigTwo := &v1alpha1.RbacConfig{
-		Inclusion: &v1alpha1.RbacConfig_Target{
-			Services: []string{"service-two.test-namespace.svc.cluster.local"},
-		},
-	}
+	clusterRbacConfig := createClusterRbacConfig("service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local")
+	clusterRbacConfigTwo := createClusterRbacConfig("service-two.test-namespace.svc.cluster.local")
 
 	tests := []struct {
 		name              string
@@ -157,67 +141,20 @@ func TestSyncService(t *testing.T) {
 		},
 	}
 
-	existingServiceTwo := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "service-two",
-			Namespace: "test-namespace",
-			Annotations: map[string]string{
-				"authz.istio.io/enabled": "true",
-			},
-		},
+	existingServiceTwo := existingService.DeepCopy()
+	existingServiceTwo.Name = "service-two"
+
+	existingServiceThree := existingService.DeepCopy()
+	existingServiceThree.Annotations = map[string]string{
+		"authz.istio.io/enabled": "false",
 	}
 
-	existingServiceThree := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "service",
-			Namespace: "test-namespace",
-			Annotations: map[string]string{
-				"authz.istio.io/enabled": "false",
-			},
-		},
-	}
+	//inputClusterRbacConfig := createClusterRbacConfigModel("service.test-namespace.svc.cluster.local")
 
-	inputClusterRbacConfig := &model.Config{
-		ConfigMeta: model.ConfigMeta{
-			Type:    model.ClusterRbacConfig.Type,
-			Name:    "default",
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Version: model.ClusterRbacConfig.Version,
-		},
-		Spec: &v1alpha1.RbacConfig{
-			Inclusion: &v1alpha1.RbacConfig_Target{
-				Services: []string{"service.test-namespace.svc.cluster.local"},
-			},
-		},
-	}
+	inputClusterRbacConfigTwo := createClusterRbacConfigModel("service.test-namespace.svc.cluster.local")
+	//inputClusterRbacConfigTwo.Namespace = "default"
 
-	//inputClusterRbacConfigTwo := &model.Config{
-	//	ConfigMeta: model.ConfigMeta{
-	//		Type:      model.ClusterRbacConfig.Type,
-	//		Name:      "default",
-	//		Group:     model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-	//		Version:   model.ClusterRbacConfig.Version,
-	//	},
-	//	Spec: &v1alpha1.RbacConfig{
-	//		Inclusion: &v1alpha1.RbacConfig_Target{
-	//			Services: []string{"service.test-namespace.svc.cluster.local"},
-	//		},
-	//	},
-	//}
-
-	inputClusterRbacConfigThree := &model.Config{
-		ConfigMeta: model.ConfigMeta{
-			Type:    model.ClusterRbacConfig.Type,
-			Name:    "default",
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Version: model.ClusterRbacConfig.Version,
-		},
-		Spec: &v1alpha1.RbacConfig{
-			Inclusion: &v1alpha1.RbacConfig_Target{
-				Services: []string{"service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local"},
-			},
-		},
-	}
+	//inputClusterRbacConfigThree := createClusterRbacConfigModel("service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local")
 
 	tests := []struct {
 		name                   string
@@ -227,38 +164,38 @@ func TestSyncService(t *testing.T) {
 		expectedError          error
 		expectedArray          []string
 	}{
-		{
-			name:                   "add a service with authz annotation set to true when cluster rbac config does not exist",
-			inputService:           existingService,
-			inputDelta:             cache.Added,
-			inputClusterRbacConfig: nil,
-			expectedError:          nil,
-			expectedArray:          []string{"service.test-namespace.svc.cluster.local"},
-		},
-		{
-			name:                   "add a service with authz annotation set to true when cluster rbac config exists",
-			inputService:           existingServiceTwo,
-			inputDelta:             cache.Added,
-			inputClusterRbacConfig: inputClusterRbacConfig,
-			expectedError:          nil,
-			expectedArray:          []string{"service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local"},
-		},
 		//{
-		//	name:                   "delete a service with authz annotation set to false when cluster rbac config exists with one entry, delete cluster rbac config",
-		//	inputService:           existingServiceThree,
+		//	name:                   "add a service with authz annotation set to true when cluster rbac config does not exist",
+		//	inputService:           existingService,
 		//	inputDelta:             cache.Added,
-		//	inputClusterRbacConfig: inputClusterRbacConfigTwo,
+		//	inputClusterRbacConfig: nil,
 		//	expectedError:          nil,
-		//	expectedArray:          []string{},
+		//	expectedArray:          []string{"service.test-namespace.svc.cluster.local"},
+		//},
+		//{
+		//	name:                   "add a service with authz annotation set to true when cluster rbac config exists",
+		//	inputService:           existingServiceTwo,
+		//	inputDelta:             cache.Added,
+		//	inputClusterRbacConfig: inputClusterRbacConfig,
+		//	expectedError:          nil,
+		//	expectedArray:          []string{"service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local"},
 		//},
 		{
-			name:                   "delete a service with authz annotation set to false when cluster rbac config exists",
+			name:                   "delete a service with authz annotation set to false when cluster rbac config exists with one entry, delete cluster rbac config",
 			inputService:           existingServiceThree,
 			inputDelta:             cache.Added,
-			inputClusterRbacConfig: inputClusterRbacConfigThree,
+			inputClusterRbacConfig: inputClusterRbacConfigTwo,
 			expectedError:          nil,
-			expectedArray:          []string{"service-two.test-namespace.svc.cluster.local"},
+			expectedArray:          []string{},
 		},
+		//{
+		//	name:                   "delete a service with authz annotation set to false when cluster rbac config exists",
+		//	inputService:           existingServiceThree,
+		//	inputDelta:             cache.Added,
+		//	inputClusterRbacConfig: inputClusterRbacConfigThree,
+		//	expectedError:          nil,
+		//	expectedArray:          []string{"service-two.test-namespace.svc.cluster.local"},
+		//},
 
 		//{
 		//	name:                   "add a service when there is only one entry in the cluster rbac config",
@@ -286,39 +223,114 @@ func TestSyncService(t *testing.T) {
 			assert.Equal(t, tt.expectedError, err)
 
 			clusterRbacConfig := getClusterRbacConfig(crcMgr)
-			assert.Equal(t, tt.expectedArray, clusterRbacConfig.Inclusion.Services, "clusterRbacConfig service list should contain expected services")
+
+			if len(tt.expectedArray) == 0 {
+				assert.Nil(t, clusterRbacConfig, "should be nil")
+			} else {
+				assert.Equal(t, tt.expectedArray, clusterRbacConfig.Inclusion.Services, "clusterRbacConfig service list should contain expected services")
+			}
 		})
 	}
 }
 
-func initCrcMgr(clusterRbacConfig *model.Config) *ClusterRbacConfigMgr {
-	configDescriptor := model.ConfigDescriptor{
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-		model.ClusterRbacConfig,
+func createClusterRbacConfigModel(services ...string) *model.Config {
+	return &model.Config{
+		ConfigMeta: model.ConfigMeta{
+			Type: model.ClusterRbacConfig.Type,
+			Name: "default",
+			//Namespace: "default",
+			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Version: model.ClusterRbacConfig.Version,
+		},
+		Spec: &v1alpha1.RbacConfig{
+			Inclusion: &v1alpha1.RbacConfig_Target{
+				Services: services,
+			},
+		},
 	}
+}
 
-	store := memory.Make(configDescriptor)
-	controller := memory.NewController(store)
+func initCrcMgr(clusterRbacConfig *model.Config) *Controller {
+	//configDescriptor := model.ConfigDescriptor{
+	//	model.ServiceRole,
+	//	model.ServiceRoleBinding,
+	//	model.ClusterRbacConfig,
+	//}
+
+	//store := memory.Make(configDescriptor)
+	foo := &StubAdapter{}
+	controller := memory.NewController(foo)
+	log.Println("foo")
+	foo.Delete("", "", "")
+	log.Println("controller")
+	controller.Delete("", "", "")
+
 	crcMgr := NewClusterRbacConfigMgr(controller, "svc.cluster.local")
 
 	log.Println("crc", clusterRbacConfig)
 
-	if clusterRbacConfig != nil {
-		_, err := crcMgr.store.Create(*clusterRbacConfig)
-		if err != nil {
-			log.Panicln("err creating:", err)
-		}
-	}
+	//if clusterRbacConfig != nil {
+	//	_, err := crcMgr.store.Create(*clusterRbacConfig)
+	//	if err != nil {
+	//		log.Panicln("err creating:", err)
+	//	}
+	//}
 	return crcMgr
 }
 
-func getClusterRbacConfig(crcMgr *ClusterRbacConfigMgr) *v1alpha1.RbacConfig {
-	log.Println(crcMgr.store.List(model.ClusterRbacConfig.Type, ""))
+func getClusterRbacConfig(crcMgr *Controller) *v1alpha1.RbacConfig {
 	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, "default", "")
+	if config == nil {
+		return nil
+	}
+
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		log.Panicln("cannot cast to rbac config")
 	}
 	return clusterRbacConfig
+}
+
+//type Foo struct {
+//	adapter model.ConfigStore
+//}
+//
+//func NewFoo(a model.ConfigStore) *Foo {
+//	return &Foo{adapter: a}
+//}
+
+type StubAdapter struct {
+	model.ConfigStore
+}
+
+func (cr *StubAdapter) ConfigDescriptor() model.ConfigDescriptor {
+	return model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
+	}
+}
+
+func (cr *StubAdapter) Get(typ, name, namespace string) *model.Config {
+	log.Println("inside get")
+	return createClusterRbacConfigModel("service.test-namespace.svc.cluster.local")
+}
+
+func (cr *StubAdapter) Delete(typ, name, namespace string) error {
+	log.Println("inside of custom delete")
+	return nil
+}
+
+func TestFooBar(t *testing.T) {
+	configDescriptor := model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
+	}
+	store := memory.Make(configDescriptor)
+
+	foo := &StubAdapter{store}
+	foo.Delete("", "", "")
+	controller := memory.NewController(foo)
+	controller.Delete("", "", "")
 }

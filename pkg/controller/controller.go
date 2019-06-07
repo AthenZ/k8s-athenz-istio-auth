@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -31,8 +32,8 @@ type Controller struct {
 	srbMgr            *servicerolebinding.ServiceRoleBindingMgr
 	namespaceIndexer  cache.Indexer
 	namespaceInformer cache.Controller
-	serviceInformer   cache.Controller
 	store             model.ConfigStoreCache
+	crcController     *clusterrbacconfig.Controller
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -208,7 +209,6 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
 	srMgr := servicerole.NewServiceRoleMgr(store)
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(store)
-	crcMgr := clusterrbacconfig.NewClusterRbacConfigMgr(store, dnsSuffix)
 
 	// TODO, handle resync if object gets modified
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
@@ -219,29 +219,19 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
 		cache.ResourceEventHandlerFuncs{}, cache.Indexers{})
 
-	// TODO, handle multithreading
-	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
-	_, serviceInformer := cache.NewInformer(serviceListWatch, &v1.Service{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			crcMgr.SyncService(cache.Added, obj)
-		},
-		UpdateFunc: func(old interface{}, new interface{}) {
-			crcMgr.SyncService(cache.Updated, new)
-		},
-		DeleteFunc: func(obj interface{}) {
-			crcMgr.SyncService(cache.Deleted, obj)
-		},
-	})
+	// TODO, where to move this
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	crcController := clusterrbacconfig.NewController(k8sClient, store, dnsSuffix, queue)
 
 	return &Controller{
 		pollInterval:      pollInterval,
 		dnsSuffix:         dnsSuffix,
 		srMgr:             srMgr,
 		srbMgr:            srbMgr,
-		serviceInformer:   serviceInformer,
 		namespaceIndexer:  namespaceIndexer,
 		namespaceInformer: namespaceInformer,
 		store:             store,
+		crcController:     crcController,
 	}
 }
 
@@ -251,11 +241,11 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 // 2. Namespace informer
 // 3. Istio custom resource informer
 func (c *Controller) Run(stop chan struct{}) {
-	go c.serviceInformer.Run(stop)
+	go c.crcController.Run(stop)
 	go c.namespaceInformer.Run(stop)
 	go c.store.Run(stop)
 
-	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
