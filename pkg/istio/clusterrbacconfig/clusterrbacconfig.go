@@ -7,154 +7,85 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	"fmt"
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 )
 
 const authzEnabledAnnotation = "authz.istio.io/enabled"
 
 type Controller struct {
-	store           model.ConfigStoreCache
-	dnsSuffix       string
-	serviceIndexer  cache.Indexer
-	serviceInformer cache.Controller
-	queue           workqueue.RateLimitingInterface
+	store                model.ConfigStoreCache
+	dnsSuffix            string
+	serviceIndexInformer cache.SharedIndexInformer
+	queue                workqueue.RateLimitingInterface
 }
 
 // NewClusterRbacConfigMgr initializes the Controller object
-func NewController(k8sClient kubernetes.Interface, store model.ConfigStoreCache, dnsSuffix string, queue workqueue.RateLimitingInterface) *Controller {
-	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer) *Controller {
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
 	c := &Controller{
-		store:     store,
-		dnsSuffix: dnsSuffix,
-		//serviceIndexer: serviceIndexer,
-		//serviceInformer: serviceInformer,
-		queue: queue,
+		store:                store,
+		dnsSuffix:            dnsSuffix,
+		serviceIndexInformer: serviceIndexInformer,
+		queue:                queue,
 	}
 
-	serviceIndexer, serviceInformer := cache.NewIndexerInformer(serviceListWatch, &v1.Service{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			svc, ok := obj.(*v1.Service)
-			if !ok {
-				log.Println("error")
-				return
-			}
-
-			ann, exists := svc.Annotations[authzEnabledAnnotation]
-			if exists && ann == "true" {
-				err := c.Sync()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-			//log.Println("inside of add event")
-			//
-			//key, err := cache.MetaNamespaceKeyFunc(obj)
-			//if err == nil {
-			//	svc, ok := obj.(*v1.Service)
-			//	if !ok {
-			//		log.Println("error")
-			//		return
-			//	}
-			//
-			//	ann, exists := svc.Annotations[authzEnabledAnnotation]
-			//	if exists && ann == "true" {
-			//		log.Println("in add")
-			//		queue.Add(key)
-			//	}
-			//} else {
-			//	log.Println("err:", err)
-			//}
-		},
+	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: c.addOrUpdateEvent,
 		UpdateFunc: func(old interface{}, new interface{}) {
-			svc, ok := new.(*v1.Service)
-			if !ok {
-				log.Println("error")
-				return
-			}
-
-			ann, exists := svc.Annotations[authzEnabledAnnotation]
-			if exists && ann == "true" {
-				err := c.Sync()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-			//log.Println("inside of update event")
-			//
-			//key, err := cache.MetaNamespaceKeyFunc(new)
-			//if err == nil {
-			//	svc, ok := new.(*v1.Service)
-			//	if !ok {
-			//		log.Println("error")
-			//		return
-			//	}
-			//
-			//	ann, exists := svc.Annotations[authzEnabledAnnotation]
-			//	if exists && ann == "true" {
-			//		log.Println("in update")
-			//		queue.Add(key)
-			//	}
-			//} else {
-			//	log.Println("err:", err)
-			//}
+			c.addOrUpdateEvent(new)
 		},
-		DeleteFunc: func(obj interface{}) {
-			svc, ok := obj.(*v1.Service)
-			if !ok {
-				log.Println("error")
-				return
-			}
+		DeleteFunc: c.deleteEvent,
+	})
 
-			ann, exists := svc.Annotations[authzEnabledAnnotation]
-			if exists && ann == "true" {
-				err := c.Sync()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-			//log.Println("inside of delete event")
-			//
-			//key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			//if err == nil {
-			//	svc, ok := obj.(*v1.Service)
-			//	if !ok {
-			//		log.Println("error")
-			//		return
-			//	}
-			//
-			//	ann, exists := svc.Annotations[authzEnabledAnnotation]
-			//	if exists && ann == "true" {
-			//		log.Println("in delete")
-			//		queue.Add(key)
-			//	}
-			//} else {
-			//	log.Println("err:", err)
-			//}
-		},
-	}, nil)
-
-	c.serviceInformer = serviceInformer
-	c.serviceIndexer = serviceIndexer
 	return c
+}
+
+func (c *Controller) addOrUpdateEvent(obj interface{}) {
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err == nil {
+		svc, ok := obj.(*v1.Service)
+		if !ok {
+			log.Println("error")
+			return
+		}
+
+		ann, exists := svc.Annotations[authzEnabledAnnotation]
+		if exists && ann == "true" {
+			log.Println("in update")
+			c.queue.Add(key)
+		}
+	} else {
+		log.Println("err:", err)
+	}
+}
+
+func (c *Controller) deleteEvent(obj interface{}) {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err == nil {
+		svc, ok := obj.(*v1.Service)
+		if !ok {
+			log.Println("error")
+			return
+		}
+
+		ann, exists := svc.Annotations[authzEnabledAnnotation]
+		if exists && ann == "true" {
+			log.Println("in delete")
+			c.queue.Add(key)
+		}
+	} else {
+		log.Println("err:", err)
+	}
 }
 
 func (c *Controller) Run(stop chan struct{}) {
 	defer c.queue.ShutDown()
-	go c.serviceInformer.Run(stop)
-
-	if !cache.WaitForCacheSync(stop, c.serviceInformer.HasSynced) {
-		log.Println("timed out waiting for cache to sync")
-	}
-
 	go wait.Until(c.runWorker, 0, stop)
 	<-stop
-	//go c.runWorker()
 }
 
 func (c *Controller) runWorker() {
@@ -171,7 +102,7 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(key)
 
 	// TODO, how to handle error, requeue
-	err := c.Sync()
+	err := c.sync()
 	if err != nil {
 		log.Println(err)
 	}
@@ -241,10 +172,9 @@ func findDiff(a, b []string) []string {
 	return myArray
 }
 
+// TODO, add service indexer with annotation check
 func (crcMgr *Controller) getServiceList() []string {
-	serviceList := crcMgr.serviceIndexer.List()
-	//log.Println("serviceList:", serviceList)
-	log.Println("serviceList length:", len(serviceList))
+	serviceList := crcMgr.serviceIndexInformer.GetIndexer().List()
 	svcList := make([]string, 0)
 
 	for _, service := range serviceList {
@@ -256,11 +186,7 @@ func (crcMgr *Controller) getServiceList() []string {
 
 		key, exists := svc.Annotations[authzEnabledAnnotation]
 		if exists && key == "true" {
-			dns := svc.Name + "." + svc.Namespace + "." + crcMgr.dnsSuffix
-			log.Println("appending to svc list", dns)
-			svcList = append(svcList, dns)
-			log.Println("svcList:", svcList)
-			log.Println("svcList length:", len(svcList))
+			svcList = append(svcList, svc.Name+"."+svc.Namespace+"."+crcMgr.dnsSuffix)
 		}
 	}
 
@@ -270,9 +196,7 @@ func (crcMgr *Controller) getServiceList() []string {
 // syncClusterRbacConfig decides whether to create / update / delete the ClusterRbacConfig
 // object based on a service create / update / delete action and if it has the authz enabled
 // annotation set.
-func (crcMgr *Controller) Sync() error {
-	log.Println("inside of sync log")
-	fmt.Println("inside of sync fmt")
+func (crcMgr *Controller) sync() error {
 	svcList := crcMgr.getServiceList()
 	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil {
@@ -284,9 +208,6 @@ func (crcMgr *Controller) Sync() error {
 	if !ok {
 		return errors.New("Could not cast to ClusterRbacConfig")
 	}
-
-	log.Println("svcList:", svcList)
-	log.Println("crc list:", clusterRbacConfig.Inclusion.Services)
 
 	newServices := findDiff(svcList, clusterRbacConfig.Inclusion.Services)
 	crcMgr.addServices(newServices, clusterRbacConfig)
