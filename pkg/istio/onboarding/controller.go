@@ -1,4 +1,4 @@
-package clusterrbacconfig
+package onboarding
 
 import (
 	"errors"
@@ -20,6 +20,21 @@ type Controller struct {
 	dnsSuffix            string
 	serviceIndexInformer cache.SharedIndexInformer
 	queue                workqueue.RateLimitingInterface
+}
+
+func (c *Controller) ServiceIndexFunc(obj interface{}) ([]string, error) {
+	//svc, ok := obj.(*v1.Service)
+	//if !ok {
+	//	log.Println("error")
+	//	return nil, errors.New("Could not cast to service.")
+	//}
+	//
+	//onboardedSvc := []string{}
+	//ann, exists := svc.Annotations[authzEnabledAnnotation]
+	//if exists && ann == "true" {
+	//	onboardedSvc = []string{}
+	//}
+	return nil, nil
 }
 
 // NewClusterRbacConfigMgr initializes the Controller object
@@ -141,7 +156,8 @@ func (crcMgr *Controller) createClusterRbacConfig(services []string) error {
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
 			Name:    model.DefaultRbacConfigName,
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			//Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Group:   model.ClusterRbacConfig.Group,
 			Version: model.ClusterRbacConfig.Version,
 		},
 		Spec: &v1alpha1.RbacConfig{
@@ -162,7 +178,8 @@ func findDiff(a, b []string) []string {
 		myMap[item] = true
 	}
 
-	myArray := make([]string, len(a))
+	// TODO, 0 will need to resize the array
+	myArray := make([]string, 0)
 	for _, item := range a {
 		if _, exists := myMap[item]; !exists {
 			myArray = append(myArray, item)

@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/clusterrbacconfig"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
@@ -31,7 +31,7 @@ type Controller struct {
 	namespaceIndexer     cache.Indexer
 	namespaceInformer    cache.Controller
 	store                model.ConfigStoreCache
-	crcController        *clusterrbacconfig.Controller
+	crcController        *onboarding.Controller
 	serviceIndexInformer cache.SharedIndexInformer
 }
 
@@ -220,7 +220,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
-	crcController := clusterrbacconfig.NewController(store, dnsSuffix, serviceIndexInformer)
+	crcController := onboarding.NewController(store, dnsSuffix, serviceIndexInformer)
 
 	return &Controller{
 		pollInterval:         pollInterval,
