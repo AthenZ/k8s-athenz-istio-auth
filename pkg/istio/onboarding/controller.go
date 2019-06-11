@@ -5,15 +5,18 @@ import (
 	"log"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/workqueue"
 )
 
-const authzEnabledAnnotation = "authz.istio.io/enabled"
+const (
+	authzEnabled           = "true"
+	authzEnabledAnnotation = "authz.istio.io/enabled"
+)
 
 type Controller struct {
 	store                model.ConfigStoreCache
@@ -22,22 +25,7 @@ type Controller struct {
 	queue                workqueue.RateLimitingInterface
 }
 
-func (c *Controller) ServiceIndexFunc(obj interface{}) ([]string, error) {
-	//svc, ok := obj.(*v1.Service)
-	//if !ok {
-	//	log.Println("error")
-	//	return nil, errors.New("Could not cast to service.")
-	//}
-	//
-	//onboardedSvc := []string{}
-	//ann, exists := svc.Annotations[authzEnabledAnnotation]
-	//if exists && ann == "true" {
-	//	onboardedSvc = []string{}
-	//}
-	return nil, nil
-}
-
-// NewClusterRbacConfigMgr initializes the Controller object
+// NewController initializes the Controller object and its dependencies
 func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
@@ -49,65 +37,45 @@ func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexI
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: c.addOrUpdateEvent,
-		UpdateFunc: func(old interface{}, new interface{}) {
-			c.addOrUpdateEvent(new)
+		AddFunc: func(obj interface{}) {
+			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
 		},
-		DeleteFunc: c.deleteEvent,
+		UpdateFunc: func(old interface{}, new interface{}) {
+			c.processEvent(cache.MetaNamespaceKeyFunc, new)
+		},
+		DeleteFunc: func(obj interface{}) {
+			c.processEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
+		},
 	})
 
 	return c
 }
 
-func (c *Controller) addOrUpdateEvent(obj interface{}) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+// processEvent processes the service watch events and puts them into the queue
+func (c *Controller) processEvent(metaNamespaceKeyFunc func(obj interface{}) (string, error), obj interface{}) {
+	key, err := metaNamespaceKeyFunc(obj)
 	if err == nil {
-		svc, ok := obj.(*v1.Service)
-		if !ok {
-			log.Println("error")
-			return
-		}
-
-		ann, exists := svc.Annotations[authzEnabledAnnotation]
-		if exists && ann == "true" {
-			log.Println("in update")
-			c.queue.Add(key)
-		}
-	} else {
-		log.Println("err:", err)
+		c.queue.Add(key)
+		return
 	}
+	log.Println("Error converting object to key:", err)
 }
 
-func (c *Controller) deleteEvent(obj interface{}) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-	if err == nil {
-		svc, ok := obj.(*v1.Service)
-		if !ok {
-			log.Println("error")
-			return
-		}
-
-		ann, exists := svc.Annotations[authzEnabledAnnotation]
-		if exists && ann == "true" {
-			log.Println("in delete")
-			c.queue.Add(key)
-		}
-	} else {
-		log.Println("err:", err)
-	}
-}
-
+// Run starts the worker thread
 func (c *Controller) Run(stop chan struct{}) {
 	defer c.queue.ShutDown()
 	go wait.Until(c.runWorker, 0, stop)
 	<-stop
 }
 
+// runWorker calls processNextItem to process events of the work queue
 func (c *Controller) runWorker() {
 	for c.processNextItem() {
 	}
 }
 
+// processNextItem takes an item off the queue and calls the controllers sync
+// function, handles the logic of requeuing in case any errors occur.
 func (c *Controller) processNextItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
@@ -116,10 +84,13 @@ func (c *Controller) processNextItem() bool {
 
 	defer c.queue.Done(key)
 
-	// TODO, how to handle error, requeue
 	err := c.sync()
 	if err != nil {
-		log.Println(err)
+		log.Println("Error syncing cluster rbac config:", err)
+		if c.queue.NumRequeues(key) < 5 {
+			c.queue.AddRateLimited(key)
+			return true
+		}
 	}
 
 	c.queue.Forget(key)
@@ -150,14 +121,13 @@ func (crcMgr *Controller) deleteServices(services []string, clusterRbacConfig *v
 	}
 }
 
-// createClusterRbacConfig creates the ClusterRbacConfig object
+// createClusterRbacConfig creates the ClusterRbacConfig object in the cluster
 func (crcMgr *Controller) createClusterRbacConfig(services []string) error {
 	config := model.Config{
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
 			Name:    model.DefaultRbacConfigName,
-			//Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Group:   model.ClusterRbacConfig.Group,
+			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
 			Version: model.ClusterRbacConfig.Version,
 		},
 		Spec: &v1alpha1.RbacConfig{
@@ -172,7 +142,73 @@ func (crcMgr *Controller) createClusterRbacConfig(services []string) error {
 	return err
 }
 
-func findDiff(a, b []string) []string {
+// TODO, add service indexer with annotation check
+func (crcMgr *Controller) getServiceList() []string {
+	cacheServiceList := crcMgr.serviceIndexInformer.GetIndexer().List()
+	serviceList := make([]string, 0)
+
+	for _, service := range cacheServiceList {
+		svc, ok := service.(*v1.Service)
+		if !ok {
+			log.Println("Could not cast to service object, skipping service list addition...")
+			continue
+		}
+
+		key, exists := svc.Annotations[authzEnabledAnnotation]
+		if exists && key == authzEnabled {
+			serviceList = append(serviceList, svc.Name+"."+svc.Namespace+"."+crcMgr.dnsSuffix)
+		}
+	}
+
+	return serviceList
+}
+
+// sync decides whether to create / update / delete the ClusterRbacConfig
+// object based on the current onboarded services in the cluster.
+func (crcMgr *Controller) sync() error {
+	serviceList := crcMgr.getServiceList()
+	// TODO, do we need length check?
+	//if len(serviceList) == 0 {
+	//	return errors.New("Service list is empty, skipping sync...")
+	//}
+
+	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	if config == nil {
+		log.Println("Creating cluster rbac config...")
+		return crcMgr.createClusterRbacConfig(serviceList)
+	}
+
+	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
+	if !ok {
+		return errors.New("Could not cast to ClusterRbacConfig")
+	}
+
+	newServices := findArrayDiff(serviceList, clusterRbacConfig.Inclusion.Services)
+	crcMgr.addServices(newServices, clusterRbacConfig)
+
+	oldServices := findArrayDiff(clusterRbacConfig.Inclusion.Services, serviceList)
+	crcMgr.deleteServices(oldServices, clusterRbacConfig)
+
+	if len(clusterRbacConfig.Inclusion.Services) == 0 {
+		log.Println("Deleting cluster rbac config...")
+		return crcMgr.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
+	}
+
+	if len(newServices) > 0 || len(oldServices) > 0 {
+		log.Println("Updating cluster rbac config...")
+		_, err := crcMgr.store.Update(model.Config{
+			ConfigMeta: config.ConfigMeta,
+			Spec:       clusterRbacConfig,
+		})
+		return err
+	}
+
+	return nil
+}
+
+// TODO, rename the variables
+// findArrayDiff compares the two arrays and returns the difference
+func findArrayDiff(a, b []string) []string {
 	myMap := make(map[string]bool, len(b))
 	for _, item := range b {
 		myMap[item] = true
@@ -187,66 +223,6 @@ func findDiff(a, b []string) []string {
 	}
 
 	return myArray
-}
-
-// TODO, add service indexer with annotation check
-func (crcMgr *Controller) getServiceList() []string {
-	serviceList := crcMgr.serviceIndexInformer.GetIndexer().List()
-	svcList := make([]string, 0)
-
-	for _, service := range serviceList {
-		svc, ok := service.(*v1.Service)
-		if !ok {
-			log.Println("error")
-			continue
-		}
-
-		key, exists := svc.Annotations[authzEnabledAnnotation]
-		if exists && key == "true" {
-			svcList = append(svcList, svc.Name+"."+svc.Namespace+"."+crcMgr.dnsSuffix)
-		}
-	}
-
-	return svcList
-}
-
-// syncClusterRbacConfig decides whether to create / update / delete the ClusterRbacConfig
-// object based on a service create / update / delete action and if it has the authz enabled
-// annotation set.
-func (crcMgr *Controller) sync() error {
-	svcList := crcMgr.getServiceList()
-	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
-	if config == nil {
-		log.Println("creating cluster rbac config")
-		return crcMgr.createClusterRbacConfig(svcList)
-	}
-
-	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
-	if !ok {
-		return errors.New("Could not cast to ClusterRbacConfig")
-	}
-
-	newServices := findDiff(svcList, clusterRbacConfig.Inclusion.Services)
-	crcMgr.addServices(newServices, clusterRbacConfig)
-
-	oldServices := findDiff(clusterRbacConfig.Inclusion.Services, svcList)
-	crcMgr.deleteServices(oldServices, clusterRbacConfig)
-
-	if len(clusterRbacConfig.Inclusion.Services) == 0 {
-		log.Println("deleting cluster rbac config")
-		return crcMgr.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "default")
-	}
-
-	if len(newServices) > 0 || len(oldServices) > 0 {
-		log.Println("updating cluster rbac config")
-		_, err := crcMgr.store.Update(model.Config{
-			ConfigMeta: config.ConfigMeta,
-			Spec:       clusterRbacConfig,
-		})
-		return err
-	}
-
-	return nil
 }
 
 // remove removes an element from an array at the given index
