@@ -1,14 +1,18 @@
 package onboarding
 
 import (
-		"testing"
+	"log"
+	"testing"
 
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/config/memory"
+	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-		"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pilot/pkg/config/memory"
+	"k8s.io/client-go/tools/cache"
+	fcache "k8s.io/client-go/tools/cache/testing"
 )
 
 func createClusterRbacConfig(services ...string) *v1alpha1.RbacConfig {
@@ -153,28 +157,28 @@ func getNewController() *Controller {
 
 	configStore := memory.Make(configDescriptor)
 	ctrl := memory.NewController(configStore)
-	crcMgr := &Controller{store:ctrl}
+	crcMgr := &Controller{store: ctrl}
 	return crcMgr
 }
 
 func TestFindDiff(t *testing.T) {
 	tests := []struct {
-		name                  string
-		inputListA            []string
-		inputListB            []string
-		expectedList          []string
+		name         string
+		inputListA   []string
+		inputListB   []string
+		expectedList []string
 	}{
 		{
-			name:                  "test list difference",
-			inputListA:            []string{"one", "two", "three"},
-			inputListB:            []string{"one", "three"},
-			expectedList:          []string{"two"},
+			name:         "test list difference",
+			inputListA:   []string{"one", "two", "three"},
+			inputListB:   []string{"one", "three"},
+			expectedList: []string{"two"},
 		},
 		{
-			name:                  "test list difference 2",
-			inputListA:            []string{"one", "two", "three"},
-			inputListB:            []string{"one", "two", "three"},
-			expectedList:          []string{},
+			name:         "test list difference 2",
+			inputListA:   []string{"one", "two", "three"},
+			inputListB:   []string{"one", "two", "three"},
+			expectedList: []string{},
 		},
 	}
 
@@ -184,6 +188,67 @@ func TestFindDiff(t *testing.T) {
 			assert.Equal(t, tt.expectedList, list, "expected list to match")
 		})
 	}
+}
+
+func TestGetServiceList(t *testing.T) {
+	newService := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "new-service",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				authzEnabledAnnotation: "true",
+			},
+		},
+	}
+	secondService := newService.DeepCopy()
+	secondService.Name = "second-service"
+
+	notOnboardedService := newService.DeepCopy()
+	notOnboardedService.Name = "not-onboarded"
+	notOnboardedService.Annotations[authzEnabledAnnotation] = "false"
+
+	tests := []struct {
+		name                 string
+		inputServiceList     []*v1.Service
+		expectedServiceArray []string
+	}{
+		{
+			name:                 "test get service list",
+			inputServiceList:     []*v1.Service{newService},
+			expectedServiceArray: []string{"new-service.test-namespace.svc.cluster.local"},
+		},
+		{
+			name:                 "test get service list 2",
+			inputServiceList:     []*v1.Service{newService, secondService, notOnboardedService},
+			expectedServiceArray: []string{"new-service.test-namespace.svc.cluster.local", "second-service.test-namespace.svc.cluster.local"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crcMgr := NewFakeIndexInformerController(tt.inputServiceList)
+			ret := crcMgr.getServiceList()
+			assert.Equal(t, tt.expectedServiceArray, ret, "list should be equal")
+		})
+	}
+}
+
+func NewFakeIndexInformerController(services []*v1.Service) *Controller {
+	crcMgr := getNewController()
+	source := fcache.NewFakeControllerSource()
+	for _, service := range services {
+		source.Add(service)
+	}
+	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
+	stopChan := make(chan struct{})
+	go fakeIndexInformer.Run(stopChan)
+
+	if !cache.WaitForCacheSync(stopChan, fakeIndexInformer.HasSynced) {
+		panic("timed out waiting for cache to sync")
+	}
+	crcMgr.serviceIndexInformer = fakeIndexInformer
+	crcMgr.dnsSuffix = "svc.cluster.local"
+	return crcMgr
 }
 
 // Service create
@@ -200,6 +265,58 @@ func TestFindDiff(t *testing.T) {
 // 1. If service annotation exists and is set to true:
 // - Delete service from clusterrbaccconfig
 // - Delete onboarding if no services left
+
+func TestSyncServiceTwo(t *testing.T) {
+	existingService := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				authzEnabledAnnotation: "true",
+			},
+		},
+	}
+	existingServiceTwo := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "service-two",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				authzEnabledAnnotation: "true",
+			},
+		},
+	}
+
+	inputClusterRbacConfig := createClusterRbacConfigModel("service-two.test-namespace.svc.cluster.local")
+
+	tests := []struct {
+		name                   string
+		inputServiceList       []*v1.Service
+		inputClusterRbacConfig *model.Config
+	}{
+		{
+			name:                   "create cluster rbacconfig when store is empty",
+			inputServiceList:       []*v1.Service{existingService, existingServiceTwo},
+			inputClusterRbacConfig: inputClusterRbacConfig,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crcMgr := NewFakeIndexInformerController(tt.inputServiceList)
+
+			if tt.inputClusterRbacConfig != nil {
+				_, err := crcMgr.store.Create(*tt.inputClusterRbacConfig)
+				assert.Nil(t, err, "create should be nil")
+			}
+
+			err := crcMgr.sync()
+			log.Println("err:", err)
+			assert.Equal(t, nil, err)
+
+			fmt.Println(crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, ""))
+		})
+	}
+}
 
 // TODO, look into istio library
 func TestSyncService(t *testing.T) {
@@ -229,8 +346,8 @@ func TestSyncService(t *testing.T) {
 	//inputClusterRbacConfigThree := createClusterRbacConfigModel("service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local")
 
 	tests := []struct {
-		name                   string
-		inputService           *v1.Service
+		name         string
+		inputService *v1.Service
 		//inputDelta             cache.DeltaType
 		inputClusterRbacConfig *model.Config
 		expectedError          error
@@ -253,8 +370,8 @@ func TestSyncService(t *testing.T) {
 		//	expectedArray:          []string{"service.test-namespace.svc.cluster.local", "service-two.test-namespace.svc.cluster.local"},
 		//},
 		{
-			name:                   "delete a service with authz annotation set to false when cluster rbac config exists with one entry, delete cluster rbac config",
-			inputService:           existingServiceThree,
+			name:         "delete a service with authz annotation set to false when cluster rbac config exists with one entry, delete cluster rbac config",
+			inputService: existingServiceThree,
 			//inputDelta:             cache.Added,
 			inputClusterRbacConfig: inputClusterRbacConfigTwo,
 			expectedError:          nil,
@@ -321,6 +438,7 @@ func createClusterRbacConfigModel(services ...string) *model.Config {
 		},
 	}
 }
+
 //
 //func initCrcMgr(clusterRbacConfig *model.Config) *Controller {
 //	//configDescriptor := model.ConfigDescriptor{
