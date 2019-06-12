@@ -276,7 +276,7 @@ func TestGetServiceList(t *testing.T) {
 			c := newFakeController(tt.inputServiceList, false)
 			ret := c.getServiceList()
 			diff := compareServiceLists(tt.expectedServiceArray, ret)
-			assert.Equal(t, []string{}, diff, "list should be equal")
+			assert.Equal(t, []string{}, diff, "list should be equal to expected")
 		})
 	}
 }
