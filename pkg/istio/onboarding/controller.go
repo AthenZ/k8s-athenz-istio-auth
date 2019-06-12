@@ -16,6 +16,7 @@ import (
 const (
 	authzEnabled           = "true"
 	authzEnabledAnnotation = "authz.istio.io/enabled"
+	numRetries             = 3
 )
 
 type Controller struct {
@@ -87,7 +88,7 @@ func (c *Controller) processNextItem() bool {
 	err := c.sync()
 	if err != nil {
 		log.Println("Error syncing cluster rbac config:", err)
-		if c.queue.NumRequeues(key) < 5 {
+		if c.queue.NumRequeues(key) < numRetries {
 			c.queue.AddRateLimited(key)
 			return true
 		}
@@ -167,11 +168,6 @@ func (crcMgr *Controller) getServiceList() []string {
 // object based on the current onboarded services in the cluster.
 func (crcMgr *Controller) sync() error {
 	serviceList := crcMgr.getServiceList()
-	// TODO, do we need length check?
-	//if len(serviceList) == 0 {
-	//	return errors.New("Service list is empty, skipping sync...")
-	//}
-
 	config := crcMgr.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil {
 		log.Println("Creating cluster rbac config...")
@@ -181,6 +177,10 @@ func (crcMgr *Controller) sync() error {
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		return errors.New("Could not cast to ClusterRbacConfig")
+	}
+
+	if clusterRbacConfig.Inclusion == nil {
+		return errors.New("ClusterRbacConfig inclusion service list is empty")
 	}
 
 	newServices := findArrayDiff(serviceList, clusterRbacConfig.Inclusion.Services)
