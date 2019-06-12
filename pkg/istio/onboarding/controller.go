@@ -173,6 +173,11 @@ func (c *Controller) getServiceList() []string {
 func (c *Controller) sync() error {
 	serviceList := c.getServiceList()
 	config := c.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	if config == nil && len(serviceList) == 0 {
+		log.Println("Service list is empty and cluster rbac config does not exist, skipping sync...")
+		return nil
+	}
+
 	if config == nil {
 		log.Println("Creating cluster rbac config...")
 		return c.createClusterRbacConfig(serviceList)
@@ -207,6 +212,7 @@ func (c *Controller) sync() error {
 		return err
 	}
 
+	log.Println("Sync state is current, no changes needed...")
 	return nil
 }
 
