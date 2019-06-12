@@ -275,7 +275,7 @@ func TestGetServiceList(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(tt.inputServiceList, false)
 			ret := c.getServiceList()
-			diff := findArrayDiff(tt.expectedServiceArray, ret)
+			diff := compareServiceLists(tt.expectedServiceArray, ret)
 			assert.Equal(t, []string{}, diff, "list should be equal")
 		})
 	}
@@ -330,13 +330,13 @@ func TestSyncService(t *testing.T) {
 			err := c.sync()
 			assert.Nil(t, err, "sync error should be nil")
 			_, clusterRbacConfig := getClusterRbacConfig(c)
-			diff := findArrayDiff(tt.expectedServiceList, clusterRbacConfig.Inclusion.Services)
+			diff := compareServiceLists(tt.expectedServiceList, clusterRbacConfig.Inclusion.Services)
 			assert.Equal(t, []string{}, diff, "ClusterRbacConfig inclusion service list should be equal to the expected service list")
 		})
 	}
 }
 
-func TestFindArrayDiff(t *testing.T) {
+func TestCompareServiceLists(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputListA   []string
@@ -359,7 +359,42 @@ func TestFindArrayDiff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			list := findArrayDiff(tt.inputListA, tt.inputListB)
+			list := compareServiceLists(tt.inputListA, tt.inputListB)
+			assert.Equal(t, tt.expectedList, list, "expected array to equal expected")
+		})
+	}
+}
+
+func TestRemoveIndexElement(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputList     []string
+		indexToRemove int
+		expectedList  []string
+	}{
+		{
+			name:          "test removing index from array",
+			inputList:     []string{"one", "two", "three"},
+			indexToRemove: 1,
+			expectedList:  []string{"one", "three"},
+		},
+		{
+			name:          "test removing from empty array",
+			inputList:     []string{},
+			indexToRemove: 1,
+			expectedList:  []string{},
+		},
+		{
+			name:          "test removing negative index",
+			inputList:     []string{"one"},
+			indexToRemove: -1,
+			expectedList:  []string{"one"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := removeIndexElement(tt.inputList, tt.indexToRemove)
 			assert.Equal(t, tt.expectedList, list, "expected array to equal expected")
 		})
 	}
