@@ -15,7 +15,7 @@ require (
 	github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
-	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/imdario/mergo v0.0.0-20141206190957-6633656539c1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/copier v0.0.0-20180308034124-7e38e58719c3
 	github.com/json-iterator/go v1.1.5 // indirect
@@ -41,11 +41,12 @@ require (
 	google.golang.org/appengine v1.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20181101192439-c830210a61df // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
 	istio.io/api v0.0.0-20190416154520-4a9a2a12a700
 	istio.io/istio v0.0.0-20190515005051-eec7a74473de
 	k8s.io/api v0.0.0-20180904230853-4e7be11eab3f
 	k8s.io/apiextensions-apiserver v0.0.0-20180905004947-16750353bf97 // indirect
-	k8s.io/apimachinery v0.0.0-20181026144827-8ee1a638bafa
-	k8s.io/client-go v0.0.0-20181010045704-56e7a63b5e38
+	k8s.io/apimachinery v0.0.0-20190223001710-c182ff3b9841
+	k8s.io/client-go v8.0.0+incompatible
 	k8s.io/kube-openapi v0.0.0-20190530181030-b52b5b0f5a7c // indirect
 )
