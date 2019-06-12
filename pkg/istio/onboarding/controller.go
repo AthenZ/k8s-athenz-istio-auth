@@ -26,10 +26,8 @@ type Controller struct {
 	queue                workqueue.RateLimitingInterface
 }
 
-type metaNamespaceKeyFunc func(obj interface{}) (string, error)
-
 // processEvent processes the service watch events and puts them into the queue
-func (c *Controller) processEvent(fn metaNamespaceKeyFunc, obj interface{}) {
+func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 	key, err := fn(obj)
 	if err == nil {
 		c.queue.Add(key)
@@ -53,8 +51,8 @@ func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexI
 		AddFunc: func(obj interface{}) {
 			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
 		},
-		UpdateFunc: func(old interface{}, new interface{}) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, new)
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			c.processEvent(cache.MetaNamespaceKeyFunc, newObj)
 		},
 		DeleteFunc: func(obj interface{}) {
 			c.processEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
@@ -89,8 +87,9 @@ func (c *Controller) processNextItem() bool {
 
 	err := c.sync()
 	if err != nil {
-		log.Println("Error syncing cluster rbac config:", err)
+		log.Printf("Error syncing cluster rbac config for key %s: %s", key, err)
 		if c.queue.NumRequeues(key) < numRetries {
+			log.Printf("Retrying key %s due to sync error", key)
 			c.queue.AddRateLimited(key)
 			return true
 		}
@@ -102,6 +101,10 @@ func (c *Controller) processNextItem() bool {
 
 // addService will add a service to the ClusterRbacConfig object
 func (c *Controller) addServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
+	if clusterRbacConfig == nil || clusterRbacConfig.Inclusion == nil {
+		return
+	}
+
 	for _, service := range services {
 		clusterRbacConfig.Inclusion.Services = append(clusterRbacConfig.Inclusion.Services, service)
 	}
@@ -109,6 +112,10 @@ func (c *Controller) addServices(services []string, clusterRbacConfig *v1alpha1.
 
 // deleteService will delete a service from the ClusterRbacConfig object
 func (c *Controller) deleteServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
+	if clusterRbacConfig == nil || clusterRbacConfig.Inclusion == nil {
+		return
+	}
+
 	for _, service := range services {
 		var indexToRemove = -1
 		for i, svc := range clusterRbacConfig.Inclusion.Services {
@@ -145,9 +152,9 @@ func (c *Controller) createClusterRbacConfig(services []string) error {
 	return err
 }
 
-// getServiceList extracts all services from the indexer with the authz
+// getOnboardedServiceList extracts all services from the indexer with the authz
 // annotation set to true.
-func (c *Controller) getServiceList() []string {
+func (c *Controller) getOnboardedServiceList() []string {
 	cacheServiceList := c.serviceIndexInformer.GetIndexer().List()
 	serviceList := make([]string, 0)
 
@@ -171,7 +178,7 @@ func (c *Controller) getServiceList() []string {
 // sync decides whether to create / update / delete the ClusterRbacConfig
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
-	serviceList := c.getServiceList()
+	serviceList := c.getOnboardedServiceList()
 	config := c.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Println("Service list is empty and cluster rbac config does not exist, skipping sync...")
@@ -186,10 +193,6 @@ func (c *Controller) sync() error {
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		return errors.New("Could not cast to ClusterRbacConfig")
-	}
-
-	if clusterRbacConfig.Inclusion == nil {
-		return errors.New("ClusterRbacConfig inclusion service list is empty")
 	}
 
 	newServices := compareServiceLists(serviceList, clusterRbacConfig.Inclusion.Services)
@@ -216,7 +219,7 @@ func (c *Controller) sync() error {
 	return nil
 }
 
-// compareServices compares the two arrays and returns the difference
+// compareServices returns a list of which items in list A are not in list B
 func compareServiceLists(serviceListA, serviceListB []string) []string {
 	serviceMapB := make(map[string]bool, len(serviceListB))
 	for _, item := range serviceListB {
@@ -233,7 +236,7 @@ func compareServiceLists(serviceListA, serviceListB []string) []string {
 	return serviceListDiff
 }
 
-// remove removes an element from an array at the given index
+// removeIndexElement removes an element from an array at the given index
 func removeIndexElement(serviceList []string, indexToRemove int) []string {
 	if indexToRemove > len(serviceList) || indexToRemove < 0 {
 		return serviceList

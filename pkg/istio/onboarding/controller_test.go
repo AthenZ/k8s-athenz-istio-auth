@@ -156,17 +156,25 @@ func TestProcessEvent(t *testing.T) {
 			inputObject:      nil,
 			expectedQueueLen: 0,
 		},
+		{
+			name:             "test processing a not onboarded service object",
+			inputObject:      notOnboardedService,
+			expectedQueueLen: 1,
+			expectedKeyName:  "test-namespace/not-onboarded-service",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, onboardedService)
+			c.processEvent(cache.MetaNamespaceKeyFunc, tt.inputObject)
 			assert.Equal(t, tt.expectedQueueLen, c.queue.Len(), "expected queue length should be equal")
 
 			if tt.expectedQueueLen > 0 {
 				item, shutdown := c.queue.Get()
 				assert.Equal(t, tt.expectedKeyName, item, "expected key name should be equal")
 				assert.Equal(t, false, shutdown, "shutdown should be false")
+				c.queue.Forget(item)
+				c.queue.Done(item)
 			}
 		})
 	}
@@ -195,12 +203,26 @@ func TestAddService(t *testing.T) {
 			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
 			expectedArray:     []string{existingServiceName, onboardedServiceName},
 		},
+		{
+			name:              "test adding nil ClusterRbacConfig",
+			inputServices:     []string{onboardedServiceName},
+			clusterRbacConfig: nil,
+			expectedArray:     []string{},
+		},
+		{
+			name:              "test adding with empty ClusterRbacConfig",
+			inputServices:     []string{onboardedServiceName},
+			clusterRbacConfig: createClusterRbacConfig(),
+			expectedArray:     []string{onboardedServiceName},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c.addServices(tt.inputServices, tt.clusterRbacConfig)
-			assert.Equal(t, tt.expectedArray, tt.clusterRbacConfig.Inclusion.Services, "ClusterRbacConfig service list should contain expected services")
+			if tt.clusterRbacConfig != nil {
+				assert.Equal(t, tt.expectedArray, tt.clusterRbacConfig.Inclusion.Services, "ClusterRbacConfig service list should contain expected services")
+			}
 		})
 	}
 }
@@ -223,6 +245,18 @@ func TestDeleteService(t *testing.T) {
 		{
 			name:              "test deleting existing service from ClusterRbacConfig",
 			clusterRbacConfig: createClusterRbacConfig(onboardedServiceName, existingServiceName),
+			inputArray:        []string{onboardedServiceName},
+			expectedArray:     []string{existingServiceName},
+		},
+		{
+			name:              "test deleting empty input array to ClusterRbacConfig",
+			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
+			inputArray:        []string{},
+			expectedArray:     []string{existingServiceName},
+		},
+		{
+			name:              "test deleting empty service which does not exist in the ClusterRbacConfig",
+			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{existingServiceName},
 		},
@@ -274,7 +308,7 @@ func TestGetServiceList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(tt.inputServiceList, false)
-			ret := c.getServiceList()
+			ret := c.getOnboardedServiceList()
 			diff := compareServiceLists(tt.expectedServiceArray, ret)
 			assert.Equal(t, []string{}, diff, "list should be equal to expected")
 		})
