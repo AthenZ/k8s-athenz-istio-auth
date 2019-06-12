@@ -4,10 +4,13 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.32.0 // indirect
+	github.com/ardielle/ardielle-go v1.5.2
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/envoyproxy/go-control-plane v0.8.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/gogo/protobuf v1.2.1
 	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect
@@ -15,7 +18,7 @@ require (
 	github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
-	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/imdario/mergo v0.0.0-20141206190957-6633656539c1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/copier v0.0.0-20180308034124-7e38e58719c3
 	github.com/json-iterator/go v1.1.5 // indirect
