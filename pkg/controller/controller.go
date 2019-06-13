@@ -13,14 +13,21 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+)
+
+const (
+	queueNumRetries = 3
+	queueKey        = "sync"
 )
 
 type Controller struct {
@@ -33,6 +40,7 @@ type Controller struct {
 	store                model.ConfigStoreCache
 	crcController        *onboarding.Controller
 	serviceIndexInformer cache.SharedIndexInformer
+	queue                workqueue.RateLimitingInterface
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -205,6 +213,7 @@ func (c *Controller) sync() error {
 // 7. Namespace informer / indexer
 // 8. Service informer
 func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
 	srMgr := servicerole.NewServiceRoleMgr(store)
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(store)
@@ -232,6 +241,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 		serviceIndexInformer: serviceIndexInformer,
 		store:                store,
 		crcController:        crcController,
+		queue:                queue,
 	}
 }
 
@@ -250,12 +260,45 @@ func (c *Controller) Run(stop chan struct{}) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
+	defer c.queue.ShutDown()
+	go wait.Until(c.runWorker, 0, stop)
+
+	// TODO, change once athenz domain cr watch is in place, add individual
+	// items to queue
 	for {
-		err := c.sync()
-		if err != nil {
-			log.Println("Error running sync:", err)
-		}
+		c.queue.Add(queueKey)
 		log.Println("Sleeping for", c.pollInterval)
 		time.Sleep(c.pollInterval)
 	}
+}
+
+// runWorker calls processNextItem to process events of the work queue
+func (c *Controller) runWorker() {
+	for c.processNextItem() {
+	}
+}
+
+// processNextItem takes an item off the queue and calls the controllers sync
+// function, handles the logic of requeuing in case any errors occur
+func (c *Controller) processNextItem() bool {
+	key, quit := c.queue.Get()
+	if quit {
+		return false
+	}
+
+	defer c.queue.Done(key)
+
+	// TODO, change to new sync function
+	err := c.sync()
+	if err != nil {
+		log.Printf("Error syncing athenz state for key %s: %s", key, err)
+		if c.queue.NumRequeues(key) < queueNumRetries {
+			log.Printf("Retrying key %s due to sync error", key)
+			c.queue.AddRateLimited(key)
+			return true
+		}
+	}
+
+	c.queue.Forget(key)
+	return true
 }
