@@ -221,6 +221,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	crcController := onboarding.NewController(store, dnsSuffix, serviceIndexInformer)
+	store.RegisterEventHandler(model.ClusterRbacConfig.Type, crcController.EventHandler)
 
 	return &Controller{
 		pollInterval:         pollInterval,
@@ -242,13 +243,15 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 // 3. Istio custom resource informer
 func (c *Controller) Run(stop chan struct{}) {
 	go c.serviceIndexInformer.Run(stop)
-	go c.crcController.Run(stop)
 	go c.namespaceInformer.Run(stop)
 	go c.store.Run(stop)
 
 	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
+
+	// crc controller must wait for service informer to sync before starting
+	go c.crcController.Run(stop)
 
 	for {
 		err := c.sync()

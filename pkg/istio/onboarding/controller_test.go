@@ -4,15 +4,13 @@ import (
 	"log"
 	"testing"
 
+	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/config/memory"
+	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	fcache "k8s.io/client-go/tools/cache/testing"
-	"k8s.io/client-go/util/workqueue"
-
-	"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/config/memory"
-	"istio.io/istio/pilot/pkg/model"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -51,31 +49,12 @@ func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
 }
 
 func (cs *fakeConfigStore) Get(typ, name, namespace string) *model.Config {
-	return createClusterRbacConfigModel(onboardedServiceName)
+	clusterRbacConfig := createClusterRbacConfig([]string{onboardedServiceName})
+	return &clusterRbacConfig
 }
 
 func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
 	return nil
-}
-
-func createClusterRbacConfig(services ...string) *v1alpha1.RbacConfig {
-	return &v1alpha1.RbacConfig{
-		Inclusion: &v1alpha1.RbacConfig_Target{
-			Services: services,
-		},
-	}
-}
-
-func createClusterRbacConfigModel(services ...string) *model.Config {
-	return &model.Config{
-		ConfigMeta: model.ConfigMeta{
-			Type:    model.ClusterRbacConfig.Type,
-			Name:    model.DefaultRbacConfigName,
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
-			Version: model.ClusterRbacConfig.Version,
-		},
-		Spec: createClusterRbacConfig(services...),
-	}
 }
 
 func getClusterRbacConfig(c *Controller) (*model.Config, *v1alpha1.RbacConfig) {
@@ -136,55 +115,7 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, configStoreCache, c.store, "config store cache pointer should be equal")
 }
 
-func TestProcessEvent(t *testing.T) {
-	c := &Controller{queue: workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())}
-
-	tests := []struct {
-		name             string
-		inputObject      interface{}
-		expectedQueueLen int
-		expectedKeyName  string
-	}{
-		{
-			name:             "test processing a service object",
-			inputObject:      onboardedService,
-			expectedQueueLen: 1,
-			expectedKeyName:  "test-namespace/onboarded-service",
-		},
-		{
-			name:             "test processing a non service object",
-			inputObject:      nil,
-			expectedQueueLen: 0,
-		},
-		{
-			name:             "test processing a not onboarded service object",
-			inputObject:      notOnboardedService,
-			expectedQueueLen: 1,
-			expectedKeyName:  "test-namespace/not-onboarded-service",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, tt.inputObject)
-			assert.Equal(t, tt.expectedQueueLen, c.queue.Len(), "expected queue length should be equal")
-
-			if tt.expectedQueueLen > 0 {
-				item, shutdown := c.queue.Get()
-				assert.Equal(t, tt.expectedKeyName, item, "expected key name should be equal")
-				assert.Equal(t, false, shutdown, "shutdown should be false")
-				c.queue.Forget(item)
-				c.queue.Done(item)
-			}
-		})
-	}
-
-	c.queue.ShutDown()
-}
-
 func TestAddService(t *testing.T) {
-	c := &Controller{}
-
 	tests := []struct {
 		name              string
 		inputServices     []string
@@ -194,13 +125,13 @@ func TestAddService(t *testing.T) {
 		{
 			name:              "test adding new service to ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacConfig(),
+			clusterRbacConfig: createClusterRbacSpec(nil),
 			expectedArray:     []string{onboardedServiceName},
 		},
 		{
 			name:              "test adding existing service to ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
+			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
 			expectedArray:     []string{existingServiceName, onboardedServiceName},
 		},
 		{
@@ -212,14 +143,14 @@ func TestAddService(t *testing.T) {
 		{
 			name:              "test adding with empty ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacConfig(),
+			clusterRbacConfig: createClusterRbacSpec(nil),
 			expectedArray:     []string{onboardedServiceName},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c.addServices(tt.inputServices, tt.clusterRbacConfig)
+			addServices(tt.inputServices, tt.clusterRbacConfig)
 			if tt.clusterRbacConfig != nil {
 				assert.Equal(t, tt.expectedArray, tt.clusterRbacConfig.Inclusion.Services, "ClusterRbacConfig service list should contain expected services")
 			}
@@ -228,8 +159,6 @@ func TestAddService(t *testing.T) {
 }
 
 func TestDeleteService(t *testing.T) {
-	c := &Controller{}
-
 	tests := []struct {
 		name              string
 		clusterRbacConfig *v1alpha1.RbacConfig
@@ -238,25 +167,25 @@ func TestDeleteService(t *testing.T) {
 	}{
 		{
 			name:              "test deleting service from ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacConfig(onboardedServiceName),
+			clusterRbacConfig: createClusterRbacSpec([]string{onboardedServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{},
 		},
 		{
 			name:              "test deleting existing service from ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacConfig(onboardedServiceName, existingServiceName),
+			clusterRbacConfig: createClusterRbacSpec([]string{onboardedServiceName, existingServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{existingServiceName},
 		},
 		{
 			name:              "test deleting empty input array to ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
+			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
 			inputArray:        []string{},
 			expectedArray:     []string{existingServiceName},
 		},
 		{
 			name:              "test deleting empty service which does not exist in the ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacConfig(existingServiceName),
+			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{existingServiceName},
 		},
@@ -264,18 +193,18 @@ func TestDeleteService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c.deleteServices(tt.inputArray, tt.clusterRbacConfig)
+			deleteServices(tt.inputArray, tt.clusterRbacConfig)
 			assert.Equal(t, tt.expectedArray, tt.clusterRbacConfig.Inclusion.Services, "ClusterRbacConfig service list should contain expected services")
 		})
 	}
 }
 
 func TestCreateClusterRbacConfig(t *testing.T) {
-	c := newFakeController(nil, false)
-	err := c.createClusterRbacConfig([]string{onboardedServiceName, existingServiceName})
-	assert.Nil(t, err, "error should be equal")
-
-	config, clusterRbacConfig := getClusterRbacConfig(c)
+	config := createClusterRbacConfig([]string{onboardedServiceName, existingServiceName})
+	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
+	if !ok {
+		log.Panicln("cannot cast to rbac config")
+	}
 	assert.Equal(t, model.ClusterRbacConfig.Type, config.Type, "ClusterRbacConfig type should be equal")
 	assert.Equal(t, model.DefaultRbacConfigName, config.Name, "ClusterRbacConfig name should be equal")
 	assert.Equal(t, model.ClusterRbacConfig.Group+model.IstioAPIGroupDomain, config.Group, "ClusterRbacConfig group should be equal")
@@ -315,6 +244,24 @@ func TestGetServiceList(t *testing.T) {
 	}
 }
 
+func createClusterRbacExclusionConfig(services []string) model.Config {
+	return model.Config{
+		ConfigMeta: model.ConfigMeta{
+			Type:    model.ClusterRbacConfig.Type,
+			Name:    model.DefaultRbacConfigName,
+			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Version: model.ClusterRbacConfig.Version,
+		},
+		Spec: &v1alpha1.RbacConfig{
+			Mode: v1alpha1.RbacConfig_ON_WITH_EXCLUSION,
+			Exclusion: &v1alpha1.RbacConfig_Target{
+				Services: services,
+			},
+			Inclusion: nil,
+		},
+	}
+}
+
 func TestSyncService(t *testing.T) {
 	onboardedServiceCopy := onboardedService.DeepCopy()
 	onboardedServiceCopy.Name = "onboarded-service-copy"
@@ -327,26 +274,31 @@ func TestSyncService(t *testing.T) {
 	tests := []struct {
 		name                   string
 		inputServiceList       []*v1.Service
-		inputClusterRbacConfig *model.Config
+		inputClusterRbacConfig model.Config
 		expectedServiceList    []string
 		fake                   bool
 	}{
 		{
-			name:                   "Create: create ClusterRbacConfig when it does not exist with multiple new services",
-			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
-			inputClusterRbacConfig: nil,
-			expectedServiceList:    []string{onboardedServiceName, onboardedServiceCopyName},
+			name:                "Create: create ClusterRbacConfig when it does not exist with multiple new services",
+			inputServiceList:    []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
+			expectedServiceList: []string{onboardedServiceName, onboardedServiceCopyName},
 		},
 		{
 			name:                   "Update: update ClusterRbacConfig when it exists with multiple services",
 			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
-			inputClusterRbacConfig: createClusterRbacConfigModel(onboardedServiceCopyName),
+			inputClusterRbacConfig: createClusterRbacConfig([]string{onboardedServiceCopyName}),
+			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
+		},
+		{
+			name:                   "Update: update ClusterRbacConfig when it exists without an inclusion field",
+			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
+			inputClusterRbacConfig: createClusterRbacExclusionConfig([]string{onboardedServiceCopyName}),
 			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
 		},
 		{
 			name:                   "Delete: delete cluster rbacconfig if service is no longer onboarded",
 			inputServiceList:       []*v1.Service{notOnboardedService},
-			inputClusterRbacConfig: createClusterRbacConfigModel(notOnboardedServiceName),
+			inputClusterRbacConfig: createClusterRbacConfig([]string{notOnboardedServiceName}),
 			expectedServiceList:    []string{},
 			fake:                   true,
 		},
@@ -356,8 +308,8 @@ func TestSyncService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(tt.inputServiceList, tt.fake)
 
-			if tt.inputClusterRbacConfig != nil {
-				_, err := c.store.Create(*tt.inputClusterRbacConfig)
+			if tt.inputClusterRbacConfig.Spec != nil {
+				_, err := c.store.Create(tt.inputClusterRbacConfig)
 				assert.Nil(t, err, "creating the ClusterRbacConfig should return nil")
 			}
 

@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	numRetries             = 3
+	queueNumRetries        = 3
 	authzEnabled           = "true"
 	authzEnabledAnnotation = "authz.istio.io/enabled"
+	queueKey               = model.DefaultRbacConfigName + "/" + v1.NamespaceDefault
 )
 
 type Controller struct {
@@ -24,16 +25,6 @@ type Controller struct {
 	dnsSuffix            string
 	serviceIndexInformer cache.SharedIndexInformer
 	queue                workqueue.RateLimitingInterface
-}
-
-// processEvent processes the service watch events and puts them into the queue
-func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
-	key, err := fn(obj)
-	if err == nil {
-		c.queue.Add(key)
-		return
-	}
-	log.Println("Error converting object to key:", err)
 }
 
 // NewController initializes the Controller object and its dependencies
@@ -48,14 +39,14 @@ func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexI
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
+		AddFunc: func(_ interface{}) {
+			c.queue.Add(queueKey)
 		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, newObj)
+		UpdateFunc: func(_ interface{}, _ interface{}) {
+			c.queue.Add(queueKey)
 		},
-		DeleteFunc: func(obj interface{}) {
-			c.processEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
+		DeleteFunc: func(_ interface{}) {
+			c.queue.Add(queueKey)
 		},
 	})
 
@@ -88,7 +79,7 @@ func (c *Controller) processNextItem() bool {
 	err := c.sync()
 	if err != nil {
 		log.Printf("Error syncing cluster rbac config for key %s: %s", key, err)
-		if c.queue.NumRequeues(key) < numRetries {
+		if c.queue.NumRequeues(key) < queueNumRetries {
 			log.Printf("Retrying key %s due to sync error", key)
 			c.queue.AddRateLimited(key)
 			return true
@@ -100,7 +91,7 @@ func (c *Controller) processNextItem() bool {
 }
 
 // addService will add a service to the ClusterRbacConfig object
-func (c *Controller) addServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
+func addServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
 	if clusterRbacConfig == nil || clusterRbacConfig.Inclusion == nil {
 		return
 	}
@@ -111,7 +102,7 @@ func (c *Controller) addServices(services []string, clusterRbacConfig *v1alpha1.
 }
 
 // deleteService will delete a service from the ClusterRbacConfig object
-func (c *Controller) deleteServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
+func deleteServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
 	if clusterRbacConfig == nil || clusterRbacConfig.Inclusion == nil {
 		return
 	}
@@ -131,25 +122,28 @@ func (c *Controller) deleteServices(services []string, clusterRbacConfig *v1alph
 	}
 }
 
-// createClusterRbacConfig creates the ClusterRbacConfig object in the cluster
-func (c *Controller) createClusterRbacConfig(services []string) error {
-	config := model.Config{
+// createClusterRbacSpec creates the rbac config object with the inclusion field
+func createClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
+	return &v1alpha1.RbacConfig{
+		Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION,
+		Inclusion: &v1alpha1.RbacConfig_Target{
+			Services: services,
+		},
+		Exclusion: nil,
+	}
+}
+
+// createClusterRbacConfig creates the ClusterRbacConfig model config object
+func createClusterRbacConfig(services []string) model.Config {
+	return model.Config{
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
 			Name:    model.DefaultRbacConfigName,
 			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
 			Version: model.ClusterRbacConfig.Version,
 		},
-		Spec: &v1alpha1.RbacConfig{
-			Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION,
-			Inclusion: &v1alpha1.RbacConfig_Target{
-				Services: services,
-			},
-		},
+		Spec: createClusterRbacSpec(services),
 	}
-
-	_, err := c.store.Create(config)
-	return err
 }
 
 // getOnboardedServiceList extracts all services from the indexer with the authz
@@ -187,7 +181,8 @@ func (c *Controller) sync() error {
 
 	if config == nil {
 		log.Println("Creating cluster rbac config...")
-		return c.createClusterRbacConfig(serviceList)
+		_, err := c.store.Create(createClusterRbacConfig(serviceList))
+		return err
 	}
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
@@ -195,18 +190,31 @@ func (c *Controller) sync() error {
 		return errors.New("Could not cast to ClusterRbacConfig")
 	}
 
+	needsUpdate := false
+	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
+		log.Println("ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
+		clusterRbacConfig = createClusterRbacSpec(serviceList)
+		needsUpdate = true
+	}
+
 	newServices := compareServiceLists(serviceList, clusterRbacConfig.Inclusion.Services)
-	c.addServices(newServices, clusterRbacConfig)
+	if len(newServices) > 0 {
+		addServices(newServices, clusterRbacConfig)
+		needsUpdate = true
+	}
 
 	oldServices := compareServiceLists(clusterRbacConfig.Inclusion.Services, serviceList)
-	c.deleteServices(oldServices, clusterRbacConfig)
+	if len(oldServices) > 0 {
+		deleteServices(oldServices, clusterRbacConfig)
+		needsUpdate = true
+	}
 
 	if len(clusterRbacConfig.Inclusion.Services) == 0 {
 		log.Println("Deleting cluster rbac config...")
 		return c.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
 	}
 
-	if len(newServices) > 0 || len(oldServices) > 0 {
+	if needsUpdate {
 		log.Println("Updating cluster rbac config...")
 		_, err := c.store.Update(model.Config{
 			ConfigMeta: config.ConfigMeta,
@@ -217,6 +225,11 @@ func (c *Controller) sync() error {
 
 	log.Println("Sync state is current, no changes needed...")
 	return nil
+}
+
+func (c *Controller) EventHandler(config model.Config, e model.Event) {
+	log.Printf("Received %s event for cluster rbac config: %+v", e.String(), config)
+	c.queue.Add(queueKey)
 }
 
 // compareServices returns a list of which items in list A are not in list B
