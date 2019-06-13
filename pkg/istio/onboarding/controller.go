@@ -17,7 +17,7 @@ const (
 	queueNumRetries        = 3
 	authzEnabled           = "true"
 	authzEnabledAnnotation = "authz.istio.io/enabled"
-	queueKey               = model.DefaultRbacConfigName + "/" + v1.NamespaceDefault
+	queueKey               = v1.NamespaceDefault + "/" + model.DefaultRbacConfigName
 )
 
 type Controller struct {
@@ -122,8 +122,8 @@ func deleteServices(services []string, clusterRbacConfig *v1alpha1.RbacConfig) {
 	}
 }
 
-// createClusterRbacSpec creates the rbac config object with the inclusion field
-func createClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
+// newClusterRbacSpec creates the rbac config object with the inclusion field
+func newClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
 	return &v1alpha1.RbacConfig{
 		Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION,
 		Inclusion: &v1alpha1.RbacConfig_Target{
@@ -133,8 +133,8 @@ func createClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
 	}
 }
 
-// createClusterRbacConfig creates the ClusterRbacConfig model config object
-func createClusterRbacConfig(services []string) model.Config {
+// newClusterRbacConfig creates the ClusterRbacConfig model config object
+func newClusterRbacConfig(services []string) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
@@ -142,7 +142,7 @@ func createClusterRbacConfig(services []string) model.Config {
 			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
 			Version: model.ClusterRbacConfig.Version,
 		},
-		Spec: createClusterRbacSpec(services),
+		Spec: newClusterRbacSpec(services),
 	}
 }
 
@@ -181,7 +181,7 @@ func (c *Controller) sync() error {
 
 	if config == nil {
 		log.Println("Creating cluster rbac config...")
-		_, err := c.store.Create(createClusterRbacConfig(serviceList))
+		_, err := c.store.Create(newClusterRbacConfig(serviceList))
 		return err
 	}
 
@@ -190,23 +190,23 @@ func (c *Controller) sync() error {
 		return errors.New("Could not cast to ClusterRbacConfig")
 	}
 
-	needsUpdate := false
 	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
 		log.Println("ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
-		clusterRbacConfig = createClusterRbacSpec(serviceList)
-		needsUpdate = true
+		_, err := c.store.Update(model.Config{
+			ConfigMeta: config.ConfigMeta,
+			Spec:       newClusterRbacSpec(serviceList),
+		})
+		return err
 	}
 
 	newServices := compareServiceLists(serviceList, clusterRbacConfig.Inclusion.Services)
 	if len(newServices) > 0 {
 		addServices(newServices, clusterRbacConfig)
-		needsUpdate = true
 	}
 
 	oldServices := compareServiceLists(clusterRbacConfig.Inclusion.Services, serviceList)
 	if len(oldServices) > 0 {
 		deleteServices(oldServices, clusterRbacConfig)
-		needsUpdate = true
 	}
 
 	if len(clusterRbacConfig.Inclusion.Services) == 0 {
@@ -214,7 +214,7 @@ func (c *Controller) sync() error {
 		return c.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
 	}
 
-	if needsUpdate {
+	if len(newServices) > 0 || len(oldServices) > 0 {
 		log.Println("Updating cluster rbac config...")
 		_, err := c.store.Update(model.Config{
 			ConfigMeta: config.ConfigMeta,

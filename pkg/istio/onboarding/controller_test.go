@@ -49,7 +49,7 @@ func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
 }
 
 func (cs *fakeConfigStore) Get(typ, name, namespace string) *model.Config {
-	clusterRbacConfig := createClusterRbacConfig([]string{onboardedServiceName})
+	clusterRbacConfig := newClusterRbacConfig([]string{onboardedServiceName})
 	return &clusterRbacConfig
 }
 
@@ -125,13 +125,13 @@ func TestAddService(t *testing.T) {
 		{
 			name:              "test adding new service to ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacSpec(nil),
+			clusterRbacConfig: newClusterRbacSpec(nil),
 			expectedArray:     []string{onboardedServiceName},
 		},
 		{
 			name:              "test adding existing service to ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
+			clusterRbacConfig: newClusterRbacSpec([]string{existingServiceName}),
 			expectedArray:     []string{existingServiceName, onboardedServiceName},
 		},
 		{
@@ -143,7 +143,7 @@ func TestAddService(t *testing.T) {
 		{
 			name:              "test adding with empty ClusterRbacConfig",
 			inputServices:     []string{onboardedServiceName},
-			clusterRbacConfig: createClusterRbacSpec(nil),
+			clusterRbacConfig: newClusterRbacSpec(nil),
 			expectedArray:     []string{onboardedServiceName},
 		},
 	}
@@ -167,25 +167,25 @@ func TestDeleteService(t *testing.T) {
 	}{
 		{
 			name:              "test deleting service from ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacSpec([]string{onboardedServiceName}),
+			clusterRbacConfig: newClusterRbacSpec([]string{onboardedServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{},
 		},
 		{
 			name:              "test deleting existing service from ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacSpec([]string{onboardedServiceName, existingServiceName}),
+			clusterRbacConfig: newClusterRbacSpec([]string{onboardedServiceName, existingServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{existingServiceName},
 		},
 		{
 			name:              "test deleting empty input array to ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
+			clusterRbacConfig: newClusterRbacSpec([]string{existingServiceName}),
 			inputArray:        []string{},
 			expectedArray:     []string{existingServiceName},
 		},
 		{
 			name:              "test deleting empty service which does not exist in the ClusterRbacConfig",
-			clusterRbacConfig: createClusterRbacSpec([]string{existingServiceName}),
+			clusterRbacConfig: newClusterRbacSpec([]string{existingServiceName}),
 			inputArray:        []string{onboardedServiceName},
 			expectedArray:     []string{existingServiceName},
 		},
@@ -200,7 +200,7 @@ func TestDeleteService(t *testing.T) {
 }
 
 func TestCreateClusterRbacConfig(t *testing.T) {
-	config := createClusterRbacConfig([]string{onboardedServiceName, existingServiceName})
+	config := newClusterRbacConfig([]string{onboardedServiceName, existingServiceName})
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		log.Panicln("cannot cast to rbac config")
@@ -286,7 +286,7 @@ func TestSyncService(t *testing.T) {
 		{
 			name:                   "Update: update ClusterRbacConfig when it exists with multiple services",
 			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
-			inputClusterRbacConfig: createClusterRbacConfig([]string{onboardedServiceCopyName}),
+			inputClusterRbacConfig: newClusterRbacConfig([]string{onboardedServiceCopyName}),
 			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
 		},
 		{
@@ -298,7 +298,7 @@ func TestSyncService(t *testing.T) {
 		{
 			name:                   "Delete: delete cluster rbacconfig if service is no longer onboarded",
 			inputServiceList:       []*v1.Service{notOnboardedService},
-			inputClusterRbacConfig: createClusterRbacConfig([]string{notOnboardedServiceName}),
+			inputClusterRbacConfig: newClusterRbacConfig([]string{notOnboardedServiceName}),
 			expectedServiceList:    []string{},
 			fake:                   true,
 		},
