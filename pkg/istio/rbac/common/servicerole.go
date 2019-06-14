@@ -303,5 +303,5 @@ func (srMgr *ServiceRoleMgr) DeleteServiceRole(name, namespace string) error {
 
 func (srMgr *ServiceRoleMgr) EventHandler(config model.Config, e model.Event) {
 	// TODO, add to workqueue
-	log.Printf("Received %s update for servicerole: %+v", e.String(), config)
+	log.Printf("Received %s event for servicerole: %+v", e.String(), config)
 }

@@ -226,5 +226,5 @@ func (srbMgr *ServiceRoleBindingMgr) DeleteServiceRoleBinding(name, namespace st
 
 func (srbMgr *ServiceRoleBindingMgr) EventHandler(config model.Config, e model.Event) {
 	// TODO, add to workqueue
-	log.Printf("Received %s update for servicerolebinding: %+v", e.String(), config)
+	log.Printf("Received %s event for servicerolebinding: %+v", e.String(), config)
 }
