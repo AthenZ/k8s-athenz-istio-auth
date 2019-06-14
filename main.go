@@ -13,6 +13,7 @@ import (
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -63,7 +64,12 @@ func main() {
 		log.Panicln("Error creating k8s client:", err.Error())
 	}
 
-	c := controller.NewController(pi, *dnsSuffix, istioClient, k8sClient)
+	versiondClient, err := athenzClientset.NewForConfig(config)
+	if err != nil {
+		log.Panicln("Error creating athenz domain client:", err.Error())
+	}
+
+	c := controller.NewController(pi, *dnsSuffix, istioClient, k8sClient, versiondClient)
 
 	stopChan := make(chan struct{})
 	go c.Run(stopChan)

@@ -21,6 +21,8 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+	athenzInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
+	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 )
 
 type Controller struct {
@@ -33,6 +35,7 @@ type Controller struct {
 	store                model.ConfigStoreCache
 	crcController        *onboarding.Controller
 	serviceIndexInformer cache.SharedIndexInformer
+	adIndexInformer      cache.SharedIndexInformer
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -194,6 +197,7 @@ func (c *Controller) sync() error {
 	return nil
 }
 
+// TODO, explore informer factory to reduce connections
 // NewController is responsible for creating the main controller object and
 // all of its dependencies:
 // 1. Istio custom resource client for service role, service role bindings, and clusterrbacconfig
@@ -204,7 +208,7 @@ func (c *Controller) sync() error {
 // 6. Kubernetes clientset
 // 7. Namespace informer / indexer
 // 8. Service informer
-func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
+func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, athenzDomainClient athenzClientset.Interface) *Controller {
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
 	srMgr := servicerole.NewServiceRoleMgr(store)
 	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(store)
@@ -213,6 +217,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
 	store.RegisterEventHandler(model.ServiceRoleBinding.Type, srbMgr.EventHandler)
 
+	// TODO, change to shared indexer / informer
 	namespaceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "namespaces",
 		v1.NamespaceAll, fields.Everything())
 	namespaceIndexer, namespaceInformer := cache.NewIndexerInformer(namespaceListWatch, &v1.Namespace{}, 0,
@@ -221,6 +226,19 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	crcController := onboarding.NewController(store, dnsSuffix, serviceIndexInformer)
+
+	adIndexInformer := athenzInformer.NewAthenzDomainInformer(athenzDomainClient, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			log.Println("inside add function", obj)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			log.Println("inside update function:", newObj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			log.Println("inside of delete function:", obj)
+		},
+	})
 
 	return &Controller{
 		pollInterval:         pollInterval,
@@ -232,6 +250,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 		serviceIndexInformer: serviceIndexInformer,
 		store:                store,
 		crcController:        crcController,
+		adIndexInformer:      adIndexInformer,
 	}
 }
 
@@ -245,8 +264,9 @@ func (c *Controller) Run(stop chan struct{}) {
 	go c.crcController.Run(stop)
 	go c.namespaceInformer.Run(stop)
 	go c.store.Run(stop)
+	go c.adIndexInformer.Run(stop)
 
-	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceIndexInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
