@@ -1,10 +1,11 @@
-// Copyright 2018, Oath Inc.
+// Copyright 2019, Verizon Media Inc.
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in github.com/yahoo/k8s-athenz-istio-auth
 // for terms.
 package zms
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -78,4 +79,21 @@ func GetServiceMapping(domainName string) (*Domain, error) {
 	}
 
 	return domain, err
+}
+
+// TODO: temporary, to be replaced with AthenzDomain custom resource
+// GetSignedDomains returns the signed domain contents from ZMS
+func GetSignedDomain(domainName string) (*zms.SignedDomain, error) {
+
+	domains, _, err := client.GetSignedDomains(zms.DomainName(domainName), "", "", "")
+	if err != nil {
+		return nil, err
+	}
+
+	for _, domain := range domains.Domains {
+		if string(domain.Domain.Name) == domainName {
+			return domain, nil
+		}
+	}
+	return nil, fmt.Errorf("signed domain: %s not found", domainName)
 }
