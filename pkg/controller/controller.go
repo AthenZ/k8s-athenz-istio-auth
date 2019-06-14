@@ -1,4 +1,4 @@
-// Copyright 2018, Oath Inc.
+// Copyright 2019, Verizon Media Inc.
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in github.com/yahoo/k8s-athenz-istio-auth
 // for terms.
 package controller
@@ -18,9 +18,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerole"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/servicerolebinding"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 )
@@ -33,13 +35,14 @@ const (
 type Controller struct {
 	pollInterval         time.Duration
 	dnsSuffix            string
-	srMgr                *servicerole.ServiceRoleMgr
-	srbMgr               *servicerolebinding.ServiceRoleBindingMgr
+	srMgr                *common.ServiceRoleMgr
+	srbMgr               *common.ServiceRoleBindingMgr
 	namespaceIndexer     cache.Indexer
 	namespaceInformer    cache.Controller
 	store                model.ConfigStoreCache
 	crcController        *onboarding.Controller
 	serviceIndexInformer cache.SharedIndexInformer
+	rbacProvider         rbac.Provider
 	queue                workqueue.RateLimitingInterface
 }
 
@@ -97,6 +100,23 @@ func (c *Controller) sync() error {
 	log.Println("domainMap:", domainMap)
 
 	for domainName, domain := range domainMap {
+
+		// temporary ZMS call to get the signed domain
+		signedDomain, err := zms.GetSignedDomain(domainName)
+		if err != nil {
+			log.Println("Error getting the signed domain from ZMS:", err)
+			continue
+		}
+
+		domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain)
+		rbacCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
+
+		for _, v := range rbacCRs {
+			log.Printf("CustomResource: %s/%s/%s: ", v.Type, v.Namespace, v.Name)
+			log.Println("Contents: ", v.Spec)
+		}
+
+		// legacy
 		for _, role := range domain.Roles {
 			// ex: service.role.domain.service
 			namespace := util.DomainToNamespace(domainName)
@@ -215,8 +235,8 @@ func (c *Controller) sync() error {
 func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
-	srMgr := servicerole.NewServiceRoleMgr(store)
-	srbMgr := servicerolebinding.NewServiceRoleBindingMgr(store)
+	srMgr := common.NewServiceRoleMgr(store)
+	srbMgr := common.NewServiceRoleBindingMgr(store)
 
 	// TODO, handle resync if object gets modified
 	store.RegisterEventHandler(model.ServiceRole.Type, srMgr.EventHandler)
@@ -241,6 +261,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 		serviceIndexInformer: serviceIndexInformer,
 		store:                store,
 		crcController:        crcController,
+		rbacProvider:         rbacv1.NewProvider(),
 		queue:                queue,
 	}
 }

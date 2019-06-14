@@ -4,10 +4,13 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.32.0 // indirect
+	github.com/ardielle/ardielle-go v1.5.2
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/envoyproxy/go-control-plane v0.8.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/gogo/protobuf v1.2.1
 	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect

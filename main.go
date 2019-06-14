@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 )
 
 func main() {
@@ -29,6 +31,7 @@ func main() {
 	zmsURL := flag.String("zms-url", "https://zms.url.com", "athenz full zms url including api path")
 	pollInterval := flag.String("poll-interval", "1m", "controller poll interval")
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
+	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	flag.Parse()
 
 	pi, err := time.ParseDuration(*pollInterval)
@@ -48,12 +51,20 @@ func main() {
 		model.ClusterRbacConfig,
 	}
 
-	istioClient, err := crd.NewClient("", "", configDescriptor, *dnsSuffix)
+	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
+	if *kubeconfig == "" {
+		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
+		if _, err := os.Stat(home); err == nil {
+			*kubeconfig = home
+		}
+	}
+
+	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix)
 	if err != nil {
 		log.Panicln("Error creating istio crd client:", err.Error())
 	}
 
-	config, err := rest.InClusterConfig()
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
 		log.Panicln("Error creating kubernetes in cluster config: " + err.Error())
 	}
