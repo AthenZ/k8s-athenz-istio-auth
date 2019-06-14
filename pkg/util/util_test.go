@@ -10,10 +10,8 @@ import (
 )
 
 func TestDomainNamespaceMap(t *testing.T) {
-	a := assert.New(t)
-
-	a.Equal("foo-bar-baz", DomainToNamespace("foo.bar.baz"))
-	a.Equal("foo-bar--baz", DomainToNamespace("foo.bar-baz"))
-	a.Equal("foo.bar.baz", NamespaceToDomain("foo-bar-baz"))
-	a.Equal("foo.bar-baz", NamespaceToDomain("foo-bar--baz"))
+	assert.Equal(t, "foo-bar-baz", DomainToNamespace("foo.bar.baz"))
+	assert.Equal(t, "foo-bar--baz", DomainToNamespace("foo.bar-baz"))
+	assert.Equal(t, "foo.bar.baz", NamespaceToDomain("foo-bar-baz"))
+	assert.Equal(t, "foo.bar-baz", NamespaceToDomain("foo-bar--baz"))
 }

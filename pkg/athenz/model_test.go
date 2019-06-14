@@ -4,11 +4,12 @@
 package athenz
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
-	"reflect"
-	"testing"
 )
 
 func toRDLTimestamp(s string) (rdl.Timestamp, error) {

@@ -49,9 +49,8 @@ func TestParseRoleFQDN(t *testing.T) {
 
 	for _, c := range cases {
 		gotRole, gotErr := ParseRoleFQDN(c.domainName, c.roleFQDN)
-		a := assert.New(t)
-		a.Equal(c.expectedRole, gotRole, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedRole, gotRole, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
 
@@ -91,9 +90,8 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 
 	for _, c := range cases {
 		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
-		a := assert.New(t)
-		a.Equal(c.expectedSpiffe, gotSpiffe, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
 
@@ -237,7 +235,6 @@ func TestNewConfig(t *testing.T) {
 
 	for _, c := range cases {
 		gotConfig := NewConfig(c.input.configType, c.input.namespace, c.input.name, c.input.spec)
-		a := assert.New(t)
-		a.Equal(c.expectedConfig, gotConfig, c.test)
+		assert.Equal(t, c.expectedConfig, gotConfig, c.test)
 	}
 }

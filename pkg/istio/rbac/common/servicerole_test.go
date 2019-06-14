@@ -37,19 +37,18 @@ func TestCreateServiceRole(t *testing.T) {
 	srMgr := NewServiceRoleMgr(nil)
 	configMeta, serviceRole, err := srMgr.createServiceRole("my-domain", "svc.cluster.local", "my.domain.details", policy)
 
-	a := assert.New(t)
-	a.Equal("my.domain.details", configMeta.Name)
-	a.Equal("my-domain", configMeta.Namespace)
-	a.Equal(serviceRole.Rules[0].Services, []string{"details.my-domain.svc.cluster.local"})
-	a.Equal(serviceRole.Rules[0].Methods, []string{"GET", "POST"})
-	a.Equal(serviceRole.Rules[0].Paths, []string{"/details"})
-	a.Equal(nil, err)
+	assert.Equal(t, "my.domain.details", configMeta.Name)
+	assert.Equal(t, "my-domain", configMeta.Namespace)
+	assert.Equal(t, serviceRole.Rules[0].Services, []string{"details.my-domain.svc.cluster.local"})
+	assert.Equal(t, serviceRole.Rules[0].Methods, []string{"GET", "POST"})
+	assert.Equal(t, serviceRole.Rules[0].Paths, []string{"/details"})
+	assert.Equal(t, nil, err)
 
 	_, _, err = srMgr.createServiceRole("my-domain", "svc.cluster.local", "", policy)
-	a.Equal(errors.New("Error splitting on . character"), err)
+	assert.Equal(t, errors.New("Error splitting on . character"), err)
 
 	_, _, err = srMgr.createServiceRole("my-domain", "svc.cluster.local", "foobar.", policy)
-	a.Equal(errors.New("Could not get sa from role: foobar."), err)
+	assert.Equal(t, errors.New("Could not get sa from role: foobar."), err)
 }
 
 func TestParseAssertionEffect(t *testing.T) {
@@ -94,9 +93,8 @@ func TestParseAssertionEffect(t *testing.T) {
 
 	for _, c := range cases {
 		gotAssertion, gotErr := parseAssertionEffect(c.assertion)
-		a := assert.New(t)
-		a.Equal(c.expectedEffect, gotAssertion, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedEffect, gotAssertion, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
 
@@ -150,9 +148,8 @@ func TestParseAssertionAction(t *testing.T) {
 
 	for _, c := range cases {
 		gotAssertion, gotErr := parseAssertionAction(c.assertion)
-		a := assert.New(t)
-		a.Equal(c.expectedAction, gotAssertion, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedAction, gotAssertion, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
 
@@ -220,10 +217,9 @@ func TestParseAssertionResource(t *testing.T) {
 
 	for _, c := range cases {
 		gotSvc, gotPath, gotErr := parseAssertionResource(c.domainName, c.assertion)
-		a := assert.New(t)
-		a.Equal(c.expectedSvc, gotSvc, c.test)
-		a.Equal(c.expectedPath, gotPath, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSvc, gotSvc, c.test)
+		assert.Equal(t, c.expectedPath, gotPath, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
 
@@ -326,8 +322,7 @@ func TestGetServiceRoleSpec(t *testing.T) {
 
 	for _, c := range cases {
 		gotSpec, gotErr := GetServiceRoleSpec(c.input.domainName, c.input.roleName, c.input.assertions)
-		a := assert.New(t)
-		a.Equal(c.expectedSpec, gotSpec, c.test)
-		a.Equal(c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpec, gotSpec, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
