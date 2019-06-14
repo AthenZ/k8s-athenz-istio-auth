@@ -185,6 +185,11 @@ func (c *Controller) sync() error {
 		return err
 	}
 
+	if len(serviceList) == 0 {
+		log.Println("Deleting cluster rbac config...")
+		return c.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
+	}
+
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		return errors.New("Could not cast to ClusterRbacConfig")
@@ -207,11 +212,6 @@ func (c *Controller) sync() error {
 	oldServices := compareServiceLists(clusterRbacConfig.Inclusion.Services, serviceList)
 	if len(oldServices) > 0 {
 		deleteServices(oldServices, clusterRbacConfig)
-	}
-
-	if len(clusterRbacConfig.Inclusion.Services) == 0 {
-		log.Println("Deleting cluster rbac config...")
-		return c.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
 	}
 
 	if len(newServices) > 0 || len(oldServices) > 0 {

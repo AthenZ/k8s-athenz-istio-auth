@@ -296,6 +296,12 @@ func TestSyncService(t *testing.T) {
 			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
 		},
 		{
+			name:                   "Update: update ClusterRbacConfig when not onboarded service exists",
+			inputServiceList:       []*v1.Service{onboardedService, notOnboardedService},
+			inputClusterRbacConfig: newClusterRbacConfig([]string{onboardedServiceName, notOnboardedServiceName}),
+			expectedServiceList:    []string{onboardedServiceName},
+		},
+		{
 			name:                   "Delete: delete cluster rbacconfig if service is no longer onboarded",
 			inputServiceList:       []*v1.Service{notOnboardedService},
 			inputClusterRbacConfig: newClusterRbacConfig([]string{notOnboardedServiceName}),
