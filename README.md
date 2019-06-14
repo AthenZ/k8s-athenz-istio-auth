@@ -126,10 +126,10 @@ make GET requests.
 
 ## Contribute
 
-Please refer to [the contributing.md file](Contributing.md) for information about how to get involved. We welcome issues, questions, and pull requests.
+Please refer to the [contributing](Contributing.md) file for information about how to get involved. We welcome issues, questions, and pull requests.
 
 ## Maintainers/Contacts
 Core Team : omega-core@verizonmedia.com
 
 ## License
-Copyright 2018 Oath Inc. Licensed under the terms of the 3-Clause BSD License.
+Copyright 2019 Verizon Media Inc. Licensed under the terms of the 3-Clause BSD License.
