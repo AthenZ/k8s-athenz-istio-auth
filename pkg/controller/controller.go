@@ -25,6 +25,8 @@ import (
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
+	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
+	athenzInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 )
 
 const (
@@ -44,6 +46,7 @@ type Controller struct {
 	serviceIndexInformer cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
 	queue                workqueue.RateLimitingInterface
+	adIndexInformer      cache.SharedIndexInformer
 }
 
 // getNamespaces is responsible for retrieving the namespaces currently in the indexer
@@ -232,7 +235,8 @@ func (c *Controller) sync() error {
 // 6. Kubernetes clientset
 // 7. Namespace informer / indexer
 // 8. Service informer
-func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface) *Controller {
+func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient athenzClientset.Interface) *Controller {
+	log.Println("inside of new controller")
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	store := crd.NewController(istioClient, kube.ControllerOptions{})
 	srMgr := common.NewServiceRoleMgr(store)
@@ -251,6 +255,18 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	crcController := onboarding.NewController(store, dnsSuffix, serviceIndexInformer)
 	store.RegisterEventHandler(model.ClusterRbacConfig.Type, crcController.EventHandler)
+	adIndexInformer := athenzInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			log.Println("add func obj:", obj)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			log.Println("update func obj:", newObj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			log.Println("delete func ")
+		},
+	})
 
 	return &Controller{
 		pollInterval:         pollInterval,
@@ -264,6 +280,7 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 		crcController:        crcController,
 		rbacProvider:         rbacv1.NewProvider(),
 		queue:                queue,
+		adIndexInformer:      adIndexInformer,
 	}
 }
 
@@ -276,8 +293,9 @@ func (c *Controller) Run(stop chan struct{}) {
 	go c.serviceIndexInformer.Run(stop)
 	go c.namespaceInformer.Run(stop)
 	go c.store.Run(stop)
+	go c.adIndexInformer.Run(stop)
 
-	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceIndexInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stop, c.store.HasSynced, c.namespaceInformer.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
