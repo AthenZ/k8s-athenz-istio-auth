@@ -7,16 +7,28 @@ rules:
   - ""
   resources:
   - namespaces
+  - services
   verbs:
   - list
   - watch
 - apiGroups:
   - rbac.istio.io
   resources:
-  - '*'
+  - serviceroles
+  - servicerolebindings
+  - clusterrbacconfigs
   verbs:
   - list
   - get
   - create
   - update
   - delete
+  - patch
+  - watch
+- apiGroups:
+  - athenz.io
+  resources:
+  - athenzdomains
+  verbs:
+  - watch
+  - list
