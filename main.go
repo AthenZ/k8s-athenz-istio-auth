@@ -10,11 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
-
-	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -22,29 +17,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 )
 
 func main() {
-	certFile := flag.String("cert", "/var/run/athenz/service.cert.pem",
-		"path to X.509 certificate file to use for zms authentication")
-	keyFile := flag.String("key", "/var/run/athenz/service.key.pem",
-		"path to private key file for zms authentication")
-	zmsURL := flag.String("zms-url", "https://zms.url.com", "athenz full zms url including api path")
-	pollInterval := flag.String("poll-interval", "1m", "controller poll interval")
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	flag.Parse()
-
-	pi, err := time.ParseDuration(*pollInterval)
-	if err != nil {
-		log.Panicln("Cannot parse poll interval:", err.Error())
-	}
-	log.Println("Controller poll interval:", pi)
-
-	err = zms.InitClient(*zmsURL, *certFile, *keyFile)
-	if err != nil {
-		log.Panicln("Error creating zms client:", err.Error())
-	}
 
 	configDescriptor := model.ConfigDescriptor{
 		model.ServiceRole,
@@ -80,7 +61,7 @@ func main() {
 		log.Panicln("Error creating athenz domain client:", err.Error())
 	}
 
-	c := controller.NewController(pi, *dnsSuffix, istioClient, k8sClient, adClient)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient)
 
 	stopChan := make(chan struct{})
 	go c.Run(stopChan)

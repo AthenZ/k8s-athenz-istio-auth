@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -81,7 +81,7 @@ func (c *Controller) sync(key string) error {
 //    cluster rbac config object based on a service label
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
-func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface) *Controller {
+func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, kube.ControllerOptions{})
 
