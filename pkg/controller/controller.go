@@ -21,8 +21,8 @@ import (
 
 	adv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
-	athenzInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
+	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
+	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
@@ -31,26 +31,20 @@ import (
 
 const queueNumRetries = 3
 
-// TODO, rename store
 type Controller struct {
-	pollInterval         time.Duration
-	dnsSuffix            string
 	configStoreCache     model.ConfigStoreCache
 	crcController        *onboarding.Controller
 	serviceIndexInformer cache.SharedIndexInformer
+	adIndexInformer      cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
 	queue                workqueue.RateLimitingInterface
-	adIndexInformer      cache.SharedIndexInformer
 }
 
-// TODO, update comments
-// sync will be ran at every poll interval and will be responsible for the following:
-// 1. Get the current ServiceRoles and ServiceRoleBindings on the cluster.
-// 2. Call every Athenz domain which has a corresponding namespace in the cluster.
-// 3. For every role name prefixed with service.role, call its corresponding policy in order to get the actions defined.
-// 4. Each role / policy combo will create or update the associated ServiceRole if there were any changes.
-// 5. The members of the role will be used to create or update the ServiceRoleBindings if there were any changes.
-// 6. Delete any ServiceRoles or ServiceRoleBindings which do not have a corresponding Athenz mapping.
+// sync will be ran for each key in the queue and will be responsible for the following:
+// 1. Get the Athenz Domain from the cache for the queue key
+// 2. Convert to Athenz Model to group domain members and policies by role
+// 3. Convert Athenz Model to Service Role and Service Role Binding objects
+// 4. Create / Update / Delete Service Role and Service Role Binding objects
 func (c *Controller) sync(key string) error {
 	athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(key)
 	if err != nil {
@@ -79,64 +73,63 @@ func (c *Controller) sync(key string) error {
 }
 
 // NewController is responsible for creating the main controller object and
-// all of its dependencies:
+// initializing all of its dependencies:
 // 1. Rate limiting queue
-// 2 Istio custom resource config store cache for service role, service role bindings, and clusterrbacconfig
-// 3. Onboarding controller responsible for creating / updating / deleting the clusterrbacconfig object based on a service label
-// 4. Kubernetes clientset
-// 5. Service shared index informer
-// 6. Athenz Domain shared index informer
-func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient athenzClientset.Interface) *Controller {
+// 2. Istio custom resource config store cache for service role, service role
+//    bindings, and cluster rbac config
+// 3. Onboarding controller responsible for creating / updating / deleting the
+//    cluster rbac config object based on a service label
+// 4. Service shared index informer
+// 5. Athenz Domain shared index informer
+func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, kube.ControllerOptions{})
 
-	// TODO, change resync periods, will this cause more events?
-	// TODO understand shared index informer compared to normal informer / indexer
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer)
-	adIndexInformer := athenzInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
 
 	c := &Controller{
-		pollInterval:         pollInterval,
-		dnsSuffix:            dnsSuffix,
 		serviceIndexInformer: serviceIndexInformer,
+		adIndexInformer:      adIndexInformer,
 		configStoreCache:     configStoreCache,
 		crcController:        crcController,
 		rbacProvider:         rbacv1.NewProvider(),
 		queue:                queue,
-		adIndexInformer:      adIndexInformer,
 	}
 
-	// TODO, add full resync for objects
 	configStoreCache.RegisterEventHandler(model.ServiceRole.Type, c.processConfigEvent)
 	configStoreCache.RegisterEventHandler(model.ServiceRoleBinding.Type, c.processConfigEvent)
 	configStoreCache.RegisterEventHandler(model.ClusterRbacConfig.Type, crcController.EventHandler)
 
 	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			c.processAthenzDomainEvent(cache.MetaNamespaceKeyFunc, obj)
+			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.processAthenzDomainEvent(cache.MetaNamespaceKeyFunc, newObj)
+			c.processEvent(cache.MetaNamespaceKeyFunc, newObj)
 		},
 		DeleteFunc: func(obj interface{}) {
-			c.processAthenzDomainEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
+			c.processEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
 		},
 	})
 
 	return c
 }
 
-func (c *Controller) processAthenzDomainEvent(fn cache.KeyFunc, obj interface{}) {
+// processEvent is responsible for calling the key function and adding the
+// key of the item to the queue
+func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 	key, err := fn(obj)
 	if err == nil {
 		c.queue.Add(key)
 		return
 	}
-	log.Println("err calling key func:", err)
+	log.Println("Error calling key func:", err)
 }
 
+// processEvent is responsible for adding the key of the item to the queue
 func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
 	domain := util.NamespaceToDomain(config.Namespace)
 	key := config.Namespace + "/" + domain
@@ -182,7 +175,7 @@ func (c *Controller) processNextItem() bool {
 
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Printf("string cast failed for key %v", key)
+		log.Printf("String cast failed for key %v", key)
 		return true
 	}
 

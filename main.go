@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
+	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
 
@@ -75,7 +75,7 @@ func main() {
 		log.Panicln("Error creating k8s client:", err.Error())
 	}
 
-	adClient, err := athenzClientset.NewForConfig(config)
+	adClient, err := adClientset.NewForConfig(config)
 	if err != nil {
 		log.Panicln("Error creating athenz domain client:", err.Error())
 	}
