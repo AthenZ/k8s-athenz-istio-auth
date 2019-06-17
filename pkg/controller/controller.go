@@ -57,7 +57,7 @@ func (c *Controller) sync(key string) error {
 
 	athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
 	if !ok {
-		return errors.New("cast failed for athenz domain")
+		return errors.New("athenz domain cast failed")
 	}
 
 	signedDomain := athenzDomain.Spec.SignedDomain
@@ -107,8 +107,8 @@ func NewController(pollInterval time.Duration, dnsSuffix string, istioClient *cr
 		AddFunc: func(obj interface{}) {
 			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.processEvent(cache.MetaNamespaceKeyFunc, newObj)
+		UpdateFunc: func(_, obj interface{}) {
+			c.processEvent(cache.MetaNamespaceKeyFunc, obj)
 		},
 		DeleteFunc: func(obj interface{}) {
 			c.processEvent(cache.DeletionHandlingMetaNamespaceKeyFunc, obj)
