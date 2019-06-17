@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/zms"
-	athenzClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"

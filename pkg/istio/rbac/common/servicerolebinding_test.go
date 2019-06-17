@@ -12,35 +12,6 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 )
 
-var srbMgr = NewServiceRoleBindingMgr(nil)
-
-func TestGetSubjects(t *testing.T) {
-	subjects := srbMgr.getSubjects([]zms.MemberName{"domain.one.application1", "domain.two.application2"})
-
-	assert.Equal(t, "domain.one/sa/application1", subjects[0].User)
-	assert.Equal(t, "domain.two/sa/application2", subjects[1].User)
-
-	subjects = srbMgr.getSubjects([]zms.MemberName{"user.*"})
-	assert.Equal(t, "*", subjects[0].User)
-
-	subjects = srbMgr.getSubjects([]zms.MemberName{"domain"})
-	assert.Equal(t, 0, len(subjects))
-
-	subjects = srbMgr.getSubjects([]zms.MemberName{"domain."})
-	assert.Equal(t, 0, len(subjects))
-}
-
-func TestCreateServiceRoleBinding(t *testing.T) {
-	configMeta, serviceRoleBinding := srbMgr.createServiceRoleBinding("my-domain", "my.domain.details",
-		[]zms.MemberName{"domain.one.application1", "domain.two.application2"})
-
-	assert.Equal(t, "my.domain.details", configMeta.Name)
-	assert.Equal(t, "my-domain", configMeta.Namespace)
-	assert.Equal(t, "my.domain.details", serviceRoleBinding.RoleRef.Name)
-	assert.Equal(t, "domain.one/sa/application1", serviceRoleBinding.Subjects[0].User)
-	assert.Equal(t, "domain.two/sa/application2", serviceRoleBinding.Subjects[1].User)
-}
-
 func TestParseMemberName(t *testing.T) {
 
 	cases := []struct {

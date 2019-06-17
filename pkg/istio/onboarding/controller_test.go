@@ -61,7 +61,7 @@ func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
 }
 
 func getClusterRbacConfig(c *Controller) (*model.Config, *v1alpha1.RbacConfig) {
-	config := c.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil {
 		return nil, nil
 	}
@@ -79,11 +79,11 @@ func newFakeController(services []*v1.Service, fake bool) *Controller {
 		model.ClusterRbacConfig,
 	}
 
-	store := memory.Make(configDescriptor)
+	configStore := memory.Make(configDescriptor)
 	if fake {
-		store = &fakeConfigStore{store}
+		configStore = &fakeConfigStore{configStore}
 	}
-	c.store = memory.NewController(store)
+	c.configStoreCache = memory.NewController(configStore)
 
 	source := fcache.NewFakeControllerSource()
 	for _, service := range services {
@@ -115,7 +115,7 @@ func TestNewController(t *testing.T) {
 	c := NewController(configStoreCache, dnsSuffix, fakeIndexInformer)
 	assert.Equal(t, dnsSuffix, c.dnsSuffix, "dns suffix should be equal")
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
-	assert.Equal(t, configStoreCache, c.store, "config store cache pointer should be equal")
+	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 }
 
 func TestAddService(t *testing.T) {
@@ -318,7 +318,7 @@ func TestSyncService(t *testing.T) {
 			c := newFakeController(tt.inputServiceList, tt.fake)
 
 			if tt.inputClusterRbacConfig.Spec != nil {
-				_, err := c.store.Create(tt.inputClusterRbacConfig)
+				_, err := c.configStoreCache.Create(tt.inputClusterRbacConfig)
 				assert.Nil(t, err, "creating the ClusterRbacConfig should return nil")
 			}
 

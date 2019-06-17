@@ -24,18 +24,18 @@ const (
 )
 
 type Controller struct {
-	store                model.ConfigStoreCache
+	configStoreCache     model.ConfigStoreCache
 	dnsSuffix            string
 	serviceIndexInformer cache.SharedIndexInformer
 	queue                workqueue.RateLimitingInterface
 }
 
 // NewController initializes the Controller object and its dependencies
-func NewController(store model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
-		store:                store,
+		configStoreCache:     configStoreCache,
 		dnsSuffix:            dnsSuffix,
 		serviceIndexInformer: serviceIndexInformer,
 		queue:                queue,
@@ -176,7 +176,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
-	config := c.store.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Println("Service list is empty and cluster rbac config does not exist, skipping sync...")
 		return nil
@@ -184,13 +184,13 @@ func (c *Controller) sync() error {
 
 	if config == nil {
 		log.Println("Creating cluster rbac config...")
-		_, err := c.store.Create(newClusterRbacConfig(serviceList))
+		_, err := c.configStoreCache.Create(newClusterRbacConfig(serviceList))
 		return err
 	}
 
 	if len(serviceList) == 0 {
 		log.Println("Deleting cluster rbac config...")
-		return c.store.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
+		return c.configStoreCache.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
 	}
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
@@ -200,7 +200,7 @@ func (c *Controller) sync() error {
 
 	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
 		log.Println("ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
-		_, err := c.store.Update(model.Config{
+		_, err := c.configStoreCache.Update(model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
 		})
@@ -219,7 +219,7 @@ func (c *Controller) sync() error {
 
 	if len(newServices) > 0 || len(oldServices) > 0 {
 		log.Println("Updating cluster rbac config...")
-		_, err := c.store.Update(model.Config{
+		_, err := c.configStoreCache.Update(model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
 		})
