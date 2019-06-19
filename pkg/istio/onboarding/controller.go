@@ -6,6 +6,7 @@ package onboarding
 import (
 	"errors"
 	"log"
+	"time"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -28,10 +29,11 @@ type Controller struct {
 	dnsSuffix            string
 	serviceIndexInformer cache.SharedIndexInformer
 	queue                workqueue.RateLimitingInterface
+	crcResyncInterval    time.Duration
 }
 
 // NewController initializes the Controller object and its dependencies
-func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer, crcResyncInterval time.Duration) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -39,6 +41,7 @@ func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, se
 		dnsSuffix:            dnsSuffix,
 		serviceIndexInformer: serviceIndexInformer,
 		queue:                queue,
+		crcResyncInterval:    crcResyncInterval,
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -57,10 +60,11 @@ func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, se
 }
 
 // Run starts the worker thread
-func (c *Controller) Run(stop chan struct{}) {
+func (c *Controller) Run(stopCh <-chan struct{}) {
+	go c.resync(stopCh)
+
 	defer c.queue.ShutDown()
-	go wait.Until(c.runWorker, 0, stop)
-	<-stop
+	wait.Until(c.runWorker, 0, stopCh)
 }
 
 // runWorker calls processNextItem to process events of the work queue
@@ -233,6 +237,23 @@ func (c *Controller) sync() error {
 func (c *Controller) EventHandler(config model.Config, e model.Event) {
 	log.Printf("Received %s event for cluster rbac config: %+v", e.String(), config)
 	c.queue.Add(queueKey)
+}
+
+// resync will run as a periodic resync at a given interval, it will put the
+// cluster rbac config key onto the queue
+func (c *Controller) resync(stopCh <-chan struct{}) {
+	t := time.NewTicker(c.crcResyncInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			log.Println("Running resync for cluster rbac config...")
+			c.queue.Add(queueKey)
+		case <-stopCh:
+			log.Println("Stopping cluster rbac config resync...")
+			return
+		}
+	}
 }
 
 // compareServices returns a list of which items in list A are not in list B

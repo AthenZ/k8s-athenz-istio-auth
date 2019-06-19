@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -38,6 +39,7 @@ type Controller struct {
 	adIndexInformer      cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
 	queue                workqueue.RateLimitingInterface
+	adResyncInterval     time.Duration
 }
 
 // sync will be ran for each key in the queue and will be responsible for the following:
@@ -83,13 +85,13 @@ func (c *Controller) sync(key string) error {
 //    cluster rbac config object based on a service label
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
-func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface) *Controller {
+func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface, adResyncInterval, crcResyncInterval time.Duration) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, kube.ControllerOptions{})
 
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
-	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer)
+	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
 
 	c := &Controller{
@@ -99,6 +101,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		crcController:        crcController,
 		rbacProvider:         rbacv1.NewProvider(),
 		queue:                queue,
+		adResyncInterval:     adResyncInterval,
 	}
 
 	configStoreCache.RegisterEventHandler(model.ServiceRole.Type, c.processConfigEvent)
@@ -143,20 +146,21 @@ func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
 // 1. Service informer
 // 2. Istio custom resource informer
 // 3. Athenz Domain informer
-func (c *Controller) Run(stop chan struct{}) {
-	go c.serviceIndexInformer.Run(stop)
-	go c.configStoreCache.Run(stop)
-	go c.adIndexInformer.Run(stop)
+func (c *Controller) Run(stopCh <-chan struct{}) {
+	go c.serviceIndexInformer.Run(stopCh)
+	go c.configStoreCache.Run(stopCh)
+	go c.adIndexInformer.Run(stopCh)
 
-	if !cache.WaitForCacheSync(stop, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
 	// crc controller must wait for service informer to sync before starting
-	go c.crcController.Run(stop)
+	go c.crcController.Run(stopCh)
+	go c.resync(stopCh)
 
 	defer c.queue.ShutDown()
-	wait.Until(c.runWorker, 0, stop)
+	wait.Until(c.runWorker, 0, stopCh)
 }
 
 // runWorker calls processNextItem to process events of the work queue
@@ -174,7 +178,6 @@ func (c *Controller) processNextItem() bool {
 	}
 
 	defer c.queue.Done(keyRaw)
-
 	key, ok := keyRaw.(string)
 	if !ok {
 		log.Printf("String cast failed for key %v", key)
@@ -194,4 +197,24 @@ func (c *Controller) processNextItem() bool {
 
 	c.queue.Forget(keyRaw)
 	return true
+}
+
+// resync will run as a periodic resync at a given interval, it will take all
+// the current athenz domains in the cache and put them onto the queue
+func (c *Controller) resync(stopCh <-chan struct{}) {
+	t := time.NewTicker(c.adResyncInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			log.Println("Running resync for athenz domains...")
+			adListRaw := c.adIndexInformer.GetIndexer().List()
+			for _, adRaw := range adListRaw {
+				c.processEvent(cache.MetaNamespaceKeyFunc, adRaw)
+			}
+		case <-stopCh:
+			log.Println("Stopping athenz domain resync...")
+			return
+		}
+	}
 }

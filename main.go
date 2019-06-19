@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
@@ -25,6 +26,8 @@ import (
 func main() {
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
+	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
+	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	flag.Parse()
 
 	configDescriptor := model.ConfigDescriptor{
@@ -61,18 +64,30 @@ func main() {
 		log.Panicln("Error creating athenz domain client:", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient)
+	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
+	if err != nil {
+		log.Panicln("Error parsing ad-resync-interval duration:", err.Error())
+	}
 
-	stopChan := make(chan struct{})
-	go c.Run(stopChan)
+	crcResyncInterval, err := time.ParseDuration(*crcResyncIntervalRaw)
+	if err != nil {
+		log.Panicln("Error parsing crc-resync-interval duration:", err.Error())
+	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval)
+
+	stopCh := make(chan struct{})
+	go c.Run(stopCh)
+
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 	for {
 		select {
-		case <-signalChan:
-			log.Println("Shutdown signal received, exiting...")
-			close(stopChan)
+		case <-signalCh:
+			log.Println("Shutdown signal received, stopping controllers...")
+			close(stopCh)
+			<-signalCh
+			log.Println("Shutting down...")
 			os.Exit(0)
 		}
 	}
