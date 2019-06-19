@@ -34,19 +34,27 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			model: athenz.Model{
 				Name:      "athenz.domain",
 				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client-reader-role"),
+					zms.ResourceName("different-domain:role.trust-role"),
+					zms.ResourceName("athenz.domain:role.client-writer-role"),
+					zms.ResourceName("athenz.domain:role.identity-provider-role"),
+					zms.ResourceName("athenz.domain:role.client-no-policies-role"),
+					zms.ResourceName("athenz.domain:role.no-members-role"),
+				},
 				Rules: map[zms.ResourceName][]*zms.Assertion{
-					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+					zms.ResourceName("different-domain:role.trust-role"): {
 						{
 							Effect:   &allow,
-							Action:   "get",
-							Role:     "athenz.domain:role.client-reader-role",
-							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+							Action:   "PUT",
+							Role:     "different-domain:role.trust-role",
+							Resource: "athenz.domain:svc.my-service-name:/another/sub/path",
 						},
 						{
 							Effect:   &allow,
-							Action:   "HEAD",
-							Role:     "athenz.domain:role.client-reader-role",
-							Resource: "athenz.domain:svc.my-another-service-name",
+							Action:   "post",
+							Role:     "different-domain:role.trust-role",
+							Resource: "athenz.domain:svc.some-other-service-name:*",
 						},
 					},
 					zms.ResourceName("athenz.domain:role.client-writer-role"): {
@@ -63,6 +71,28 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 							Resource: "athenz.domain:svc.some-other-service-name:*",
 						},
 					},
+					zms.ResourceName("athenz.domain:role.identity-provider-role"): {
+						{
+							Effect:   &allow,
+							Action:   "LAUNCH",
+							Role:     "athenz.domain:role.identity-provider-role",
+							Resource: "athenz.domain:svc.my-service-name",
+						},
+					},
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							Effect:   &allow,
+							Action:   "get",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-another-service-name",
+						},
+					},
 				},
 				Members: map[zms.ResourceName][]*zms.RoleMember{
 					zms.ResourceName("athenz.domain:role.client-reader-role"): {
@@ -73,12 +103,33 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 							MemberName: "user.athenzuser",
 						},
 					},
+					zms.ResourceName("different-domain:trust-role"): {
+						{
+							MemberName: "user.trusted",
+						},
+					},
 					zms.ResourceName("athenz.domain:role.client-writer-role"): {
 						{
 							MemberName: "writer-domain.client-power-service",
 						},
 						{
 							MemberName: "user.developer",
+						},
+					},
+					zms.ResourceName("athenz.domain:role.identity-provider-role"): {
+						{
+							MemberName: "k8s.cluster.prod",
+						},
+						{
+							MemberName: "k8s.cluster.canary",
+						},
+					},
+					zms.ResourceName("athenz.domain:role.client-no-policies-role"): {
+						{
+							MemberName: "another-domain.client-service",
+						},
+						{
+							MemberName: "user.engineer",
 						},
 					},
 				},
@@ -222,6 +273,197 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			test: "model with invalid members that results in empty ServiceRoleBindingSpec",
+			model: athenz.Model{
+				Name:      "athenz.domain",
+				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client-reader-role"),
+					zms.ResourceName("athenz.domain:role.client-writer-role"),
+				},
+				Rules: map[zms.ResourceName][]*zms.Assertion{
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							Effect:   &allow,
+							Action:   "get",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-another-service-name",
+						},
+					},
+				},
+				Members: map[zms.ResourceName][]*zms.RoleMember{
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							MemberName: "invalid-principal",
+						},
+					},
+				},
+			},
+			expectedConfigs: []model.Config{
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRole.Type,
+						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Version:   model.ServiceRole.Version,
+						Namespace: "athenz-domain",
+						Name:      "client-reader-role",
+					},
+					Spec: &v1alpha1.ServiceRole{
+						Rules: []*v1alpha1.AccessRule{
+							{
+								Methods: []string{
+									"GET",
+								},
+								Paths: []string{
+									"/protected/path",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-service-name",
+										},
+									},
+								},
+							},
+							{
+								Methods: []string{
+									"HEAD",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-another-service-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			test: "model with invalid members that results in unable to create ServiceRoleBindingSpec",
+			model: athenz.Model{
+				Name:      "athenz.domain",
+				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client-reader-role"),
+				},
+				Rules: map[zms.ResourceName][]*zms.Assertion{
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							Effect:   &allow,
+							Action:   "get",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-another-service-name",
+						},
+					},
+				},
+				Members: map[zms.ResourceName][]*zms.RoleMember{},
+			},
+			expectedConfigs: []model.Config{
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRole.Type,
+						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Version:   model.ServiceRole.Version,
+						Namespace: "athenz-domain",
+						Name:      "client-reader-role",
+					},
+					Spec: &v1alpha1.ServiceRole{
+						Rules: []*v1alpha1.AccessRule{
+							{
+								Methods: []string{
+									"GET",
+								},
+								Paths: []string{
+									"/protected/path",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-service-name",
+										},
+									},
+								},
+							},
+							{
+								Methods: []string{
+									"HEAD",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-another-service-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			test: "model with invalid assertions that results in no rules for ServiceRole",
+			model: athenz.Model{
+				Name:      "athenz.domain",
+				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client-reader-role"),
+					zms.ResourceName("athenz.domain:role.client-writer-role"),
+				},
+				Rules: map[zms.ResourceName][]*zms.Assertion{
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							Effect:   &allow,
+							Action:   "assume_role",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client-reader-role",
+							Resource: "my-another-service-name:*",
+						},
+					},
+				},
+				Members: map[zms.ResourceName][]*zms.RoleMember{
+					zms.ResourceName("athenz.domain:role.client-reader-role"): {
+						{
+							MemberName: "some-client.domain.client-serviceA",
+						},
+						{
+							MemberName: "user.athenzuser",
+						},
+					},
+				},
+			},
+			expectedConfigs: []model.Config{},
 		},
 	}
 
