@@ -58,7 +58,6 @@ spec:
         - { name: sia-identity, mountPath: /identity, readOnly: true}
       - name: k8s-athenz-istio-auth
         image: local/k8s-athenz-istio-auth
-        args: [ "--zms-url=replace-me" ]
         volumeMounts:
         - { name: tls-certs, mountPath: /var/run/athenz, readOnly: true }
       volumes:

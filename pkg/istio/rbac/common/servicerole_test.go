@@ -4,7 +4,6 @@
 package common
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -13,43 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 )
-
-func TestCreateServiceRole(t *testing.T) {
-	allow := zms.ALLOW
-	policy := &zms.Policy{
-		Name: "my.domain:policy.service.role.my.domain.details",
-		Assertions: []*zms.Assertion{
-			{
-				Role:     "my.domain.details:role.",
-				Resource: "my.domain.details:/details",
-				Action:   "get",
-				Effect:   &allow,
-			},
-			{
-				Role:     "my.domain.details:role.",
-				Resource: "my.domain.details:/details",
-				Action:   "post",
-				Effect:   &allow,
-			},
-		},
-	}
-
-	srMgr := NewServiceRoleMgr(nil)
-	configMeta, serviceRole, err := srMgr.createServiceRole("my-domain", "svc.cluster.local", "my.domain.details", policy)
-
-	assert.Equal(t, "my.domain.details", configMeta.Name)
-	assert.Equal(t, "my-domain", configMeta.Namespace)
-	assert.Equal(t, serviceRole.Rules[0].Services, []string{"details.my-domain.svc.cluster.local"})
-	assert.Equal(t, serviceRole.Rules[0].Methods, []string{"GET", "POST"})
-	assert.Equal(t, serviceRole.Rules[0].Paths, []string{"/details"})
-	assert.Equal(t, nil, err)
-
-	_, _, err = srMgr.createServiceRole("my-domain", "svc.cluster.local", "", policy)
-	assert.Equal(t, errors.New("Error splitting on . character"), err)
-
-	_, _, err = srMgr.createServiceRole("my-domain", "svc.cluster.local", "foobar.", policy)
-	assert.Equal(t, errors.New("Could not get sa from role: foobar."), err)
-}
 
 func TestParseAssertionEffect(t *testing.T) {
 
