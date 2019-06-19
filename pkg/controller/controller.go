@@ -52,6 +52,8 @@ func (c *Controller) sync(key string) error {
 	}
 
 	if !exists {
+		// TODO, add the non existing athenz domain to the istio custom resource
+		// processing controller to delete them
 		return fmt.Errorf("athenz domain %s does not exist in cache", key)
 	}
 
