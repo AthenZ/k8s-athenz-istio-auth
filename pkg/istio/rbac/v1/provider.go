@@ -28,7 +28,14 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 
 	out := make([]model.Config, 0)
 
-	for roleFQDN, assertions := range m.Rules {
+	// Process all the roles in the same order as defined in the Athenz domain
+	for _, roleFQDN := range m.Roles {
+
+		// Check if there are any policies/assertions defined for this role
+		assertions, exists := m.Rules[roleFQDN]
+		if !exists {
+			continue
+		}
 
 		// Extract only the role name from the <domain>:role.<roleName> format
 		roleName, err := common.ParseRoleFQDN(m.Name, string(roleFQDN))
