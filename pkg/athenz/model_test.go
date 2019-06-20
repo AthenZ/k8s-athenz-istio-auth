@@ -18,10 +18,6 @@ func toRDLTimestamp(s string) (rdl.Timestamp, error) {
 
 func TestGetRolesForDomain(t *testing.T) {
 
-	modified, err := toRDLTimestamp("2018-03-14T19:36:41.003Z")
-	if err != nil {
-		t.Errorf(err.Error())
-	}
 	cases := []struct {
 		test     string
 		domain   *zms.DomainData
@@ -43,31 +39,10 @@ func TestGetRolesForDomain(t *testing.T) {
 				Name: "athenz-domain.name",
 				Roles: []*zms.Role{
 					{
-						Name:     "athenz-domain.name:role.my-reader-role",
-						Modified: &modified,
-						RoleMembers: []*zms.RoleMember{
-							{
-								MemberName: "client-domain.serviceA",
-							},
-							{
-								MemberName: "client-domain.serviceB",
-							},
-							{
-								MemberName: "client2-domain.serviceA",
-							},
-						},
+						Name: "athenz-domain.name:role.my-reader-role",
 					},
 					{
-						Name:     "athenz-domain.name:role.my-writer-role",
-						Modified: &modified,
-						RoleMembers: []*zms.RoleMember{
-							{
-								MemberName: "client-domain.admin-service",
-							},
-							{
-								MemberName: "client2-domain.serviceA",
-							},
-						},
+						Name: "athenz-domain.name:role.my-writer-role",
 					},
 				},
 			},
@@ -733,7 +708,6 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 
 	for _, c := range cases {
 		if got := ConvertAthenzPoliciesIntoRbacModel(c.domain); !reflect.DeepEqual(got, c.expected) {
-			//assert.True(t, reflect.DeepEqual(c.expected, got), c.test)
 			assert.Equal(t, c.expected, got, c.test)
 		}
 	}

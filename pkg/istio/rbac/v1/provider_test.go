@@ -355,7 +355,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			},
 		},
 		{
-			test: "model with invalid members that results in unable to create ServiceRoleBindingSpec",
+			test: "model that has no members for a role resulting in unable to create ServiceRoleBindingSpec",
 			model: athenz.Model{
 				Name:      "athenz.domain",
 				Namespace: "athenz-domain",
