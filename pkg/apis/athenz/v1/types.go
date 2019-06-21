@@ -4,7 +4,7 @@
 package v1
 
 import (
-	"github.com/jinzhu/copier"
+	"github.com/mohae/deepcopy"
 	"github.com/yahoo/athenz/clients/go/zms"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -36,9 +36,9 @@ func (in *AthenzDomainSpec) DeepCopy() *AthenzDomainSpec {
 	if in == nil {
 		return nil
 	}
-	out := new(AthenzDomainSpec)
-	*out = *in
-	if err := copier.Copy(&out.SignedDomain, &in.SignedDomain); err != nil {
+	outRaw := deepcopy.Copy(in)
+	out, ok := outRaw.(*AthenzDomainSpec)
+	if !ok {
 		return nil
 	}
 	return out
