@@ -6,14 +6,17 @@ package onboarding
 import (
 	"log"
 	"testing"
+	"time"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	fcache "k8s.io/client-go/tools/cache/testing"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -112,10 +115,11 @@ func TestNewController(t *testing.T) {
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
 
-	c := NewController(configStoreCache, dnsSuffix, fakeIndexInformer)
+	c := NewController(configStoreCache, dnsSuffix, fakeIndexInformer, time.Second)
 	assert.Equal(t, dnsSuffix, c.dnsSuffix, "dns suffix should be equal")
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
+	assert.Equal(t, time.Second, c.crcResyncInterval, "crc resync interval should be equal")
 }
 
 func TestAddService(t *testing.T) {
@@ -329,6 +333,24 @@ func TestSyncService(t *testing.T) {
 			assert.Equal(t, []string{}, diff, "ClusterRbacConfig inclusion service list should be equal to the expected service list")
 		})
 	}
+}
+
+func TestResync(t *testing.T) {
+	c := &Controller{
+		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		crcResyncInterval: time.Second * 1,
+	}
+
+	stopCh := make(chan struct{})
+	go c.resync(stopCh)
+	time.Sleep(time.Second * 2)
+	close(stopCh)
+
+	assert.Equal(t, 1, c.queue.Len(), "queue length should be 1")
+	item, shutdown := c.queue.Get()
+	assert.False(t, shutdown, "shutdown should be false")
+	assert.Equal(t, 0, c.queue.Len(), "queue length should be 0")
+	assert.Equal(t, queueKey, item, "key should be equal")
 }
 
 func TestCompareServiceLists(t *testing.T) {
