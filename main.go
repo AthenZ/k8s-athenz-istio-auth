@@ -86,7 +86,8 @@ func main() {
 		case <-signalCh:
 			log.Println("Shutdown signal received, stopping controllers...")
 			close(stopCh)
-			<-signalCh
+			// sleep to allow go routines to successfully exit
+			time.Sleep(time.Second)
 			log.Println("Shutting down...")
 			os.Exit(0)
 		}
