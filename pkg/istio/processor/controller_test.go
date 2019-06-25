@@ -11,25 +11,6 @@ import (
 	"testing"
 )
 
-/*type fakeConfigStore struct {
-	model.ConfigStore
-}
-
-func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
-	return model.ConfigDescriptor{
-		model.ClusterRbacConfig,
-	}
-}
-
-func (cs *fakeConfigStore) Get(typ, name, namespace string) *model.Config {
-	clusterRbacConfig := newClusterRbacConfig([]string{onboardedServiceName})
-	return &clusterRbacConfig
-}
-
-func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
-	return nil
-}*/
-
 func newSrSpec() *v1alpha1.ServiceRole {
 	return &v1alpha1.ServiceRole{
 		Rules: []*v1alpha1.AccessRule{
