@@ -9,6 +9,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
@@ -25,6 +27,7 @@ import (
 	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
@@ -35,11 +38,83 @@ const queueNumRetries = 3
 type Controller struct {
 	configStoreCache     model.ConfigStoreCache
 	crcController        *onboarding.Controller
+	processor            *processor.Controller
 	serviceIndexInformer cache.SharedIndexInformer
 	adIndexInformer      cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
 	queue                workqueue.RateLimitingInterface
 	adResyncInterval     time.Duration
+}
+
+// convertSliceToMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
+func convertSliceToMap(in []model.Config) map[string]model.Config {
+	out := make(map[string]model.Config)
+	for _, c := range in {
+		key := c.Key()
+		out[key] = c
+	}
+	return out
+}
+
+// equal compares the Spec of two model.Config items
+func equal(c1, c2 model.Config) bool {
+	return c1.Key() == c2.Key() && proto.Equal(c1.Spec, c2.Spec)
+}
+
+// computeChangeList determines a list of change operations to convert the current state of model.Config items into the
+// desired state of model.Config items in the following manner:
+// 1. Converts the current and desired slices into a map for quick lookup
+// 2. Loops through the desired slice of items and identifies items that need to be created/updated
+// 3. Loops through the current slice of items and identifies items that need to be deleted
+func (c *Controller) computeChangeList(current []model.Config, desired []model.Config) []*processor.Item {
+
+	currMap := convertSliceToMap(current)
+	desiredMap := convertSliceToMap(desired)
+
+	changeList := make([]*processor.Item, 0)
+
+	// loop through the desired slice of model.Config and add the items that need to be created or updated
+	for _, desiredConfig := range desired {
+		key := desiredConfig.Key()
+		existingConfig, exists := currMap[key]
+		if !exists {
+			item := processor.Item{
+				Operation:    processor.CREATE,
+				Resource:     desiredConfig,
+				ErrorHandler: nil,
+			}
+			changeList = append(changeList, &item)
+			continue
+		}
+
+		if !equal(existingConfig, desiredConfig) {
+			// copy metadata(for resource version) from current config to desired config
+			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
+			item := processor.Item{
+				Operation:    processor.UPDATE,
+				Resource:     desiredConfig,
+				ErrorHandler: nil,
+			}
+			changeList = append(changeList, &item)
+			continue
+		}
+	}
+
+	// loop through the current slice of model.Config and add the items that need to be deleted
+	for _, currConfig := range current {
+		key := currConfig.Key()
+		_, exists := desiredMap[key]
+		if !exists {
+			item := processor.Item{
+				Operation:    processor.DELETE,
+				Resource:     currConfig,
+				ErrorHandler: nil,
+			}
+			changeList = append(changeList, &item)
+		}
+	}
+
+	return changeList
 }
 
 // sync will be ran for each key in the queue and will be responsible for the following:
@@ -66,11 +141,12 @@ func (c *Controller) sync(key string) error {
 
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain)
-	rbacCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
+	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
 
-	for _, v := range rbacCRs {
-		log.Printf("CustomResource: %s/%s/%s: ", v.Type, v.Namespace, v.Name)
-		log.Println("Contents: ", v.Spec)
+	changeList := c.computeChangeList(currentCRs, desiredCRs)
+	for _, item := range changeList {
+		c.processor.ProcessConfigChange(item)
 	}
 
 	return nil
@@ -91,7 +167,8 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
-	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval)
+	processor := processor.NewController(configStoreCache)
+	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
 
 	c := &Controller{
@@ -99,6 +176,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		adIndexInformer:      adIndexInformer,
 		configStoreCache:     configStoreCache,
 		crcController:        crcController,
+		processor:            processor,
 		rbacProvider:         rbacv1.NewProvider(),
 		queue:                queue,
 		adResyncInterval:     adResyncInterval,
@@ -131,7 +209,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 		c.queue.Add(key)
 		return
 	}
-	log.Println("Error calling key func:", err)
+	log.Println("Controller: processEvent(): Error calling key func:", err)
 }
 
 // processEvent is responsible for adding the key of the item to the queue
@@ -152,10 +230,11 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.adIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
-		log.Panicln("Timed out waiting for namespace cache to sync.")
+		log.Panicln("Controller: Run(): Timed out waiting for namespace cache to sync.")
 	}
 
 	// crc controller must wait for service informer to sync before starting
+	go c.processor.Run(stopCh)
 	go c.crcController.Run(stopCh)
 	go c.resync(stopCh)
 
@@ -180,16 +259,16 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(keyRaw)
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Printf("String cast failed for key %v", key)
+		log.Printf("Controller: processNextItem(): String cast failed for key %v", key)
 		return true
 	}
 
-	log.Println("Processing key:", key)
+	log.Println("Controller: processNextItem(): Processing key:", key)
 	err := c.sync(key)
 	if err != nil {
-		log.Printf("Error syncing athenz state for key %s: %s", keyRaw, err)
+		log.Printf("Controller: processNextItem(): Error syncing athenz state for key %s: %s", keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Printf("Retrying key %s due to sync error", keyRaw)
+			log.Printf("Controller: processNextItem(): Retrying key %s due to sync error", keyRaw)
 			c.queue.AddRateLimited(keyRaw)
 			return true
 		}

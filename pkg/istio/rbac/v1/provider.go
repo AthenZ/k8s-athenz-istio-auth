@@ -87,3 +87,23 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 
 	return out
 }
+
+// GetCurrentIstioRbac returns the ServiceRole and ServiceRoleBinding resources for the specified model's namespace
+func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []model.Config {
+
+	out := make([]model.Config, 0)
+
+	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
+	if err != nil {
+		log.Printf("error listing the ServiceRole resources in the namespace: %s", m.Namespace)
+	}
+	out = append(out, sr...)
+
+	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
+	if err != nil {
+		log.Printf("error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
+	}
+	out = append(out, srb...)
+
+	return out
+}

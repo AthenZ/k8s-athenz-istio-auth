@@ -4,6 +4,7 @@
 package onboarding
 
 import (
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"log"
 	"testing"
 	"time"
@@ -87,6 +88,9 @@ func newFakeController(services []*v1.Service, fake bool) *Controller {
 		configStore = &fakeConfigStore{configStore}
 	}
 	c.configStoreCache = memory.NewController(configStore)
+	c.processor = processor.NewController(c.configStoreCache)
+	stopCh := make(chan struct{})
+	go c.processor.Run(stopCh)
 
 	source := fcache.NewFakeControllerSource()
 	for _, service := range services {
@@ -114,12 +118,17 @@ func TestNewController(t *testing.T) {
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
+	processor := processor.NewController(configStoreCache)
+	stopCh := make(chan struct{})
+	go processor.Run(stopCh)
 
-	c := NewController(configStoreCache, dnsSuffix, fakeIndexInformer, time.Second)
+	c := NewController(configStoreCache, dnsSuffix, fakeIndexInformer, time.Second, processor)
 	assert.Equal(t, dnsSuffix, c.dnsSuffix, "dns suffix should be equal")
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, time.Second, c.crcResyncInterval, "crc resync interval should be equal")
+	assert.Equal(t, processor, c.processor, "processor controller pointer should be equal")
+
 }
 
 func TestAddService(t *testing.T) {
@@ -328,6 +337,8 @@ func TestSyncService(t *testing.T) {
 
 			err := c.sync()
 			assert.Nil(t, err, "sync error should be nil")
+			// Add a sleep for processing controller to work on the queue
+			time.Sleep(100 * time.Millisecond)
 			_, clusterRbacConfig := getClusterRbacConfig(c)
 			diff := compareServiceLists(tt.expectedServiceList, clusterRbacConfig.Inclusion.Services)
 			assert.Equal(t, []string{}, diff, "ClusterRbacConfig inclusion service list should be equal to the expected service list")
