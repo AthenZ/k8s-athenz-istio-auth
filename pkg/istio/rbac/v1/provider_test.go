@@ -13,6 +13,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 
 	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 )
 
@@ -468,8 +469,111 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		p := NewProvider()
-		gotConfigs := p.ConvertAthenzModelIntoIstioRbac(c.model)
-		assert.EqualValues(t, c.expectedConfigs, gotConfigs, c.test)
+		t.Run(c.test, func(t *testing.T) {
+			p := NewProvider()
+			gotConfigs := p.ConvertAthenzModelIntoIstioRbac(c.model)
+			assert.EqualValues(t, c.expectedConfigs, gotConfigs, c.test)
+		})
+	}
+}
+
+func newCache() model.ConfigStoreCache {
+	configDescriptor := model.ConfigDescriptor{
+		model.ClusterRbacConfig,
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+	}
+
+	return memory.NewController(memory.Make(configDescriptor))
+}
+
+func newSr(ns, role string) model.Config {
+	srSpec := &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Services: []string{common.WildCardAll},
+				Methods:  []string{"GET"},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key:    common.ConstraintSvcKey,
+						Values: []string{"test-svc"},
+					},
+				},
+			},
+		},
+	}
+	return common.NewConfig(model.ServiceRole.Type, ns, role, srSpec)
+}
+
+func newSrb(ns, role string) model.Config {
+	srbSpec := &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Kind: common.ServiceRoleKind,
+			Name: role,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "test-user",
+			},
+		},
+	}
+	return common.NewConfig(model.ServiceRoleBinding.Type, ns, role, srbSpec)
+}
+
+func updatedCache() (model.ConfigStoreCache, error) {
+	c := newCache()
+	_, err := c.Create(newSr("test-ns", "svc-role"))
+	if err != nil {
+		return nil, err
+	}
+	_, err = c.Create(newSrb("test-ns", "svc-role"))
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func TestGetCurrentIstioRbac(t *testing.T) {
+
+	cacheWithItems, err := updatedCache()
+	assert.Nil(t, err, "error should be nil")
+	assert.NotNil(t, cacheWithItems, "cache should not be nil")
+
+	type input struct {
+		m   athenz.Model
+		csc model.ConfigStoreCache
+	}
+	cases := []struct {
+		test     string
+		input    input
+		expected []model.Config
+	}{
+		{
+			test: "should return empty list for empty cache",
+			input: input{
+				m:   athenz.Model{},
+				csc: newCache(),
+			},
+			expected: []model.Config{},
+		},
+		{
+			test: "should return list of servicerole and servicerolebindings",
+			input: input{
+				m:   athenz.Model{},
+				csc: cacheWithItems,
+			},
+			expected: []model.Config{
+				*cacheWithItems.Get(model.ServiceRole.Type, "svc-role", "test-ns"),
+				*cacheWithItems.Get(model.ServiceRoleBinding.Type, "svc-role", "test-ns"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.test, func(t *testing.T) {
+			p := NewProvider()
+			gotConfigs := p.GetCurrentIstioRbac(c.input.m, c.input.csc)
+			assert.EqualValues(t, c.expected, gotConfigs, c.test)
+		})
 	}
 }

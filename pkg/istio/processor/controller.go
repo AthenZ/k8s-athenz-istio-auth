@@ -18,18 +18,10 @@ type Controller struct {
 	queue            workqueue.RateLimitingInterface
 }
 
-type op string
-
-const (
-	CREATE op = "CREATE"
-	UPDATE op = "UPDATE"
-	DELETE op = "DELETE"
-)
-
 type OnErrorFunc func(err error, item *Item) error
 
 type Item struct {
-	Operation    op
+	Operation    model.Event
 	Resource     model.Config
 	ErrorHandler OnErrorFunc
 }
@@ -67,14 +59,14 @@ func (c *Controller) runWorker() {
 // processNextItem takes an item off the queue and calls the controllers sync
 // function, handles the logic of re-queuing in case any errors occur
 func (c *Controller) processNextItem() bool {
-	itemObj, quit := c.queue.Get()
+	itemRaw, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 
-	defer c.queue.Done(itemObj)
+	defer c.queue.Done(itemRaw)
 
-	item, ok := itemObj.(*Item)
+	item, ok := itemRaw.(*Item)
 	if !ok {
 		log.Printf("Processor: processNextItem() Item cast failed for resource %v", item)
 		return true
@@ -86,15 +78,15 @@ func (c *Controller) processNextItem() bool {
 		log.Printf("Processor: processNextItem() Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
 		if item.ErrorHandler != nil {
 			err := item.ErrorHandler(err, item)
-			if err != nil && c.queue.NumRequeues(itemObj) < queueNumRetries {
+			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
 				log.Printf("Processor: processNextItem() Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
-				c.queue.AddRateLimited(itemObj)
+				c.queue.AddRateLimited(itemRaw)
 				return true
 			}
 		}
 	}
 
-	c.queue.Forget(itemObj)
+	c.queue.Forget(itemRaw)
 	return true
 }
 
@@ -107,11 +99,11 @@ func (c *Controller) sync(item *Item) error {
 
 	var err error
 	switch item.Operation {
-	case CREATE:
+	case model.EventAdd:
 		_, err = c.configStoreCache.Create(item.Resource)
-	case UPDATE:
+	case model.EventUpdate:
 		_, err = c.configStoreCache.Update(item.Resource)
-	case DELETE:
+	case model.EventDelete:
 		res := item.Resource
 		err = c.configStoreCache.Delete(res.Type, res.Name, res.Namespace)
 	}

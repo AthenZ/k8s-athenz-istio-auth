@@ -5,7 +5,6 @@ package onboarding
 
 import (
 	"errors"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"log"
 	"time"
 
@@ -16,6 +15,8 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 )
 
 const (
@@ -181,8 +182,12 @@ func (c *Controller) getOnboardedServiceList() []string {
 
 // errHandler re-adds the key for a failed processor.sync operation
 func (c *Controller) errHandler(err error, item *processor.Item) error {
-	log.Printf("Onboarding: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
-	c.queue.AddRateLimited(queueKey)
+	if err != nil {
+		if item != nil {
+			log.Printf("Onboarding: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+		}
+		c.queue.AddRateLimited(queueKey)
+	}
 	return nil
 }
 
@@ -199,7 +204,7 @@ func (c *Controller) sync() error {
 	if config == nil {
 		log.Println("Onboarding: Creating cluster rbac config...")
 		item := processor.Item{
-			Operation:    processor.CREATE,
+			Operation:    model.EventAdd,
 			Resource:     newClusterRbacConfig(serviceList),
 			ErrorHandler: c.errHandler,
 		}
@@ -210,7 +215,7 @@ func (c *Controller) sync() error {
 	if len(serviceList) == 0 {
 		log.Println("Onboarding: Deleting cluster rbac config...")
 		item := processor.Item{
-			Operation:    processor.DELETE,
+			Operation:    model.EventDelete,
 			Resource:     newClusterRbacConfig(serviceList),
 			ErrorHandler: c.errHandler,
 		}
@@ -230,7 +235,7 @@ func (c *Controller) sync() error {
 			Spec:       newClusterRbacSpec(serviceList),
 		}
 		item := processor.Item{
-			Operation:    processor.UPDATE,
+			Operation:    model.EventUpdate,
 			Resource:     config,
 			ErrorHandler: c.errHandler,
 		}
@@ -255,7 +260,7 @@ func (c *Controller) sync() error {
 			Spec:       clusterRbacConfig,
 		}
 		item := processor.Item{
-			Operation:    processor.UPDATE,
+			Operation:    model.EventUpdate,
 			Resource:     config,
 			ErrorHandler: c.errHandler,
 		}

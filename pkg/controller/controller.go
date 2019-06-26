@@ -46,9 +46,9 @@ type Controller struct {
 	adResyncInterval     time.Duration
 }
 
-// convertSliceToMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
-func convertSliceToMap(in []model.Config) map[string]model.Config {
-	out := make(map[string]model.Config)
+// convertSliceToKeyedMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
+func convertSliceToKeyedMap(in []model.Config) map[string]model.Config {
+	out := make(map[string]model.Config, len(in))
 	for _, c := range in {
 		key := c.Key()
 		out[key] = c
@@ -66,10 +66,10 @@ func equal(c1, c2 model.Config) bool {
 // 1. Converts the current and desired slices into a map for quick lookup
 // 2. Loops through the desired slice of items and identifies items that need to be created/updated
 // 3. Loops through the current slice of items and identifies items that need to be deleted
-func (c *Controller) computeChangeList(current []model.Config, desired []model.Config) []*processor.Item {
+func computeChangeList(current []model.Config, desired []model.Config, errHandler processor.OnErrorFunc) []*processor.Item {
 
-	currMap := convertSliceToMap(current)
-	desiredMap := convertSliceToMap(desired)
+	currMap := convertSliceToKeyedMap(current)
+	desiredMap := convertSliceToKeyedMap(desired)
 
 	changeList := make([]*processor.Item, 0)
 
@@ -79,9 +79,9 @@ func (c *Controller) computeChangeList(current []model.Config, desired []model.C
 		existingConfig, exists := currMap[key]
 		if !exists {
 			item := processor.Item{
-				Operation:    processor.CREATE,
+				Operation:    model.EventAdd,
 				Resource:     desiredConfig,
-				ErrorHandler: nil,
+				ErrorHandler: errHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -91,9 +91,9 @@ func (c *Controller) computeChangeList(current []model.Config, desired []model.C
 			// copy metadata(for resource version) from current config to desired config
 			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
 			item := processor.Item{
-				Operation:    processor.UPDATE,
+				Operation:    model.EventUpdate,
 				Resource:     desiredConfig,
-				ErrorHandler: nil,
+				ErrorHandler: errHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -106,9 +106,9 @@ func (c *Controller) computeChangeList(current []model.Config, desired []model.C
 		_, exists := desiredMap[key]
 		if !exists {
 			item := processor.Item{
-				Operation:    processor.DELETE,
+				Operation:    model.EventDelete,
 				Resource:     currConfig,
-				ErrorHandler: nil,
+				ErrorHandler: errHandler,
 			}
 			changeList = append(changeList, &item)
 		}
@@ -144,7 +144,17 @@ func (c *Controller) sync(key string) error {
 	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
 
-	changeList := c.computeChangeList(currentCRs, desiredCRs)
+	errHandler := func(err error, item *processor.Item) error {
+		if err != nil {
+			if item != nil {
+				log.Printf("Controller: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+			}
+			c.queue.AddRateLimited(key)
+		}
+		return nil
+	}
+
+	changeList := computeChangeList(currentCRs, desiredCRs, errHandler)
 	for _, item := range changeList {
 		c.processor.ProcessConfigChange(item)
 	}

@@ -77,6 +77,11 @@ func getClusterRbacConfig(c *Controller) (*model.Config, *v1alpha1.RbacConfig) {
 	return config, clusterRbacConfig
 }
 
+/*type fakeProcessor struct {
+
+}
+
+func (fp *)*/
 func newFakeController(services []*v1.Service, fake bool) *Controller {
 	c := &Controller{}
 	configDescriptor := model.ConfigDescriptor{
@@ -105,6 +110,7 @@ func newFakeController(services []*v1.Service, fake bool) *Controller {
 	}
 	c.serviceIndexInformer = fakeIndexInformer
 	c.dnsSuffix = dnsSuffix
+	go c.configStoreCache.Run(stopCh)
 
 	return c
 }
@@ -337,6 +343,10 @@ func TestSyncService(t *testing.T) {
 
 			err := c.sync()
 			assert.Nil(t, err, "sync error should be nil")
+			/*c.processor.ProcessConfigChange = func(item *processor.Item) {
+				spew.Dump(item)
+				assert.Nil(t, item, "nil item")
+			}*/
 			// Add a sleep for processing controller to work on the queue
 			time.Sleep(100 * time.Millisecond)
 			_, clusterRbacConfig := getClusterRbacConfig(c)
