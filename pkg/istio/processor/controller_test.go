@@ -2,13 +2,16 @@ package processor
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
+
 	"k8s.io/api/core/v1"
-	"testing"
 )
 
 func newSrSpec() *v1alpha1.ServiceRole {
@@ -181,6 +184,17 @@ func TestSync(t *testing.T) {
 			}(),
 			expectedErr: nil,
 		},
+		{
+			name: "should return error if valid update operation",
+			input: &Item{
+				Operation:    model.EventUpdate,
+				Resource:     newSr("test-ns", "test-svc"),
+				ErrorHandler: errHandler,
+			},
+			startingCache: updateTestCache,
+			expectedCache: updateTestCache,
+			expectedErr:   fmt.Errorf("old revision"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -189,7 +203,7 @@ func TestSync(t *testing.T) {
 			c := NewController(configStoreCache)
 
 			err := c.sync(tt.input)
-			assert.Nil(t, err, "sync should not return error")
+			assert.Equal(t, tt.expectedErr, err, "sync err should match expected error")
 
 			for _, typ := range configDescriptor.Types() {
 				actualItemsT, err := configStoreCache.List(typ, v1.NamespaceAll)

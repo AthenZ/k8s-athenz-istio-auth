@@ -4,8 +4,9 @@
 package onboarding
 
 import (
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
+	"fmt"
 	"log"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 )
 
 var (
@@ -45,8 +48,10 @@ var (
 	dnsSuffix               = "svc.cluster.local"
 )
 
+// fakeConfigStore a wrapper around a passed-in config store that does mutex lock on all store operations
 type fakeConfigStore struct {
 	model.ConfigStore
+	m sync.Mutex
 }
 
 func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
@@ -56,33 +61,49 @@ func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
 }
 
 func (cs *fakeConfigStore) Get(typ, name, namespace string) *model.Config {
-	clusterRbacConfig := newClusterRbacConfig([]string{onboardedServiceName})
-	return &clusterRbacConfig
+	cs.m.Lock()
+	defer cs.m.Unlock()
+	return cs.ConfigStore.Get(typ, name, namespace)
+}
+
+func (cs *fakeConfigStore) List(typ, namespace string) ([]model.Config, error) {
+	cs.m.Lock()
+	defer cs.m.Unlock()
+	return cs.ConfigStore.List(typ, namespace)
+}
+
+func (cs *fakeConfigStore) Create(cfg model.Config) (string, error) {
+	cs.m.Lock()
+	defer cs.m.Unlock()
+	return cs.ConfigStore.Create(cfg)
+}
+
+func (cs *fakeConfigStore) Update(cfg model.Config) (string, error) {
+	cs.m.Lock()
+	defer cs.m.Unlock()
+	return cs.ConfigStore.Update(cfg)
 }
 
 func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
-	return nil
+	cs.m.Lock()
+	defer cs.m.Unlock()
+	return cs.ConfigStore.Delete(typ, name, namespace)
 }
 
-func getClusterRbacConfig(c *Controller) (*model.Config, *v1alpha1.RbacConfig) {
+func getClusterRbacConfig(c *Controller) (*v1alpha1.RbacConfig, error) {
 	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil {
-		return nil, nil
+		return nil, fmt.Errorf("config store returned nil for ClusterRbacConfig resource")
 	}
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
 		log.Panicln("cannot cast to rbac config")
 	}
-	return config, clusterRbacConfig
+	return clusterRbacConfig, nil
 }
 
-/*type fakeProcessor struct {
-
-}
-
-func (fp *)*/
-func newFakeController(services []*v1.Service, fake bool) *Controller {
+func newFakeController(services []*v1.Service, fake bool, stopCh chan struct{}) *Controller {
 	c := &Controller{}
 	configDescriptor := model.ConfigDescriptor{
 		model.ClusterRbacConfig,
@@ -90,11 +111,13 @@ func newFakeController(services []*v1.Service, fake bool) *Controller {
 
 	configStore := memory.Make(configDescriptor)
 	if fake {
-		configStore = &fakeConfigStore{configStore}
+		configStore = &fakeConfigStore{
+			configStore,
+			sync.Mutex{},
+		}
 	}
 	c.configStoreCache = memory.NewController(configStore)
 	c.processor = processor.NewController(c.configStoreCache)
-	stopCh := make(chan struct{})
 	go c.processor.Run(stopCh)
 
 	source := fcache.NewFakeControllerSource()
@@ -102,15 +125,13 @@ func newFakeController(services []*v1.Service, fake bool) *Controller {
 		source.Add(service)
 	}
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
-	stopChan := make(chan struct{})
-	go fakeIndexInformer.Run(stopChan)
+	go fakeIndexInformer.Run(stopCh)
 
-	if !cache.WaitForCacheSync(stopChan, fakeIndexInformer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, fakeIndexInformer.HasSynced) {
 		log.Panicln("timed out waiting for cache to sync")
 	}
 	c.serviceIndexInformer = fakeIndexInformer
 	c.dnsSuffix = dnsSuffix
-	go c.configStoreCache.Run(stopCh)
 
 	return c
 }
@@ -258,7 +279,7 @@ func TestGetServiceList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputServiceList, false)
+			c := newFakeController(tt.inputServiceList, false, make(chan struct{}))
 			ret := c.getOnboardedServiceList()
 			diff := compareServiceLists(tt.expectedServiceArray, ret)
 			assert.Equal(t, []string{}, diff, "list should be equal to expected")
@@ -298,7 +319,6 @@ func TestSyncService(t *testing.T) {
 		inputServiceList       []*v1.Service
 		inputClusterRbacConfig model.Config
 		expectedServiceList    []string
-		fake                   bool
 	}{
 		{
 			name:                "Create: create ClusterRbacConfig when it does not exist with multiple new services",
@@ -328,13 +348,13 @@ func TestSyncService(t *testing.T) {
 			inputServiceList:       []*v1.Service{notOnboardedService},
 			inputClusterRbacConfig: newClusterRbacConfig([]string{notOnboardedServiceName}),
 			expectedServiceList:    []string{},
-			fake:                   true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputServiceList, tt.fake)
+			stopCh := make(chan struct{})
+			c := newFakeController(tt.inputServiceList, true, stopCh)
 
 			if tt.inputClusterRbacConfig.Spec != nil {
 				_, err := c.configStoreCache.Create(tt.inputClusterRbacConfig)
@@ -343,15 +363,20 @@ func TestSyncService(t *testing.T) {
 
 			err := c.sync()
 			assert.Nil(t, err, "sync error should be nil")
-			/*c.processor.ProcessConfigChange = func(item *processor.Item) {
-				spew.Dump(item)
-				assert.Nil(t, item, "nil item")
-			}*/
+
 			// Add a sleep for processing controller to work on the queue
 			time.Sleep(100 * time.Millisecond)
-			_, clusterRbacConfig := getClusterRbacConfig(c)
-			diff := compareServiceLists(tt.expectedServiceList, clusterRbacConfig.Inclusion.Services)
-			assert.Equal(t, []string{}, diff, "ClusterRbacConfig inclusion service list should be equal to the expected service list")
+
+			clusterRbacConfig, err := getClusterRbacConfig(c)
+			if len(tt.expectedServiceList) == 0 {
+				assert.NotNil(t, err, fmt.Sprintf("error should not be nil for getClusterRbacConfig: %s", err))
+				assert.Nil(t, clusterRbacConfig, "ClusterRbacConfig resource should be nil")
+			} else {
+				assert.Nil(t, err, fmt.Sprintf("error should be nil for getClusterRbacConfig: %s", err))
+				assert.Equal(t, len(tt.expectedServiceList), len(clusterRbacConfig.Inclusion.Services), "number of onboarded services should match expected")
+				diff := compareServiceLists(tt.expectedServiceList, clusterRbacConfig.Inclusion.Services)
+				assert.Equal(t, []string{}, diff, "ClusterRbacConfig inclusion service list should be equal to the expected service list")
+			}
 		})
 	}
 }

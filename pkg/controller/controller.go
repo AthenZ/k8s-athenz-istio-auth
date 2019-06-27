@@ -117,6 +117,20 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 	return changeList
 }
 
+// getErrHandler returns a error handler func that re-adds the athenz domain back to queue
+// this explicit func definition takes in the key to avoid data race while accessing key
+func (c *Controller) getErrHandler(key string) processor.OnErrorFunc {
+	return func(err error, item *processor.Item) error {
+		if err != nil {
+			if item != nil {
+				log.Printf("Controller: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+			}
+			c.queue.AddRateLimited(key)
+		}
+		return nil
+	}
+}
+
 // sync will be ran for each key in the queue and will be responsible for the following:
 // 1. Get the Athenz Domain from the cache for the queue key
 // 2. Convert to Athenz Model to group domain members and policies by role
@@ -143,16 +157,7 @@ func (c *Controller) sync(key string) error {
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain)
 	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
-
-	errHandler := func(err error, item *processor.Item) error {
-		if err != nil {
-			if item != nil {
-				log.Printf("Controller: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
-			}
-			c.queue.AddRateLimited(key)
-		}
-		return nil
-	}
+	errHandler := c.getErrHandler(key)
 
 	changeList := computeChangeList(currentCRs, desiredCRs, errHandler)
 	for _, item := range changeList {

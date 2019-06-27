@@ -2,12 +2,10 @@ package controller
 
 import (
 	"fmt"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
-	"istio.io/api/rbac/v1alpha1"
 	"testing"
 	"time"
 
+	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +15,8 @@ import (
 	adv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 
 	"github.com/stretchr/testify/assert"
 )
