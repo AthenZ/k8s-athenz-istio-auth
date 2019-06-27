@@ -103,7 +103,7 @@ func getClusterRbacConfig(c *Controller) (*v1alpha1.RbacConfig, error) {
 	return clusterRbacConfig, nil
 }
 
-func newFakeController(services []*v1.Service, fake bool, stopCh chan struct{}) *Controller {
+func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
 	c := &Controller{}
 	configDescriptor := model.ConfigDescriptor{
 		model.ClusterRbacConfig,
