@@ -15,6 +15,8 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 )
 
 const (
@@ -28,18 +30,20 @@ type Controller struct {
 	configStoreCache     model.ConfigStoreCache
 	dnsSuffix            string
 	serviceIndexInformer cache.SharedIndexInformer
+	processor            *processor.Controller
 	queue                workqueue.RateLimitingInterface
 	crcResyncInterval    time.Duration
 }
 
 // NewController initializes the Controller object and its dependencies
-func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer, crcResyncInterval time.Duration) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, dnsSuffix string, serviceIndexInformer cache.SharedIndexInformer, crcResyncInterval time.Duration, processor *processor.Controller) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
 		configStoreCache:     configStoreCache,
 		dnsSuffix:            dnsSuffix,
 		serviceIndexInformer: serviceIndexInformer,
+		processor:            processor,
 		queue:                queue,
 		crcResyncInterval:    crcResyncInterval,
 	}
@@ -85,9 +89,9 @@ func (c *Controller) processNextItem() bool {
 
 	err := c.sync()
 	if err != nil {
-		log.Printf("Error syncing cluster rbac config for key %s: %s", key, err)
+		log.Printf("Onboarding: Error syncing cluster rbac config for key %s: %s", key, err)
 		if c.queue.NumRequeues(key) < queueNumRetries {
-			log.Printf("Retrying key %s due to sync error", key)
+			log.Printf("Onboarding: Retrying key %s due to sync error", key)
 			c.queue.AddRateLimited(key)
 			return true
 		}
@@ -162,7 +166,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 	for _, service := range cacheServiceList {
 		svc, ok := service.(*v1.Service)
 		if !ok {
-			log.Println("Could not cast to service object, skipping service list addition...")
+			log.Println("Onboarding: Could not cast to service object, skipping service list addition...")
 			continue
 		}
 
@@ -176,25 +180,47 @@ func (c *Controller) getOnboardedServiceList() []string {
 	return serviceList
 }
 
+// errHandler re-adds the key for a failed processor.sync operation
+func (c *Controller) errHandler(err error, item *processor.Item) error {
+	if err != nil {
+		if item != nil {
+			log.Printf("Onboarding: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+		}
+		c.queue.AddRateLimited(queueKey)
+	}
+	return nil
+}
+
 // sync decides whether to create / update / delete the ClusterRbacConfig
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
 	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
-		log.Println("Service list is empty and cluster rbac config does not exist, skipping sync...")
+		log.Println("Onboarding: Service list is empty and cluster rbac config does not exist, skipping sync...")
 		return nil
 	}
 
 	if config == nil {
-		log.Println("Creating cluster rbac config...")
-		_, err := c.configStoreCache.Create(newClusterRbacConfig(serviceList))
-		return err
+		log.Println("Onboarding: Creating cluster rbac config...")
+		item := processor.Item{
+			Operation:    model.EventAdd,
+			Resource:     newClusterRbacConfig(serviceList),
+			ErrorHandler: c.errHandler,
+		}
+		c.processor.ProcessConfigChange(&item)
+		return nil
 	}
 
 	if len(serviceList) == 0 {
-		log.Println("Deleting cluster rbac config...")
-		return c.configStoreCache.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, v1.NamespaceDefault)
+		log.Println("Onboarding: Deleting cluster rbac config...")
+		item := processor.Item{
+			Operation:    model.EventDelete,
+			Resource:     newClusterRbacConfig(serviceList),
+			ErrorHandler: c.errHandler,
+		}
+		c.processor.ProcessConfigChange(&item)
+		return nil
 	}
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
@@ -203,12 +229,18 @@ func (c *Controller) sync() error {
 	}
 
 	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
-		log.Println("ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
-		_, err := c.configStoreCache.Update(model.Config{
+		log.Println("Onboarding: ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
+		config := model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
-		})
-		return err
+		}
+		item := processor.Item{
+			Operation:    model.EventUpdate,
+			Resource:     config,
+			ErrorHandler: c.errHandler,
+		}
+		c.processor.ProcessConfigChange(&item)
+		return nil
 	}
 
 	newServices := compareServiceLists(serviceList, clusterRbacConfig.Inclusion.Services)
@@ -222,20 +254,26 @@ func (c *Controller) sync() error {
 	}
 
 	if len(newServices) > 0 || len(oldServices) > 0 {
-		log.Println("Updating cluster rbac config...")
-		_, err := c.configStoreCache.Update(model.Config{
+		log.Println("Onboarding: Updating cluster rbac config...")
+		config := model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
-		})
-		return err
+		}
+		item := processor.Item{
+			Operation:    model.EventUpdate,
+			Resource:     config,
+			ErrorHandler: c.errHandler,
+		}
+		c.processor.ProcessConfigChange(&item)
+		return nil
 	}
 
-	log.Println("Sync state is current, no changes needed...")
+	log.Println("Onboarding: Sync state is current, no changes needed...")
 	return nil
 }
 
 func (c *Controller) EventHandler(config model.Config, e model.Event) {
-	log.Printf("Received %s event for cluster rbac config: %+v", e.String(), config)
+	log.Printf("Onboarding: Received %s event for cluster rbac config: %+v", e.String(), config)
 	c.queue.Add(queueKey)
 }
 
