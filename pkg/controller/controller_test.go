@@ -17,6 +17,7 @@ import (
 	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -26,6 +27,10 @@ var ad = &adv1.AthenzDomain{
 		Name:      "test.namespace",
 		Namespace: "test-namespace",
 	},
+}
+
+func init() {
+	log.InitLogger("/tmp/k8s-athenz-istio-auth.log", "debug")
 }
 
 func TestProcessEvent(t *testing.T) {

@@ -4,14 +4,18 @@
 package processor
 
 import (
-	"log"
-
 	"istio.io/istio/pilot/pkg/model"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
-const queueNumRetries = 3
+const (
+	queueNumRetries = 3
+	logPrefix       = "[processor]"
+)
 
 type Controller struct {
 	configStoreCache model.ConfigStoreCache
@@ -40,7 +44,7 @@ func NewController(configStoreCache model.ConfigStoreCache) *Controller {
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
 func (c *Controller) ProcessConfigChange(item *Item) {
-	log.Printf("Processor: ProcessConfigChange() Item added to queue Resource: %s, Action: %s", item.Resource.Key(), item.Operation)
+	log.Printf("%s ProcessConfigChange() Item added to queue Resource: %s, Action: %s", logPrefix, item.Resource.Key(), item.Operation)
 	c.queue.Add(item)
 }
 
@@ -68,18 +72,18 @@ func (c *Controller) processNextItem() bool {
 
 	item, ok := itemRaw.(*Item)
 	if !ok {
-		log.Printf("Processor: processNextItem() Item cast failed for resource %v", item)
+		log.Printf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
 		return true
 	}
 
-	log.Printf("Processor: processNextItem() Processing %s for resource: %s", item.Operation, item.Resource.Key())
+	log.Printf("%s processNextItem() Processing %s for resource: %s", logPrefix, item.Operation, item.Resource.Key())
 	err := c.sync(item)
 	if err != nil {
-		log.Printf("Processor: processNextItem() Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
+		log.Printf("%s processNextItem() Error performing %s for resource: %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
 		if item.ErrorHandler != nil {
 			err := item.ErrorHandler(err, item)
 			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
-				log.Printf("Processor: processNextItem() Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
+				log.Printf("%s processNextItem() Retrying %s for resource: %s due to sync error", logPrefix, item.Operation, item.Resource.Key())
 				c.queue.AddRateLimited(itemRaw)
 				return true
 			}

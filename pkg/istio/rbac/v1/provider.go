@@ -4,14 +4,15 @@
 package v1
 
 import (
-	"log"
-
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/istio/pilot/pkg/model"
 )
+
+const logPrefix = "[provider]"
 
 type v1 struct {
 	// implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
@@ -40,21 +41,21 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Extract only the role name from the <domain>:role.<roleName> format
 		roleName, err := common.ParseRoleFQDN(m.Name, string(roleFQDN))
 		if err != nil {
-			log.Println(err.Error())
+			log.Printf("%s %s", logPrefix, err.Error())
 			continue
 		}
 
 		// Transform the assertions for an Athenz Role into a ServiceRole spec
 		srSpec, err := common.GetServiceRoleSpec(m.Name, roleName, assertions)
 		if err != nil {
-			log.Printf("error converting the assertions for role:%s to a ServiceRole: %s", roleName, err.Error())
+			log.Printf("%s Error converting the assertions for role: %s to a ServiceRole: %s", logPrefix, roleName, err.Error())
 			continue
 		}
 
 		// Validate the ServiceRole spec
 		err = model.ValidateServiceRole(roleName, m.Namespace, srSpec)
 		if err != nil {
-			log.Printf("error validating the converted ServiceRole spec: %s for role: %s", err.Error(), roleName)
+			log.Printf("%s Error validating the converted ServiceRole spec: %s for role: %s", logPrefix, err.Error(), roleName)
 			continue
 		}
 
@@ -64,20 +65,20 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
 		roleMembers, exists := m.Members[roleFQDN]
 		if !exists {
-			log.Printf("cannot find members for the role:%s while creating a ServiceRoleBinding", roleName)
+			log.Printf("%s Cannot find members for the role:%s while creating a ServiceRoleBinding", logPrefix, roleName)
 			continue
 		}
 
 		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, roleMembers)
 		if err != nil {
-			log.Printf("error converting the members for role:%s to a ServiceRoleBinding: %s", roleName, err.Error())
+			log.Printf("%s Error converting the members for role:%s to a ServiceRoleBinding: %s", logPrefix, roleName, err.Error())
 			continue
 		}
 
 		// Validate the ServiceRoleBinding spec
 		err = model.ValidateServiceRoleBinding(roleName, m.Namespace, srbSpec)
 		if err != nil {
-			log.Printf("error validating the converted ServiceRoleBinding spec: %s for role: %s", err.Error(), roleName)
+			log.Printf("%s Error validating the converted ServiceRoleBinding spec: %s for role: %s", logPrefix, err.Error(), roleName)
 			continue
 		}
 
@@ -93,12 +94,12 @@ func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []m
 
 	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
 	if err != nil {
-		log.Printf("error listing the ServiceRole resources in the namespace: %s", m.Namespace)
+		log.Printf("%s Error listing the ServiceRole resources in the namespace: %s", logPrefix, m.Namespace)
 	}
 
 	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
 	if err != nil {
-		log.Printf("error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
+		log.Printf("%s Error listing the ServiceRoleBinding resources in the namespace: %s", logPrefix, m.Namespace)
 	}
 
 	return append(sr, srb...)

@@ -11,7 +11,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
+
+func init() {
+	log.InitLogger("/tmp/k8s-athenz-istio-auth.log", "debug")
+}
 
 func TestParseAssertionEffect(t *testing.T) {
 
