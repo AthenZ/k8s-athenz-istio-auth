@@ -126,7 +126,7 @@ func (c *Controller) getErrHandler(key string) processor.OnErrorFunc {
 	return func(err error, item *processor.Item) error {
 		if err != nil {
 			if item != nil {
-				log.Printf("%s Error performing %s on %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
+				log.Errorf("%s Error performing %s on %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
 			}
 			c.queue.AddRateLimited(key)
 		}
@@ -227,7 +227,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 		c.queue.Add(key)
 		return
 	}
-	log.Printf("%s processEvent(): Error calling key func: %s", logPrefix, err.Error())
+	log.Errorf("%s processEvent(): Error calling key func: %s", logPrefix, err.Error())
 }
 
 // processEvent is responsible for adding the key of the item to the queue
@@ -277,16 +277,16 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(keyRaw)
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Printf("%s processNextItem(): String cast failed for key %v", logPrefix, key)
+		log.Errorf("%s processNextItem(): String cast failed for key %v", logPrefix, key)
 		return true
 	}
 
-	log.Printf("%s processNextItem(): Processing key: %s", logPrefix, key)
+	log.Infof("%s processNextItem(): Processing key: %s", logPrefix, key)
 	err := c.sync(key)
 	if err != nil {
-		log.Printf("%s processNextItem(): Error syncing athenz state for key %s: %s", logPrefix, keyRaw, err)
+		log.Errorf("%s processNextItem(): Error syncing athenz state for key %s: %s", logPrefix, keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Printf("%s processNextItem(): Retrying key %s due to sync error", logPrefix, keyRaw)
+			log.Infof("%s processNextItem(): Retrying key %s due to sync error", logPrefix, keyRaw)
 			c.queue.AddRateLimited(keyRaw)
 			return true
 		}
@@ -304,13 +304,13 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
-			log.Printf("%s Running resync for athenz domains...", logPrefix)
+			log.Infof("%s Running resync for athenz domains...", logPrefix)
 			adListRaw := c.adIndexInformer.GetIndexer().List()
 			for _, adRaw := range adListRaw {
 				c.processEvent(cache.MetaNamespaceKeyFunc, adRaw)
 			}
 		case <-stopCh:
-			log.Printf("%s Stopping athenz domain resync...", logPrefix)
+			log.Infof("%s Stopping athenz domain resync...", logPrefix)
 			return
 		}
 	}

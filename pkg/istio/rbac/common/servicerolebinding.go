@@ -46,7 +46,7 @@ func GetServiceRoleBindingSpec(roleName string, members []*zms.RoleMember) (*v1a
 
 		memberName, err := parseMemberName(member)
 		if err != nil {
-			log.Printf("%s %s", srbLogPrefix, err.Error())
+			log.Warningf("%s %s", srbLogPrefix, err.Error())
 			continue
 		}
 

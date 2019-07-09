@@ -22,15 +22,20 @@ func InitLogger(logFile, level string) {
 		logLevel = logrus.InfoLevel
 	}
 
-	logger := &lumberjack.Logger{
-		Filename:   logFile,
-		MaxSize:    1, // Mb
-		MaxBackups: 5,
-		MaxAge:     28, // Days
+	ioWriter := io.Writer(os.Stdout)
+
+	if logFile != "" {
+		logger := &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    1, // Mb
+			MaxBackups: 5,
+			MaxAge:     28, // Days
+		}
+		ioWriter = io.MultiWriter(os.Stdout, logger)
 	}
 
 	l := &logrus.Logger{
-		Out: io.MultiWriter(os.Stdout, logger),
+		Out: ioWriter,
 		Formatter: &logrus.TextFormatter{
 			ForceColors:            true,
 			DisableSorting:         true,

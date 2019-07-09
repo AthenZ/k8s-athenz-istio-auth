@@ -105,29 +105,29 @@ func GetServiceRoleSpec(domainName zms.DomainName, roleName string, assertions [
 	for _, assertion := range assertions {
 		assertionRole, err := ParseRoleFQDN(domainName, string(assertion.Role))
 		if err != nil {
-			log.Printf("%s %s", srLogPrefix, err.Error())
+			log.Warningf("%s %s", srLogPrefix, err.Error())
 			continue
 		}
 
 		if assertionRole != roleName {
-			log.Printf("%s Assertion: %v does not belong to the role: %s", srLogPrefix, assertion, roleName)
+			log.Warningf("%s Assertion: %v does not belong to the role: %s", srLogPrefix, assertion, roleName)
 			continue
 		}
 		_, err = parseAssertionEffect(assertion)
 		if err != nil {
-			log.Printf("%s %s", srLogPrefix, err.Error())
+			log.Warningf("%s %s", srLogPrefix, err.Error())
 			continue
 		}
 
 		method, err := parseAssertionAction(assertion)
 		if err != nil {
-			log.Printf("%s %s", srLogPrefix, err.Error())
+			log.Warningf("%s %s", srLogPrefix, err.Error())
 			continue
 		}
 
 		svc, path, err := parseAssertionResource(domainName, assertion)
 		if err != nil {
-			log.Printf("%s %s", srLogPrefix, err.Error())
+			log.Warningf("%s %s", srLogPrefix, err.Error())
 			continue
 		}
 

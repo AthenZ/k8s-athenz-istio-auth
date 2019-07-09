@@ -49,7 +49,7 @@ var (
 )
 
 func init() {
-	log.InitLogger("/tmp/k8s-athenz-istio-auth.log", "debug")
+	log.InitLogger("", "debug")
 }
 
 // fakeConfigStore a wrapper around a passed-in config store that does mutex lock on all store operations

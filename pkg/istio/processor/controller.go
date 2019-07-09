@@ -44,7 +44,7 @@ func NewController(configStoreCache model.ConfigStoreCache) *Controller {
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
 func (c *Controller) ProcessConfigChange(item *Item) {
-	log.Printf("%s ProcessConfigChange() Item added to queue Resource: %s, Action: %s", logPrefix, item.Resource.Key(), item.Operation)
+	log.Infof("%s ProcessConfigChange() Item added to queue Resource: %s, Action: %s", logPrefix, item.Resource.Key(), item.Operation)
 	c.queue.Add(item)
 }
 
@@ -72,18 +72,18 @@ func (c *Controller) processNextItem() bool {
 
 	item, ok := itemRaw.(*Item)
 	if !ok {
-		log.Printf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
+		log.Warningf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
 		return true
 	}
 
-	log.Printf("%s processNextItem() Processing %s for resource: %s", logPrefix, item.Operation, item.Resource.Key())
+	log.Infof("%s processNextItem() Processing %s for resource: %s", logPrefix, item.Operation, item.Resource.Key())
 	err := c.sync(item)
 	if err != nil {
-		log.Printf("%s processNextItem() Error performing %s for resource: %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
+		log.Errorf("%s processNextItem() Error performing %s for resource: %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
 		if item.ErrorHandler != nil {
 			err := item.ErrorHandler(err, item)
 			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
-				log.Printf("%s processNextItem() Retrying %s for resource: %s due to sync error", logPrefix, item.Operation, item.Resource.Key())
+				log.Infof("%s processNextItem() Retrying %s for resource: %s due to sync error", logPrefix, item.Operation, item.Resource.Key())
 				c.queue.AddRateLimited(itemRaw)
 				return true
 			}

@@ -41,21 +41,21 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Extract only the role name from the <domain>:role.<roleName> format
 		roleName, err := common.ParseRoleFQDN(m.Name, string(roleFQDN))
 		if err != nil {
-			log.Printf("%s %s", logPrefix, err.Error())
+			log.Warningf("%s %s", logPrefix, err.Error())
 			continue
 		}
 
 		// Transform the assertions for an Athenz Role into a ServiceRole spec
 		srSpec, err := common.GetServiceRoleSpec(m.Name, roleName, assertions)
 		if err != nil {
-			log.Printf("%s Error converting the assertions for role: %s to a ServiceRole: %s", logPrefix, roleName, err.Error())
+			log.Warningf("%s Error converting the assertions for role: %s to a ServiceRole: %s", logPrefix, roleName, err.Error())
 			continue
 		}
 
 		// Validate the ServiceRole spec
 		err = model.ValidateServiceRole(roleName, m.Namespace, srSpec)
 		if err != nil {
-			log.Printf("%s Error validating the converted ServiceRole spec: %s for role: %s", logPrefix, err.Error(), roleName)
+			log.Warningf("%s Error validating the converted ServiceRole spec: %s for role: %s", logPrefix, err.Error(), roleName)
 			continue
 		}
 
@@ -65,20 +65,20 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
 		roleMembers, exists := m.Members[roleFQDN]
 		if !exists {
-			log.Printf("%s Cannot find members for the role:%s while creating a ServiceRoleBinding", logPrefix, roleName)
+			log.Warningf("%s Cannot find members for the role:%s while creating a ServiceRoleBinding", logPrefix, roleName)
 			continue
 		}
 
 		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, roleMembers)
 		if err != nil {
-			log.Printf("%s Error converting the members for role:%s to a ServiceRoleBinding: %s", logPrefix, roleName, err.Error())
+			log.Warningf("%s Error converting the members for role:%s to a ServiceRoleBinding: %s", logPrefix, roleName, err.Error())
 			continue
 		}
 
 		// Validate the ServiceRoleBinding spec
 		err = model.ValidateServiceRoleBinding(roleName, m.Namespace, srbSpec)
 		if err != nil {
-			log.Printf("%s Error validating the converted ServiceRoleBinding spec: %s for role: %s", logPrefix, err.Error(), roleName)
+			log.Warningf("%s Error validating the converted ServiceRoleBinding spec: %s for role: %s", logPrefix, err.Error(), roleName)
 			continue
 		}
 

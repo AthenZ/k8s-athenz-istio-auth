@@ -31,7 +31,7 @@ func main() {
 	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
-	logLevel := flag.String("log-level", "debug", "logging level")
+	logLevel := flag.String("log-level", "info", "logging level")
 
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)

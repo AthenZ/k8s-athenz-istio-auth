@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	log.InitLogger("/tmp/k8s-athenz-istio-auth.log", "debug")
+	log.InitLogger("", "debug")
 }
 
 func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
