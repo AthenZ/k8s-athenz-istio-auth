@@ -5,9 +5,9 @@ package common
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 )
@@ -16,6 +16,7 @@ const (
 	allUsers        = "user.*"
 	WildCardAll     = "*"
 	ServiceRoleKind = "ServiceRole"
+	srbLogPrefix    = "[servicerolebinding]"
 )
 
 // parseMemberName parses the Athenz role member into a SPIFFE compliant name
@@ -45,7 +46,7 @@ func GetServiceRoleBindingSpec(roleName string, members []*zms.RoleMember) (*v1a
 
 		memberName, err := parseMemberName(member)
 		if err != nil {
-			log.Println(err.Error())
+			log.Warningf("%s %s", srbLogPrefix, err.Error())
 			continue
 		}
 

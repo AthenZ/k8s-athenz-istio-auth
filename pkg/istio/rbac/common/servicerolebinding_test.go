@@ -9,8 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+
 	"istio.io/api/rbac/v1alpha1"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func TestParseMemberName(t *testing.T) {
 

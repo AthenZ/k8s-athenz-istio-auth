@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
@@ -13,6 +14,10 @@ import (
 
 	"k8s.io/api/core/v1"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func newSrSpec() *v1alpha1.ServiceRole {
 	return &v1alpha1.ServiceRole{

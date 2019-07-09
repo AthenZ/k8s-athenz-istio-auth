@@ -5,7 +5,6 @@ package athenz
 
 import (
 	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
 )
 
 // Athenz data structures the way we would want
@@ -100,7 +99,7 @@ func ConvertAthenzPoliciesIntoRbacModel(domain *zms.DomainData) Model {
 	}
 	return Model{
 		Name:      domainName,
-		Namespace: util.DomainToNamespace(string(domainName)),
+		Namespace: DomainToNamespace(string(domainName)),
 		Roles:     getRolesForDomain(domain),
 		Rules:     getRulesForDomain(domain),
 		Members:   getMembersForRole(domain),

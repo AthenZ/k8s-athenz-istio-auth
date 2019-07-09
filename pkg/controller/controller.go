@@ -6,7 +6,6 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -23,6 +22,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	adv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
@@ -30,10 +30,13 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
-const queueNumRetries = 3
+const (
+	queueNumRetries = 3
+	logPrefix       = "[controller]"
+)
 
 type Controller struct {
 	configStoreCache     model.ConfigStoreCache
@@ -123,7 +126,7 @@ func (c *Controller) getErrHandler(key string) processor.OnErrorFunc {
 	return func(err error, item *processor.Item) error {
 		if err != nil {
 			if item != nil {
-				log.Printf("Controller: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+				log.Errorf("%s Error performing %s on %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
 			}
 			c.queue.AddRateLimited(key)
 		}
@@ -224,12 +227,12 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 		c.queue.Add(key)
 		return
 	}
-	log.Println("Controller: processEvent(): Error calling key func:", err)
+	log.Errorf("%s processEvent(): Error calling key func: %s", logPrefix, err.Error())
 }
 
 // processEvent is responsible for adding the key of the item to the queue
 func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
-	domain := util.NamespaceToDomain(config.Namespace)
+	domain := athenz.NamespaceToDomain(config.Namespace)
 	key := config.Namespace + "/" + domain
 	c.queue.Add(key)
 }
@@ -245,7 +248,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.adIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
-		log.Panicln("Controller: Run(): Timed out waiting for namespace cache to sync.")
+		log.Panicf("%s Run(): Timed out waiting for namespace cache to sync.", logPrefix)
 	}
 
 	// crc controller must wait for service informer to sync before starting
@@ -274,16 +277,16 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(keyRaw)
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Printf("Controller: processNextItem(): String cast failed for key %v", key)
+		log.Errorf("%s processNextItem(): String cast failed for key %v", logPrefix, key)
 		return true
 	}
 
-	log.Println("Controller: processNextItem(): Processing key:", key)
+	log.Infof("%s processNextItem(): Processing key: %s", logPrefix, key)
 	err := c.sync(key)
 	if err != nil {
-		log.Printf("Controller: processNextItem(): Error syncing athenz state for key %s: %s", keyRaw, err)
+		log.Errorf("%s processNextItem(): Error syncing athenz state for key %s: %s", logPrefix, keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Printf("Controller: processNextItem(): Retrying key %s due to sync error", keyRaw)
+			log.Infof("%s processNextItem(): Retrying key %s due to sync error", logPrefix, keyRaw)
 			c.queue.AddRateLimited(keyRaw)
 			return true
 		}
@@ -301,13 +304,13 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
-			log.Println("Running resync for athenz domains...")
+			log.Infof("%s Running resync for athenz domains...", logPrefix)
 			adListRaw := c.adIndexInformer.GetIndexer().List()
 			for _, adRaw := range adListRaw {
 				c.processEvent(cache.MetaNamespaceKeyFunc, adRaw)
 			}
 		case <-stopCh:
-			log.Println("Stopping athenz domain resync...")
+			log.Infof("%s Stopping athenz domain resync...", logPrefix)
 			return
 		}
 	}

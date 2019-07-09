@@ -5,7 +5,6 @@ package onboarding
 
 import (
 	"errors"
-	"log"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -17,6 +16,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
 const (
@@ -24,6 +24,7 @@ const (
 	authzEnabled           = "true"
 	authzEnabledAnnotation = "authz.istio.io/enabled"
 	queueKey               = v1.NamespaceDefault + "/" + model.DefaultRbacConfigName
+	logPrefix              = "[onboarding]"
 )
 
 type Controller struct {
@@ -89,9 +90,9 @@ func (c *Controller) processNextItem() bool {
 
 	err := c.sync()
 	if err != nil {
-		log.Printf("Onboarding: Error syncing cluster rbac config for key %s: %s", key, err)
+		log.Errorf("%s Error syncing cluster rbac config for key %s: %s", logPrefix, key, err)
 		if c.queue.NumRequeues(key) < queueNumRetries {
-			log.Printf("Onboarding: Retrying key %s due to sync error", key)
+			log.Infof("%s Retrying key %s due to sync error", logPrefix, key)
 			c.queue.AddRateLimited(key)
 			return true
 		}
@@ -166,7 +167,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 	for _, service := range cacheServiceList {
 		svc, ok := service.(*v1.Service)
 		if !ok {
-			log.Println("Onboarding: Could not cast to service object, skipping service list addition...")
+			log.Errorf("%s Could not cast to service object, skipping service list addition...", logPrefix)
 			continue
 		}
 
@@ -184,7 +185,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 func (c *Controller) errHandler(err error, item *processor.Item) error {
 	if err != nil {
 		if item != nil {
-			log.Printf("Onboarding: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+			log.Errorf("%s Error performing %s on %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
 		}
 		c.queue.AddRateLimited(queueKey)
 	}
@@ -197,12 +198,12 @@ func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
 	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
-		log.Println("Onboarding: Service list is empty and cluster rbac config does not exist, skipping sync...")
+		log.Infof("%s Service list is empty and cluster rbac config does not exist, skipping sync...", logPrefix)
 		return nil
 	}
 
 	if config == nil {
-		log.Println("Onboarding: Creating cluster rbac config...")
+		log.Infof("%s Creating cluster rbac config...", logPrefix)
 		item := processor.Item{
 			Operation:    model.EventAdd,
 			Resource:     newClusterRbacConfig(serviceList),
@@ -213,7 +214,7 @@ func (c *Controller) sync() error {
 	}
 
 	if len(serviceList) == 0 {
-		log.Println("Onboarding: Deleting cluster rbac config...")
+		log.Infof("%s Deleting cluster rbac config...", logPrefix)
 		item := processor.Item{
 			Operation:    model.EventDelete,
 			Resource:     newClusterRbacConfig(serviceList),
@@ -229,7 +230,7 @@ func (c *Controller) sync() error {
 	}
 
 	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
-		log.Println("Onboarding: ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
+		log.Infof("%s ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...", logPrefix)
 		config := model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
@@ -254,7 +255,7 @@ func (c *Controller) sync() error {
 	}
 
 	if len(newServices) > 0 || len(oldServices) > 0 {
-		log.Println("Onboarding: Updating cluster rbac config...")
+		log.Infof("%s Updating cluster rbac config...", logPrefix)
 		config := model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
@@ -268,12 +269,11 @@ func (c *Controller) sync() error {
 		return nil
 	}
 
-	log.Println("Onboarding: Sync state is current, no changes needed...")
+	log.Infof("%s Sync state is current, no changes needed...", logPrefix)
 	return nil
 }
 
 func (c *Controller) EventHandler(config model.Config, e model.Event) {
-	log.Printf("Onboarding: Received %s event for cluster rbac config: %+v", e.String(), config)
 	c.queue.Add(queueKey)
 }
 
@@ -285,10 +285,10 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
-			log.Println("Running resync for cluster rbac config...")
+			log.Infof("%s Running resync for cluster rbac config...", logPrefix)
 			c.queue.Add(queueKey)
 		case <-stopCh:
-			log.Println("Stopping cluster rbac config resync...")
+			log.Infof("%s Stopping cluster rbac config resync...", logPrefix)
 			return
 		}
 	}

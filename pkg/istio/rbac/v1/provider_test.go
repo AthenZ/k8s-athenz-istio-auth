@@ -11,11 +11,16 @@ import (
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 
