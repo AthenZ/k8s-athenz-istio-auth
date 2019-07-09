@@ -167,7 +167,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 	for _, service := range cacheServiceList {
 		svc, ok := service.(*v1.Service)
 		if !ok {
-			log.Warningf("%s Could not cast to service object, skipping service list addition...", logPrefix)
+			log.Errorf("%s Could not cast to service object, skipping service list addition...", logPrefix)
 			continue
 		}
 
