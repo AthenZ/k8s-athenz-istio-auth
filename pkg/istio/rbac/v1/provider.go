@@ -57,7 +57,8 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, roleName, srSpec)
+		k8sRoleName := common.ConvertAthenzRoleNameToK8sName(roleName)
+		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, k8sRoleName, srSpec)
 		out = append(out, sr)
 
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
@@ -67,7 +68,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, roleMembers)
+		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, k8sRoleName, roleMembers)
 		if err != nil {
 			log.Warningf("Error converting the members for role: %s to a ServiceRoleBinding: %s", roleName, err.Error())
 			continue
@@ -80,7 +81,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, roleName, srbSpec)
+		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, k8sRoleName, srbSpec)
 		out = append(out, srb)
 	}
 

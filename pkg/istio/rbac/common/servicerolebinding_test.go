@@ -76,8 +76,9 @@ func TestParseMemberName(t *testing.T) {
 func TestGetServiceRoleBindingSpec(t *testing.T) {
 
 	type input struct {
-		roleName string
-		members  []*zms.RoleMember
+		roleName    string
+		k8sRoleName string
+		members     []*zms.RoleMember
 	}
 	cases := []struct {
 		test         string
@@ -88,8 +89,9 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "empty args",
 			input: input{
-				roleName: "",
-				members:  nil,
+				roleName:    "",
+				k8sRoleName: "",
+				members:     nil,
 			},
 			expectedSpec: nil,
 			expectedErr:  fmt.Errorf("no subjects found for the ServiceRoleBinding: "),
@@ -97,7 +99,8 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "valid role member spec",
 			input: input{
-				roleName: "client-reader-role",
+				roleName:    "client-reader_role",
+				k8sRoleName: "client-reader--role",
 				members: []*zms.RoleMember{
 					{
 						MemberName: "athenz.domain.client-serviceA",
@@ -109,7 +112,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 			},
 			expectedSpec: &v1alpha1.ServiceRoleBinding{
 				RoleRef: &v1alpha1.RoleRef{
-					Name: "client-reader-role",
+					Name: "client-reader--role",
 					Kind: ServiceRoleKind,
 				},
 				Subjects: []*v1alpha1.Subject{
@@ -126,7 +129,8 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "invalid role member spec",
 			input: input{
-				roleName: "client-reader-role",
+				roleName:    "client-reader-role",
+				k8sRoleName: "client-reader-role",
 				members: []*zms.RoleMember{
 					{
 						MemberName: "not-a-valid-user",
@@ -142,7 +146,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.roleName, c.input.members)
+		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.roleName, c.input.k8sRoleName, c.input.members)
 		assert.Equal(t, c.expectedSpec, gotSpec, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
