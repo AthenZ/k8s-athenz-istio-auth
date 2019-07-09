@@ -23,7 +23,6 @@ func InitLogger(logFile, level string) {
 	}
 
 	ioWriter := io.Writer(os.Stdout)
-
 	if logFile != "" {
 		logger := &lumberjack.Logger{
 			Filename:   logFile,

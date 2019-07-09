@@ -94,12 +94,12 @@ func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []m
 
 	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
 	if err != nil {
-		log.Printf("%s Error listing the ServiceRole resources in the namespace: %s", logPrefix, m.Namespace)
+		log.Warningf("%s Error listing the ServiceRole resources in the namespace: %s", logPrefix, m.Namespace)
 	}
 
 	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
 	if err != nil {
-		log.Printf("%s Error listing the ServiceRoleBinding resources in the namespace: %s", logPrefix, m.Namespace)
+		log.Warningf("%s Error listing the ServiceRoleBinding resources in the namespace: %s", logPrefix, m.Namespace)
 	}
 
 	return append(sr, srb...)

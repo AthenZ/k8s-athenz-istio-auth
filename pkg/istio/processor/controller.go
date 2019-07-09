@@ -72,7 +72,7 @@ func (c *Controller) processNextItem() bool {
 
 	item, ok := itemRaw.(*Item)
 	if !ok {
-		log.Warningf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
+		log.Errorf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
 		return true
 	}
 
