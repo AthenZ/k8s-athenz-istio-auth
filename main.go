@@ -90,11 +90,11 @@ func main() {
 	for {
 		select {
 		case <-signalCh:
-			log.Printf("%s Shutdown signal received, stopping controllers...", logPrefix)
+			log.Infof("%s Shutdown signal received, stopping controllers...", logPrefix)
 			close(stopCh)
 			// sleep to allow go routines to successfully exit
 			time.Sleep(time.Second)
-			log.Printf("%s Shutting down...", logPrefix)
+			log.Infof("%s Shutting down...", logPrefix)
 			os.Exit(0)
 		}
 	}
