@@ -274,7 +274,6 @@ func (c *Controller) sync() error {
 }
 
 func (c *Controller) EventHandler(config model.Config, e model.Event) {
-	log.Infof("%s Received %s event for cluster rbac config: %+v", logPrefix, e.String(), config)
 	c.queue.Add(queueKey)
 }
 
