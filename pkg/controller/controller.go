@@ -33,10 +33,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
-const (
-	queueNumRetries = 3
-	logPrefix       = "[controller]"
-)
+const queueNumRetries = 3
 
 type Controller struct {
 	configStoreCache     model.ConfigStoreCache
@@ -126,7 +123,7 @@ func (c *Controller) getErrHandler(key string) processor.OnErrorFunc {
 	return func(err error, item *processor.Item) error {
 		if err != nil {
 			if item != nil {
-				log.Errorf("%s Error performing %s on %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
+				log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err.Error())
 			}
 			c.queue.AddRateLimited(key)
 		}
@@ -227,7 +224,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 		c.queue.Add(key)
 		return
 	}
-	log.Errorf("%s processEvent(): Error calling key func: %s", logPrefix, err.Error())
+	log.Errorf("Error calling key func: %s", err.Error())
 }
 
 // processEvent is responsible for adding the key of the item to the queue
@@ -248,7 +245,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.adIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
-		log.Panicf("%s Run(): Timed out waiting for namespace cache to sync.", logPrefix)
+		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
 	// crc controller must wait for service informer to sync before starting
@@ -277,16 +274,16 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(keyRaw)
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Errorf("%s processNextItem(): String cast failed for key %v", logPrefix, key)
+		log.Errorf("String cast failed for key %v", key)
 		return true
 	}
 
-	log.Infof("%s processNextItem(): Processing key: %s", logPrefix, key)
+	log.Infof("Processing key: %s", key)
 	err := c.sync(key)
 	if err != nil {
-		log.Errorf("%s processNextItem(): Error syncing athenz state for key %s: %s", logPrefix, keyRaw, err)
+		log.Errorf("Error syncing athenz state for key %s: %s", keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Infof("%s processNextItem(): Retrying key %s due to sync error", logPrefix, keyRaw)
+			log.Infof("Retrying key %s due to sync error", keyRaw)
 			c.queue.AddRateLimited(keyRaw)
 			return true
 		}
@@ -304,13 +301,13 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
-			log.Infof("%s Running resync for athenz domains...", logPrefix)
+			log.Infoln("Running resync for athenz domains...")
 			adListRaw := c.adIndexInformer.GetIndexer().List()
 			for _, adRaw := range adListRaw {
 				c.processEvent(cache.MetaNamespaceKeyFunc, adRaw)
 			}
 		case <-stopCh:
-			log.Infof("%s Stopping athenz domain resync...", logPrefix)
+			log.Infoln("Stopping athenz domain resync...")
 			return
 		}
 	}

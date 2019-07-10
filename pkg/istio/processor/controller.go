@@ -12,10 +12,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
-const (
-	queueNumRetries = 3
-	logPrefix       = "[processor]"
-)
+const queueNumRetries = 3
 
 type Controller struct {
 	configStoreCache model.ConfigStoreCache
@@ -44,7 +41,7 @@ func NewController(configStoreCache model.ConfigStoreCache) *Controller {
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
 func (c *Controller) ProcessConfigChange(item *Item) {
-	log.Infof("%s ProcessConfigChange() Item added to queue Resource: %s, Action: %s", logPrefix, item.Resource.Key(), item.Operation)
+	log.Infof("Item added to queue Resource: %s, Action: %s", item.Resource.Key(), item.Operation)
 	c.queue.Add(item)
 }
 
@@ -72,18 +69,18 @@ func (c *Controller) processNextItem() bool {
 
 	item, ok := itemRaw.(*Item)
 	if !ok {
-		log.Errorf("%s processNextItem() Item cast failed for resource %v", logPrefix, item)
+		log.Errorf("Item cast failed for resource %v", item)
 		return true
 	}
 
-	log.Infof("%s processNextItem() Processing %s for resource: %s", logPrefix, item.Operation, item.Resource.Key())
+	log.Infof("Processing %s for resource: %s", item.Operation, item.Resource.Key())
 	err := c.sync(item)
 	if err != nil {
-		log.Errorf("%s processNextItem() Error performing %s for resource: %s: %s", logPrefix, item.Operation, item.Resource.Key(), err)
+		log.Errorf("Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
 		if item.ErrorHandler != nil {
 			err := item.ErrorHandler(err, item)
 			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
-				log.Infof("%s processNextItem() Retrying %s for resource: %s due to sync error", logPrefix, item.Operation, item.Resource.Key())
+				log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
 				c.queue.AddRateLimited(itemRaw)
 				return true
 			}
