@@ -68,9 +68,6 @@ controller was developed and tested with the Istio 1.0.3 release.
 - **Athenz** - Athenz must be fully deployed in order for users to be able to define roles and policies in
 their domain. More information and setup steps can be found [here](http://www.athenz.io/). The authorization
 management service (ZMS) and its apis are primarily used for this controller.
-- **SIA Provider** - A service identity agent (SIA) must be running in the Kubernetes cluster in order to provision
-X.509 certificates to instances in order to authenticate with Athenz. The approach we currently use in production
-can be found [here](https://github.com/yahoo/k8s-athenz-identity).
 
 ### Setup
 Configuration files which must be applied to run k8s-athenz-istio-auth can be found in the k8s directory.
