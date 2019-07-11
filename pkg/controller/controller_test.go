@@ -241,7 +241,7 @@ func TestComputeChangeList(t *testing.T) {
 	type input struct {
 		current    []model.Config
 		desired    []model.Config
-		errHandler processor.OnErrorFunc
+		errHandler processor.OnCompleteFunc
 	}
 	tests := []struct {
 		name           string
@@ -265,14 +265,14 @@ func TestComputeChangeList(t *testing.T) {
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventAdd,
-					Resource:     newSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        newSr("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     newSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        newSrb("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 			},
 		},
@@ -295,14 +295,14 @@ func TestComputeChangeList(t *testing.T) {
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSr("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSrb("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 			},
 		},
@@ -318,14 +318,14 @@ func TestComputeChangeList(t *testing.T) {
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSr("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSrb("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 			},
 		},
@@ -348,34 +348,34 @@ func TestComputeChangeList(t *testing.T) {
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSr("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSrb("test-ns", "svc-role"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     updatedSr("another-ns", "backend-writer"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        updatedSr("another-ns", "backend-writer"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     updatedSrb("another-ns", "backend-writer"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        updatedSrb("another-ns", "backend-writer"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSr("some-ns", "frontend-reader"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSr("some-ns", "frontend-reader"),
+					CallbackHandler: errHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSrb("some-ns", "frontend-reader"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSrb("some-ns", "frontend-reader"),
+					CallbackHandler: errHandler,
 				},
 			},
 		},

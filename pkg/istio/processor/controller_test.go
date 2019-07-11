@@ -86,7 +86,7 @@ func TestSync(t *testing.T) {
 	}
 
 	errHandler := func(err error, i *Item) error {
-		assert.Fail(t, "ErrorHandler should not be called")
+		assert.Fail(t, "CallbackHandler should not be called")
 		return nil
 	}
 
@@ -110,9 +110,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should perfom valid create operation",
 			input: &Item{
-				Operation:    model.EventAdd,
-				Resource:     newSr("test-ns", "test-role"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventAdd,
+				Resource:        newSr("test-ns", "test-role"),
+				CallbackHandler: errHandler,
 			},
 			startingCache: memory.NewController(memory.Make(configDescriptor)),
 			expectedCache: func() model.ConfigStoreCache {
@@ -144,7 +144,7 @@ func TestSync(t *testing.T) {
 					})
 					return *obj
 				}(),
-				ErrorHandler: errHandler,
+				CallbackHandler: errHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: func() model.ConfigStoreCache {
@@ -172,9 +172,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should perfom valid delete operation",
 			input: &Item{
-				Operation:    model.EventDelete,
-				Resource:     newSr("test-ns", "test-svc"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventDelete,
+				Resource:        newSr("test-ns", "test-svc"),
+				CallbackHandler: errHandler,
 			},
 			startingCache: func() model.ConfigStoreCache {
 				c, err := cacheWithItems()
@@ -192,9 +192,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should return error if valid update operation",
 			input: &Item{
-				Operation:    model.EventUpdate,
-				Resource:     newSr("test-ns", "test-svc"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventUpdate,
+				Resource:        newSr("test-ns", "test-svc"),
+				CallbackHandler: errHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: updateTestCache,
