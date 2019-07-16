@@ -11,6 +11,6 @@ func init() {
 }
 
 func TestGetCallerInfo(t *testing.T) {
-	logPrefix := getCallerInfo()
+	logPrefix := getCallerInfo(defaultDepth)
 	assert.Equal(t, logPrefix, "[testing/testing.go] [tRunner]", "Log prefix not equal to expected")
 }
