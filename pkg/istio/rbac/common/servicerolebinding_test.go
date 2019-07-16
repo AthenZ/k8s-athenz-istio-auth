@@ -76,7 +76,6 @@ func TestParseMemberName(t *testing.T) {
 func TestGetServiceRoleBindingSpec(t *testing.T) {
 
 	type input struct {
-		roleName    string
 		k8sRoleName string
 		members     []*zms.RoleMember
 	}
@@ -89,7 +88,6 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "empty args",
 			input: input{
-				roleName:    "",
 				k8sRoleName: "",
 				members:     nil,
 			},
@@ -99,7 +97,6 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "valid role member spec",
 			input: input{
-				roleName:    "client-reader_role",
 				k8sRoleName: "client-reader--role",
 				members: []*zms.RoleMember{
 					{
@@ -129,7 +126,6 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "invalid role member spec",
 			input: input{
-				roleName:    "client-reader-role",
 				k8sRoleName: "client-reader-role",
 				members: []*zms.RoleMember{
 					{
@@ -146,7 +142,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.roleName, c.input.k8sRoleName, c.input.members)
+		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.k8sRoleName, c.input.members)
 		assert.Equal(t, c.expectedSpec, gotSpec, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}

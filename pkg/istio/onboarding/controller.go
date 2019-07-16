@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -187,6 +188,14 @@ func (c *Controller) callbackHandler(err error, item *processor.Item) error {
 	if item != nil {
 		log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
 	}
+	if apiErrors.IsNotFound(err) || apiErrors.IsAlreadyExists(err) {
+		log.Infof("Error is non-retryable %s", err)
+		return nil
+	}
+	if !apiErrors.IsConflict(err) {
+		log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), queueKey)
+		return err
+	}
 	if c.queue.NumRequeues(queueKey) >= queueNumRetries {
 		log.Errorf("Max number of retries reached for %s.", queueKey)
 		return nil
@@ -276,6 +285,7 @@ func (c *Controller) sync() error {
 	}
 
 	log.Infoln("Sync state is current, no changes needed...")
+	c.queue.Forget(queueKey)
 	return nil
 }
 

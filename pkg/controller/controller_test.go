@@ -234,14 +234,14 @@ func TestEqual(t *testing.T) {
 
 func TestComputeChangeList(t *testing.T) {
 
-	errHandler := func(err error, item *processor.Item) error {
+	cbHandler := func(err error, item *processor.Item) error {
 		return err
 	}
 
 	type input struct {
-		current    []model.Config
-		desired    []model.Config
-		errHandler processor.OnCompleteFunc
+		current   []model.Config
+		desired   []model.Config
+		cbHandler processor.OnCompleteFunc
 	}
 	tests := []struct {
 		name           string
@@ -261,18 +261,18 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("test-ns", "svc-role"),
 					newSrb("test-ns", "svc-role"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
 					Operation:       model.EventAdd,
 					Resource:        newSr("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventAdd,
 					Resource:        newSrb("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -291,18 +291,18 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("another-ns", "backend-writer"),
 					newSrb("another-ns", "backend-writer"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSr("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSrb("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -313,19 +313,19 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("test-ns", "svc-role"),
 					newSrb("test-ns", "svc-role"),
 				},
-				desired:    []model.Config{},
-				errHandler: errHandler,
+				desired:   []model.Config{},
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
 					Operation:       model.EventDelete,
 					Resource:        newSr("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventDelete,
 					Resource:        newSrb("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -344,38 +344,38 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("another-ns", "backend-writer"),
 					newSrb("another-ns", "backend-writer"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSr("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSrb("test-ns", "svc-role"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventAdd,
 					Resource:        updatedSr("another-ns", "backend-writer"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventAdd,
 					Resource:        updatedSrb("another-ns", "backend-writer"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventDelete,
 					Resource:        newSr("some-ns", "frontend-reader"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 				{
 					Operation:       model.EventDelete,
 					Resource:        newSrb("some-ns", "frontend-reader"),
-					CallbackHandler: errHandler,
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -383,7 +383,7 @@ func TestComputeChangeList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualChangeList := computeChangeList(tt.input.current, tt.input.desired, tt.input.errHandler)
+			actualChangeList := computeChangeList(tt.input.current, tt.input.desired, tt.input.cbHandler)
 			assert.Equal(t, len(tt.expectedOutput), len(actualChangeList), "len(expectedChangeList) and len(actualChangeList) should match")
 			for i, expectedItem := range tt.expectedOutput {
 				assert.Equal(t, expectedItem.Operation, actualChangeList[i].Operation, fmt.Sprintf("operation on changelist[%d] does not match with expected", i))

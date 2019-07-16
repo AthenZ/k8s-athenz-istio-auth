@@ -26,7 +26,7 @@ type Item struct {
 	Resource  model.Config
 
 	// Handler function that should be invoked with the status of the current sync operation on the item
-	// If the handler returns an error, the operation is retried upto `queueNumRetries`
+	// If the handler returns an error, the operation is retried up to `queueNumRetries`
 	CallbackHandler OnCompleteFunc
 }
 

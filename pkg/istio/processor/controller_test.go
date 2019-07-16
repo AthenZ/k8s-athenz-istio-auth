@@ -85,7 +85,7 @@ func TestSync(t *testing.T) {
 		model.ServiceRoleBinding,
 	}
 
-	errHandler := func(err error, i *Item) error {
+	cbHandler := func(err error, i *Item) error {
 		assert.Fail(t, "CallbackHandler should not be called")
 		return nil
 	}
@@ -112,7 +112,7 @@ func TestSync(t *testing.T) {
 			input: &Item{
 				Operation:       model.EventAdd,
 				Resource:        newSr("test-ns", "test-role"),
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			},
 			startingCache: memory.NewController(memory.Make(configDescriptor)),
 			expectedCache: func() model.ConfigStoreCache {
@@ -144,7 +144,7 @@ func TestSync(t *testing.T) {
 					})
 					return *obj
 				}(),
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: func() model.ConfigStoreCache {
@@ -174,7 +174,7 @@ func TestSync(t *testing.T) {
 			input: &Item{
 				Operation:       model.EventDelete,
 				Resource:        newSr("test-ns", "test-svc"),
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			},
 			startingCache: func() model.ConfigStoreCache {
 				c, err := cacheWithItems()
@@ -194,7 +194,7 @@ func TestSync(t *testing.T) {
 			input: &Item{
 				Operation:       model.EventUpdate,
 				Resource:        newSr("test-ns", "test-svc"),
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: updateTestCache,

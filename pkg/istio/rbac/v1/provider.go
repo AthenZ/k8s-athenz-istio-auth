@@ -68,7 +68,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, k8sRoleName, roleMembers)
+		srbSpec, err := common.GetServiceRoleBindingSpec(k8sRoleName, roleMembers)
 		if err != nil {
 			log.Debugf("Error converting the members for role: %s to a ServiceRoleBinding: %s", roleName, err.Error())
 			continue

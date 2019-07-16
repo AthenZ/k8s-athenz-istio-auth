@@ -15,6 +15,7 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 
 	"k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -127,6 +128,14 @@ func (c *Controller) getCallbackHandler(key string) processor.OnCompleteFunc {
 		}
 		if item != nil {
 			log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err.Error())
+		}
+		if apiErrors.IsNotFound(err) || apiErrors.IsAlreadyExists(err) {
+			log.Infof("Error is non-retryable %s", err)
+			return nil
+		}
+		if !apiErrors.IsConflict(err) {
+			log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), key)
+			return err
 		}
 		if c.queue.NumRequeues(key) >= queueNumRetries {
 			log.Errorf("Max number of retries reached for %s.", key)
