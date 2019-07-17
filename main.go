@@ -23,8 +23,6 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
-const logPrefix = "[main]"
-
 func main() {
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
@@ -52,32 +50,32 @@ func main() {
 
 	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix)
 	if err != nil {
-		log.Panicf("%s Error creating istio crd client: %s", logPrefix, err.Error())
+		log.Panicf("Error creating istio crd client: %s", err.Error())
 	}
 
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		log.Panicf("%s Error creating kubernetes in cluster config: %s", logPrefix, err.Error())
+		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
 	}
 
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Panicf("%s Error creating k8s client: %s", logPrefix, err.Error())
+		log.Panicf("Error creating k8s client: %s", err.Error())
 	}
 
 	adClient, err := adClientset.NewForConfig(config)
 	if err != nil {
-		log.Panicf("%s Error creating athenz domain client: %s", logPrefix, err.Error())
+		log.Panicf("Error creating athenz domain client: %s", err.Error())
 	}
 
 	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
 	if err != nil {
-		log.Panicf("%s Error parsing ad-resync-interval duration: %s", logPrefix, err.Error())
+		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
 	}
 
 	crcResyncInterval, err := time.ParseDuration(*crcResyncIntervalRaw)
 	if err != nil {
-		log.Panicf("%s Error parsing crc-resync-interval duration: %s", logPrefix, err.Error())
+		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval)
@@ -90,11 +88,11 @@ func main() {
 	for {
 		select {
 		case <-signalCh:
-			log.Infof("%s Shutdown signal received, stopping controllers...", logPrefix)
+			log.Infoln("Shutdown signal received, stopping controllers...")
 			close(stopCh)
 			// sleep to allow go routines to successfully exit
 			time.Sleep(time.Second)
-			log.Infof("%s Shutting down...", logPrefix)
+			log.Infoln("Shutting down...")
 			os.Exit(0)
 		}
 	}

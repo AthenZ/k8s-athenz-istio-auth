@@ -16,7 +16,6 @@ const (
 	allUsers        = "user.*"
 	WildCardAll     = "*"
 	ServiceRoleKind = "ServiceRole"
-	srbLogPrefix    = "[servicerolebinding]"
 )
 
 // parseMemberName parses the Athenz role member into a SPIFFE compliant name
@@ -46,7 +45,7 @@ func GetServiceRoleBindingSpec(roleName string, members []*zms.RoleMember) (*v1a
 
 		memberName, err := parseMemberName(member)
 		if err != nil {
-			log.Warningf("%s %s", srbLogPrefix, err.Error())
+			log.Warningln(err.Error())
 			continue
 		}
 
