@@ -15,6 +15,8 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AthenzV1() athenzv1.AthenzV1Interface
+	// Deprecated: please explicitly pick a version if possible.
+	Athenz() athenzv1.AthenzV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -26,6 +28,12 @@ type Clientset struct {
 
 // AthenzV1 retrieves the AthenzV1Client
 func (c *Clientset) AthenzV1() athenzv1.AthenzV1Interface {
+	return c.athenzV1
+}
+
+// Deprecated: Athenz retrieves the default version of AthenzClient.
+// Please explicitly pick a version.
+func (c *Clientset) Athenz() athenzv1.AthenzV1Interface {
 	return c.athenzV1
 }
 

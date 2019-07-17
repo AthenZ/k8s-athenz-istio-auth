@@ -99,7 +99,7 @@ func (c *FakeAthenzDomains) DeleteCollection(options *v1.DeleteOptions, listOpti
 // Patch applies the patch and returns the patched athenzDomain.
 func (c *FakeAthenzDomains) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *athenzv1.AthenzDomain, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(athenzdomainsResource, name, pt, data, subresources...), &athenzv1.AthenzDomain{})
+		Invokes(testing.NewRootPatchSubresourceAction(athenzdomainsResource, name, data, subresources...), &athenzv1.AthenzDomain{})
 	if obj == nil {
 		return nil, err
 	}

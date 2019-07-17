@@ -395,7 +395,7 @@ func TestComputeChangeList(t *testing.T) {
 
 func TestResync(t *testing.T) {
 	fakeClientset := fake.NewSimpleClientset()
-	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
 	adIndexInformer.GetStore().Add(ad.DeepCopy())
 
 	c := &Controller{

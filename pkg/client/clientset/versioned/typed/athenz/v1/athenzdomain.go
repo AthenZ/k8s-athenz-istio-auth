@@ -6,8 +6,6 @@
 package v1
 
 import (
-	"time"
-
 	v1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
 	scheme "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,15 +59,10 @@ func (c *athenzDomains) Get(name string, options metav1.GetOptions) (result *v1.
 
 // List takes label and field selectors, and returns the list of AthenzDomains that match those selectors.
 func (c *athenzDomains) List(opts metav1.ListOptions) (result *v1.AthenzDomainList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
 	result = &v1.AthenzDomainList{}
 	err = c.client.Get().
 		Resource("athenzdomains").
 		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
 		Do().
 		Into(result)
 	return
@@ -77,15 +70,10 @@ func (c *athenzDomains) List(opts metav1.ListOptions) (result *v1.AthenzDomainLi
 
 // Watch returns a watch.Interface that watches the requested athenzDomains.
 func (c *athenzDomains) Watch(opts metav1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
 	opts.Watch = true
 	return c.client.Get().
 		Resource("athenzdomains").
 		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
 		Watch()
 }
 
@@ -124,14 +112,9 @@ func (c *athenzDomains) Delete(name string, options *metav1.DeleteOptions) error
 
 // DeleteCollection deletes a collection of objects.
 func (c *athenzDomains) DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
-	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
-	}
 	return c.client.Delete().
 		Resource("athenzdomains").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
-		Timeout(timeout).
 		Body(options).
 		Do().
 		Error()

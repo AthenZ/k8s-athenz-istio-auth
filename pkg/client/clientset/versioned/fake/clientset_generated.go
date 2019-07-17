@@ -62,3 +62,8 @@ var _ clientset.Interface = &Clientset{}
 func (c *Clientset) AthenzV1() athenzv1.AthenzV1Interface {
 	return &fakeathenzv1.FakeAthenzV1{Fake: &c.Fake}
 }
+
+// Athenz retrieves the AthenzV1Client
+func (c *Clientset) Athenz() athenzv1.AthenzV1Interface {
+	return &fakeathenzv1.FakeAthenzV1{Fake: &c.Fake}
+}
