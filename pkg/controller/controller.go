@@ -230,8 +230,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 // processEvent is responsible for adding the key of the item to the queue
 func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
 	domain := athenz.NamespaceToDomain(config.Namespace)
-	key := config.Namespace + "/" + domain
-	c.queue.Add(key)
+	c.queue.Add(domain)
 }
 
 // Run starts the main controller loop running sync at every poll interval. It
