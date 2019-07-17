@@ -65,7 +65,7 @@ func TestProcessConfigEvent(t *testing.T) {
 	item, shutdown := c.queue.Get()
 	assert.False(t, shutdown, "shutdown should be false")
 	assert.Equal(t, 0, c.queue.Len(), "queue length should be 0")
-	assert.Equal(t, "test-namespace/test.namespace", item, "key should be equal")
+	assert.Equal(t, "test.namespace", item, "key should be equal")
 }
 
 func newSr(ns, role string) model.Config {
