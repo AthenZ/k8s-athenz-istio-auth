@@ -187,7 +187,7 @@ func (c *Controller) sync(key string) error {
 	}
 
 	for _, item := range changeList {
-		log.Infof("Adding resource action to processor queue: %s on %s", item.Operation, item.Resource.Key())
+		log.Infof("Adding resource action to processor queue: %s on %s for key: %s", item.Operation, item.Resource.Key(), key)
 		c.processor.ProcessConfigChange(item)
 	}
 

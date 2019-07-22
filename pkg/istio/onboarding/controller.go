@@ -214,6 +214,7 @@ func (c *Controller) sync() error {
 	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Infoln("Service list is empty and cluster rbac config does not exist, skipping sync...")
+		c.queue.Forget(queueKey)
 		return nil
 	}
 

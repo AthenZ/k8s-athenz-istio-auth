@@ -88,16 +88,17 @@ func (c *Controller) processNextItem() bool {
 
 	// All errors/successes should be handled by the CallbackHandler()
 	err = item.CallbackHandler(err, item)
-	// If callback returns an error, retry if within limit
-	if err != nil {
-		if c.queue.NumRequeues(itemRaw) < queueNumRetries {
-			log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
-			c.queue.AddRateLimited(itemRaw)
-			return true
-		}
-		log.Errorf("Max number of retries reached for operation %s on %s", item.Operation, item.Resource.Key())
+	if err == nil {
+		c.queue.Forget(itemRaw)
+		return true
 	}
-	c.queue.Forget(itemRaw)
+	// If callback returns an error, retry if within limit
+	if c.queue.NumRequeues(itemRaw) < queueNumRetries {
+		log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
+		c.queue.AddRateLimited(itemRaw)
+		return true
+	}
+	log.Errorf("Max number of retries reached for operation %s on %s", item.Operation, item.Resource.Key())
 	return true
 }
 
