@@ -67,7 +67,7 @@ func equal(c1, c2 model.Config) bool {
 // 1. Converts the current and desired slices into a map for quick lookup
 // 2. Loops through the desired slice of items and identifies items that need to be created/updated
 // 3. Loops through the current slice of items and identifies items that need to be deleted
-func computeChangeList(current []model.Config, desired []model.Config, errHandler processor.OnCompleteFunc) []*processor.Item {
+func computeChangeList(current []model.Config, desired []model.Config, cbHandler processor.OnCompleteFunc) []*processor.Item {
 
 	currMap := convertSliceToKeyedMap(current)
 	desiredMap := convertSliceToKeyedMap(desired)
@@ -82,7 +82,7 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 			item := processor.Item{
 				Operation:       model.EventAdd,
 				Resource:        desiredConfig,
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -94,7 +94,7 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 			item := processor.Item{
 				Operation:       model.EventUpdate,
 				Resource:        desiredConfig,
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -109,7 +109,7 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 			item := processor.Item{
 				Operation:       model.EventDelete,
 				Resource:        currConfig,
-				CallbackHandler: errHandler,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 		}
@@ -175,9 +175,9 @@ func (c *Controller) sync(key string) error {
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain)
 	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
-	errHandler := c.getCallbackHandler(key)
+	cbHandler := c.getCallbackHandler(key)
 
-	changeList := computeChangeList(currentCRs, desiredCRs, errHandler)
+	changeList := computeChangeList(currentCRs, desiredCRs, cbHandler)
 
 	// If change list is empty, nothing to do
 	if len(changeList) == 0 {
