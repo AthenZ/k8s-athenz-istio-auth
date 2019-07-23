@@ -19,12 +19,15 @@ type Controller struct {
 	queue            workqueue.RateLimitingInterface
 }
 
-type OnErrorFunc func(err error, item *Item) error
+type OnCompleteFunc func(err error, item *Item) error
 
 type Item struct {
-	Operation    model.Event
-	Resource     model.Config
-	ErrorHandler OnErrorFunc
+	Operation model.Event
+	Resource  model.Config
+
+	// Handler function that should be invoked with the status of the current sync operation on the item
+	// If the handler returns an error, the operation is retried up to `queueNumRetries`
+	CallbackHandler OnCompleteFunc
 }
 
 // NewController is responsible for creating the processing controller workqueue
@@ -77,17 +80,25 @@ func (c *Controller) processNextItem() bool {
 	err := c.sync(item)
 	if err != nil {
 		log.Errorf("Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
-		if item.ErrorHandler != nil {
-			err := item.ErrorHandler(err, item)
-			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
-				log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
-				c.queue.AddRateLimited(itemRaw)
-				return true
-			}
-		}
+	}
+	if item.CallbackHandler == nil {
+		c.queue.Forget(itemRaw)
+		return true
 	}
 
-	c.queue.Forget(itemRaw)
+	// All errors/successes should be handled by the CallbackHandler()
+	err = item.CallbackHandler(err, item)
+	if err == nil {
+		c.queue.Forget(itemRaw)
+		return true
+	}
+	// If callback returns an error, retry if within limit
+	if c.queue.NumRequeues(itemRaw) < queueNumRetries {
+		log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
+		c.queue.AddRateLimited(itemRaw)
+		return true
+	}
+	log.Errorf("Max number of retries reached for operation %s on %s", item.Operation, item.Resource.Key())
 	return true
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -97,7 +98,6 @@ func (c *Controller) processNextItem() bool {
 		}
 	}
 
-	c.queue.Forget(key)
 	return true
 }
 
@@ -180,14 +180,30 @@ func (c *Controller) getOnboardedServiceList() []string {
 	return serviceList
 }
 
-// errHandler re-adds the key for a failed processor.sync operation
-func (c *Controller) errHandler(err error, item *processor.Item) error {
-	if err != nil {
-		if item != nil {
-			log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err.Error())
-		}
-		c.queue.AddRateLimited(queueKey)
+// callbackHandler re-adds the key for a failed processor.sync operation
+func (c *Controller) callbackHandler(err error, item *processor.Item) error {
+	if err == nil {
+		return nil
 	}
+	if item != nil {
+		log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
+	}
+	if apiErrors.IsNotFound(err) || apiErrors.IsAlreadyExists(err) {
+		log.Infof("Error is non-retryable %s", err)
+		return nil
+	}
+	if !apiErrors.IsConflict(err) {
+		log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), queueKey)
+		return err
+	}
+	if c.queue.NumRequeues(queueKey) >= queueNumRetries {
+		log.Errorf("Max number of retries reached for %s.", queueKey)
+		return nil
+	}
+	if item != nil {
+		log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), queueKey)
+	}
+	c.queue.AddRateLimited(queueKey)
 	return nil
 }
 
@@ -198,15 +214,16 @@ func (c *Controller) sync() error {
 	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Infoln("Service list is empty and cluster rbac config does not exist, skipping sync...")
+		c.queue.Forget(queueKey)
 		return nil
 	}
 
 	if config == nil {
 		log.Infoln("Creating cluster rbac config...")
 		item := processor.Item{
-			Operation:    model.EventAdd,
-			Resource:     newClusterRbacConfig(serviceList),
-			ErrorHandler: c.errHandler,
+			Operation:       model.EventAdd,
+			Resource:        newClusterRbacConfig(serviceList),
+			CallbackHandler: c.callbackHandler,
 		}
 		c.processor.ProcessConfigChange(&item)
 		return nil
@@ -215,9 +232,9 @@ func (c *Controller) sync() error {
 	if len(serviceList) == 0 {
 		log.Infoln("Deleting cluster rbac config...")
 		item := processor.Item{
-			Operation:    model.EventDelete,
-			Resource:     newClusterRbacConfig(serviceList),
-			ErrorHandler: c.errHandler,
+			Operation:       model.EventDelete,
+			Resource:        newClusterRbacConfig(serviceList),
+			CallbackHandler: c.callbackHandler,
 		}
 		c.processor.ProcessConfigChange(&item)
 		return nil
@@ -235,9 +252,9 @@ func (c *Controller) sync() error {
 			Spec:       newClusterRbacSpec(serviceList),
 		}
 		item := processor.Item{
-			Operation:    model.EventUpdate,
-			Resource:     config,
-			ErrorHandler: c.errHandler,
+			Operation:       model.EventUpdate,
+			Resource:        config,
+			CallbackHandler: c.callbackHandler,
 		}
 		c.processor.ProcessConfigChange(&item)
 		return nil
@@ -260,15 +277,16 @@ func (c *Controller) sync() error {
 			Spec:       clusterRbacConfig,
 		}
 		item := processor.Item{
-			Operation:    model.EventUpdate,
-			Resource:     config,
-			ErrorHandler: c.errHandler,
+			Operation:       model.EventUpdate,
+			Resource:        config,
+			CallbackHandler: c.callbackHandler,
 		}
 		c.processor.ProcessConfigChange(&item)
 		return nil
 	}
 
 	log.Infoln("Sync state is current, no changes needed...")
+	c.queue.Forget(queueKey)
 	return nil
 }
 

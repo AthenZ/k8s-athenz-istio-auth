@@ -39,14 +39,14 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Extract only the role name from the <domain>:role.<roleName> format
 		roleName, err := common.ParseRoleFQDN(m.Name, string(roleFQDN))
 		if err != nil {
-			log.Warningln(err.Error())
+			log.Debugf(err.Error())
 			continue
 		}
 
 		// Transform the assertions for an Athenz Role into a ServiceRole spec
 		srSpec, err := common.GetServiceRoleSpec(m.Name, roleName, assertions)
 		if err != nil {
-			log.Warningf("Error converting the assertions for role: %s to a ServiceRole: %s", roleName, err.Error())
+			log.Debugf("Error converting the assertions for role: %s to a ServiceRole: %s", roleName, err.Error())
 			continue
 		}
 
@@ -57,19 +57,20 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, roleName, srSpec)
+		k8sRoleName := common.ConvertAthenzRoleNameToK8sName(roleName)
+		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, k8sRoleName, srSpec)
 		out = append(out, sr)
 
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
 		roleMembers, exists := m.Members[roleFQDN]
 		if !exists {
-			log.Warningf("Cannot find members for the role: %s while creating a ServiceRoleBinding", roleName)
+			log.Debugf("Cannot find members for the role: %s while creating a ServiceRoleBinding", roleName)
 			continue
 		}
 
-		srbSpec, err := common.GetServiceRoleBindingSpec(roleName, roleMembers)
+		srbSpec, err := common.GetServiceRoleBindingSpec(k8sRoleName, roleMembers)
 		if err != nil {
-			log.Warningf("Error converting the members for role: %s to a ServiceRoleBinding: %s", roleName, err.Error())
+			log.Debugf("Error converting the members for role: %s to a ServiceRoleBinding: %s", roleName, err.Error())
 			continue
 		}
 
@@ -80,7 +81,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, roleName, srbSpec)
+		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, k8sRoleName, srbSpec)
 		out = append(out, srb)
 	}
 
@@ -92,12 +93,12 @@ func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []m
 
 	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
 	if err != nil {
-		log.Warningf("Error listing the ServiceRole resources in the namespace: %s", m.Namespace)
+		log.Errorf("Error listing the ServiceRole resources in the namespace: %s", m.Namespace)
 	}
 
 	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
 	if err != nil {
-		log.Warningf("Error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
+		log.Errorf("Error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
 	}
 
 	return append(sr, srb...)

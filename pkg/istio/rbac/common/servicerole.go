@@ -95,6 +95,13 @@ func parseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 	return svc, path, nil
 }
 
+// ConvertAthenzRoleNameToK8sName replaces the '_' in the Athenz role name to a '--' as Kubernetes resource name
+// needs to follow a DNS-1123 subdomain format which must consist of lower case alphanumeric characters, '-' or '.',
+// and must start and end with an alphanumeric character
+func ConvertAthenzRoleNameToK8sName(roleName string) string {
+	return strings.ReplaceAll(roleName, "_", "--")
+}
+
 // GetServiceRoleSpec returns the ServiceRoleSpec for a given Athenz role and the associated assertions
 func GetServiceRoleSpec(domainName zms.DomainName, roleName string, assertions []*zms.Assertion) (*v1alpha1.ServiceRole, error) {
 
@@ -102,29 +109,30 @@ func GetServiceRoleSpec(domainName zms.DomainName, roleName string, assertions [
 	for _, assertion := range assertions {
 		assertionRole, err := ParseRoleFQDN(domainName, string(assertion.Role))
 		if err != nil {
-			log.Warningln(err.Error())
+			log.Debug(err.Error())
 			continue
 		}
 
 		if assertionRole != roleName {
-			log.Warningf("Assertion: %v does not belong to the role: %s", assertion, roleName)
-			continue
-		}
-		_, err = parseAssertionEffect(assertion)
-		if err != nil {
-			log.Warningln(err.Error())
-			continue
-		}
-
-		method, err := parseAssertionAction(assertion)
-		if err != nil {
-			log.Warningln(err.Error())
+			log.Debugf("Assertion: %v does not belong to the role: %s", assertion, roleName)
 			continue
 		}
 
 		svc, path, err := parseAssertionResource(domainName, assertion)
 		if err != nil {
-			log.Warningln(err.Error())
+			log.Debugf(err.Error())
+			continue
+		}
+
+		_, err = parseAssertionEffect(assertion)
+		if err != nil {
+			log.Debugf(err.Error())
+			continue
+		}
+
+		method, err := parseAssertionAction(assertion)
+		if err != nil {
+			log.Debugf(err.Error())
 			continue
 		}
 

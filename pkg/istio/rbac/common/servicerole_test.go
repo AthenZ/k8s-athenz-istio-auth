@@ -190,6 +190,39 @@ func TestParseAssertionResource(t *testing.T) {
 	}
 }
 
+func TestConvertAthenzRoleNameToK8sName(t *testing.T) {
+	cases := []struct {
+		test     string
+		input    string
+		expected string
+	}{
+		{
+			test:     "empty",
+			input:    "",
+			expected: "",
+		},
+		{
+			test:     "role name with underscore",
+			input:    "client_reader",
+			expected: "client--reader",
+		},
+		{
+			test:     "role name without underscore",
+			input:    "client.reader",
+			expected: "client.reader",
+		},
+		{
+			test:     "role name with dashes and underscores",
+			input:    "client-service_group_reader",
+			expected: "client-service--group--reader",
+		},
+	}
+	for _, c := range cases {
+		got := ConvertAthenzRoleNameToK8sName(c.input)
+		assert.Equal(t, c.expected, got, c.test)
+	}
+}
+
 func TestGetServiceRoleSpec(t *testing.T) {
 
 	allow := zms.ALLOW

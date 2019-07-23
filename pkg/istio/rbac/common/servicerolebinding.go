@@ -36,7 +36,7 @@ func parseMemberName(member *zms.RoleMember) (string, error) {
 }
 
 // GetServiceRoleBindingSpec returns the ServiceRoleBindingSpec for a given Athenz role and its members
-func GetServiceRoleBindingSpec(roleName string, members []*zms.RoleMember) (*v1alpha1.ServiceRoleBinding, error) {
+func GetServiceRoleBindingSpec(k8sRoleName string, members []*zms.RoleMember) (*v1alpha1.ServiceRoleBinding, error) {
 
 	subjects := make([]*v1alpha1.Subject, 0)
 	for _, member := range members {
@@ -57,12 +57,12 @@ func GetServiceRoleBindingSpec(roleName string, members []*zms.RoleMember) (*v1a
 	}
 
 	if len(subjects) == 0 {
-		return nil, fmt.Errorf("no subjects found for the ServiceRoleBinding: %s", roleName)
+		return nil, fmt.Errorf("no subjects found for the ServiceRoleBinding: %s", k8sRoleName)
 	}
 
 	roleRef := &v1alpha1.RoleRef{
 		Kind: ServiceRoleKind,
-		Name: roleName,
+		Name: k8sRoleName,
 	}
 	spec := &v1alpha1.ServiceRoleBinding{
 		RoleRef:  roleRef,
