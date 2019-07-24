@@ -18,9 +18,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 )
 
 func main() {
