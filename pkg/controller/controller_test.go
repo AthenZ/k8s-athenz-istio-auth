@@ -12,12 +12,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-	"github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
-	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	"github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -22,16 +22,16 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
-	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 )
 
 const queueNumRetries = 3
