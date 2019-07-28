@@ -1,4 +1,6 @@
 language: go
+services:
+  - docker
 env:
 - GO111MODULE=on
 
@@ -9,6 +11,7 @@ script:
 - go build -v -race ./...
 - diff -u <(echo -n) <(gofmt -d .)
 - go vet ./...
+- GO111MODULE="on" go get sigs.k8s.io/kind@v0.4.0
 - go test -v -race ./...
 
 branches:
