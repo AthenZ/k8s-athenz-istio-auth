@@ -11,7 +11,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func TestParseAssertionEffect(t *testing.T) {
 
@@ -182,6 +187,39 @@ func TestParseAssertionResource(t *testing.T) {
 		assert.Equal(t, c.expectedSvc, gotSvc, c.test)
 		assert.Equal(t, c.expectedPath, gotPath, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestConvertAthenzRoleNameToK8sName(t *testing.T) {
+	cases := []struct {
+		test     string
+		input    string
+		expected string
+	}{
+		{
+			test:     "empty",
+			input:    "",
+			expected: "",
+		},
+		{
+			test:     "role name with underscore",
+			input:    "client_reader",
+			expected: "client--reader",
+		},
+		{
+			test:     "role name without underscore",
+			input:    "client.reader",
+			expected: "client.reader",
+		},
+		{
+			test:     "role name with dashes and underscores",
+			input:    "client-service_group_reader",
+			expected: "client-service--group--reader",
+		},
+	}
+	for _, c := range cases {
+		got := ConvertAthenzRoleNameToK8sName(c.input)
+		assert.Equal(t, c.expected, got, c.test)
 	}
 }
 

@@ -12,11 +12,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	adv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned/fake"
-	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	"github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -26,6 +27,10 @@ var ad = &adv1.AthenzDomain{
 		Name:      "test.namespace",
 		Namespace: "test-namespace",
 	},
+}
+
+func init() {
+	log.InitLogger("", "debug")
 }
 
 func TestProcessEvent(t *testing.T) {
@@ -60,7 +65,7 @@ func TestProcessConfigEvent(t *testing.T) {
 	item, shutdown := c.queue.Get()
 	assert.False(t, shutdown, "shutdown should be false")
 	assert.Equal(t, 0, c.queue.Len(), "queue length should be 0")
-	assert.Equal(t, "test-namespace/test.namespace", item, "key should be equal")
+	assert.Equal(t, "test.namespace", item, "key should be equal")
 }
 
 func newSr(ns, role string) model.Config {
@@ -229,14 +234,14 @@ func TestEqual(t *testing.T) {
 
 func TestComputeChangeList(t *testing.T) {
 
-	errHandler := func(err error, item *processor.Item) error {
+	cbHandler := func(err error, item *processor.Item) error {
 		return err
 	}
 
 	type input struct {
-		current    []model.Config
-		desired    []model.Config
-		errHandler processor.OnErrorFunc
+		current   []model.Config
+		desired   []model.Config
+		cbHandler processor.OnCompleteFunc
 	}
 	tests := []struct {
 		name           string
@@ -256,18 +261,18 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("test-ns", "svc-role"),
 					newSrb("test-ns", "svc-role"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventAdd,
-					Resource:     newSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        newSr("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     newSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        newSrb("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -286,18 +291,18 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("another-ns", "backend-writer"),
 					newSrb("another-ns", "backend-writer"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSr("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSrb("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -308,19 +313,19 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("test-ns", "svc-role"),
 					newSrb("test-ns", "svc-role"),
 				},
-				desired:    []model.Config{},
-				errHandler: errHandler,
+				desired:   []model.Config{},
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSr("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSrb("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -339,38 +344,38 @@ func TestComputeChangeList(t *testing.T) {
 					newSr("another-ns", "backend-writer"),
 					newSrb("another-ns", "backend-writer"),
 				},
-				errHandler: errHandler,
+				cbHandler: cbHandler,
 			},
 			expectedOutput: []*processor.Item{
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSr("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSr("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventUpdate,
-					Resource:     updatedSrb("test-ns", "svc-role"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventUpdate,
+					Resource:        updatedSrb("test-ns", "svc-role"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     updatedSr("another-ns", "backend-writer"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        updatedSr("another-ns", "backend-writer"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventAdd,
-					Resource:     updatedSrb("another-ns", "backend-writer"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventAdd,
+					Resource:        updatedSrb("another-ns", "backend-writer"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSr("some-ns", "frontend-reader"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSr("some-ns", "frontend-reader"),
+					CallbackHandler: cbHandler,
 				},
 				{
-					Operation:    model.EventDelete,
-					Resource:     newSrb("some-ns", "frontend-reader"),
-					ErrorHandler: errHandler,
+					Operation:       model.EventDelete,
+					Resource:        newSrb("some-ns", "frontend-reader"),
+					CallbackHandler: cbHandler,
 				},
 			},
 		},
@@ -378,7 +383,7 @@ func TestComputeChangeList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualChangeList := computeChangeList(tt.input.current, tt.input.desired, tt.input.errHandler)
+			actualChangeList := computeChangeList(tt.input.current, tt.input.desired, tt.input.cbHandler)
 			assert.Equal(t, len(tt.expectedOutput), len(actualChangeList), "len(expectedChangeList) and len(actualChangeList) should match")
 			for i, expectedItem := range tt.expectedOutput {
 				assert.Equal(t, expectedItem.Operation, actualChangeList[i].Operation, fmt.Sprintf("operation on changelist[%d] does not match with expected", i))
@@ -390,7 +395,7 @@ func TestComputeChangeList(t *testing.T) {
 
 func TestResync(t *testing.T) {
 	fakeClientset := fake.NewSimpleClientset()
-	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
 	adIndexInformer.GetStore().Add(ad.DeepCopy())
 
 	c := &Controller{

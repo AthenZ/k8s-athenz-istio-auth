@@ -11,11 +11,16 @@ import (
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 
@@ -269,6 +274,111 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 							},
 							{
 								User: "user/sa/developer",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			test: "valid model with policies and members and role name with underscore",
+			model: athenz.Model{
+				Name:      "athenz.domain",
+				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client_reader_role"),
+				},
+				Rules: map[zms.ResourceName][]*zms.Assertion{
+					zms.ResourceName("athenz.domain:role.client_reader_role"): {
+						{
+							Effect:   &allow,
+							Action:   "get",
+							Role:     "athenz.domain:role.client_reader_role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client_reader_role",
+							Resource: "athenz.domain:svc.my-another-service-name",
+						},
+					},
+				},
+				Members: map[zms.ResourceName][]*zms.RoleMember{
+					zms.ResourceName("athenz.domain:role.client_reader_role"): {
+						{
+							MemberName: "some-client.domain.client-serviceA",
+						},
+						{
+							MemberName: "user.athenzuser",
+						},
+					},
+				},
+			},
+			expectedConfigs: []model.Config{
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRole.Type,
+						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Version:   model.ServiceRole.Version,
+						Namespace: "athenz-domain",
+						Name:      "client--reader--role",
+					},
+					Spec: &v1alpha1.ServiceRole{
+						Rules: []*v1alpha1.AccessRule{
+							{
+								Methods: []string{
+									"GET",
+								},
+								Paths: []string{
+									"/protected/path",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-service-name",
+										},
+									},
+								},
+							},
+							{
+								Methods: []string{
+									"HEAD",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-another-service-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRoleBinding.Type,
+						Group:     model.ServiceRoleBinding.Group + model.IstioAPIGroupDomain,
+						Version:   model.ServiceRoleBinding.Version,
+						Namespace: "athenz-domain",
+						Name:      "client--reader--role",
+					},
+					Spec: &v1alpha1.ServiceRoleBinding{
+						RoleRef: &v1alpha1.RoleRef{
+							Name: "client--reader--role",
+							Kind: common.ServiceRoleKind,
+						},
+						Subjects: []*v1alpha1.Subject{
+							{
+								User: "some-client.domain/sa/client-serviceA",
+							},
+							{
+								User: "user/sa/athenzuser",
 							},
 						},
 					},

@@ -68,16 +68,12 @@ controller was developed and tested with the Istio 1.0.3 release.
 - **Athenz** - Athenz must be fully deployed in order for users to be able to define roles and policies in
 their domain. More information and setup steps can be found [here](http://www.athenz.io/). The authorization
 management service (ZMS) and its apis are primarily used for this controller.
-- **SIA Provider** - A service identity agent (SIA) must be running in the Kubernetes cluster in order to provision
-X.509 certificates to instances in order to authenticate with Athenz. The approach we currently use in production
-can be found [here](https://github.com/yahoo/k8s-athenz-identity).
 
 ### Setup
 Configuration files which must be applied to run k8s-athenz-istio-auth can be found in the k8s directory.
 
 #### ServiceAccount
-In order to tell SIA which service to provide an X.509 certificate to, a service account must be present. This is required
-for the controller to authenticate with ZMS for api calls. Run the following command:
+Run the following command to apply the service account:
 ```
 kubectl apply -f k8s/serviceaccount.yaml
 ```
@@ -95,10 +91,9 @@ kubectl apply -f k8s/clusterrolebinding.yaml
 ```
 
 #### Deployment
-The deployment for the controller contains three containers: sia init, sia refresh, and the controller itself. Build
-a docker image using the Dockerfile and publish to a docker registry. Make sure to replace the docker images inside of
-this spec to the ones which are published in your organization. Also, replace the zms url with your instance. Run the 
-following command in order to deploy:
+The deployment for the controller contains one main container for the controller itself. Build
+a docker image using the Dockerfile and publish to a docker registry. Make sure to replace the docker image inside of
+this spec to the one which is published in your organization. Run the following command in order to deploy:
 ```
 kubectl apply -f k8s/deployment.yaml
 ```
@@ -108,10 +103,12 @@ K8s-athenz-istio-auth has a variety of parameters that can be configured, they a
 
 **Parameters**
 ```
-cert (default: /var/run/athenz/service.cert.pem): path to X.509 certificate file to use for zms authentication
-key (default: /var/run/athenz/service.key.pem): path to private key file for zms authentication
-zms-url (default: https://zms.url.com): athenz full zms url including api path
-poll-interval (default: 1m): controller poll interval
+dns-suffix (default: svc.cluster.local): dns suffix used for service role target services
+kubeconfig (default: empty): (optional) absolute path to the kubeconfig file
+ad-resync-interval (default: 1h): athenz domain resync interval
+crc-resync-interval (default: 1h): cluster rbac config resync interval
+log-file (default: /var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log): log file location
+log-level (default: info): logging level
 ```
 ## Usage
 Once the controller is up and running, a user may go into the Athenz UI and define roles and policies for their

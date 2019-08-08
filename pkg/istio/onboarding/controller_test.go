@@ -5,7 +5,6 @@ package onboarding
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
 var (
@@ -47,6 +47,10 @@ var (
 	notOnboardedServiceName = "not-onboarded-service.test-namespace.svc.cluster.local"
 	dnsSuffix               = "svc.cluster.local"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 // fakeConfigStore a wrapper around a passed-in config store that does mutex lock on all store operations
 type fakeConfigStore struct {

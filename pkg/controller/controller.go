@@ -6,7 +6,6 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -16,21 +15,23 @@ import (
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 
 	"k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	adv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/apis/athenz/v1"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
-	adInformer "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/informers/externalversions/athenz/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/util"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 )
 
 const queueNumRetries = 3
@@ -66,7 +67,7 @@ func equal(c1, c2 model.Config) bool {
 // 1. Converts the current and desired slices into a map for quick lookup
 // 2. Loops through the desired slice of items and identifies items that need to be created/updated
 // 3. Loops through the current slice of items and identifies items that need to be deleted
-func computeChangeList(current []model.Config, desired []model.Config, errHandler processor.OnErrorFunc) []*processor.Item {
+func computeChangeList(current []model.Config, desired []model.Config, cbHandler processor.OnCompleteFunc) []*processor.Item {
 
 	currMap := convertSliceToKeyedMap(current)
 	desiredMap := convertSliceToKeyedMap(desired)
@@ -79,9 +80,9 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 		existingConfig, exists := currMap[key]
 		if !exists {
 			item := processor.Item{
-				Operation:    model.EventAdd,
-				Resource:     desiredConfig,
-				ErrorHandler: errHandler,
+				Operation:       model.EventAdd,
+				Resource:        desiredConfig,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -91,9 +92,9 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 			// copy metadata(for resource version) from current config to desired config
 			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
 			item := processor.Item{
-				Operation:    model.EventUpdate,
-				Resource:     desiredConfig,
-				ErrorHandler: errHandler,
+				Operation:       model.EventUpdate,
+				Resource:        desiredConfig,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 			continue
@@ -106,9 +107,9 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 		_, exists := desiredMap[key]
 		if !exists {
 			item := processor.Item{
-				Operation:    model.EventDelete,
-				Resource:     currConfig,
-				ErrorHandler: errHandler,
+				Operation:       model.EventDelete,
+				Resource:        currConfig,
+				CallbackHandler: cbHandler,
 			}
 			changeList = append(changeList, &item)
 		}
@@ -117,16 +118,33 @@ func computeChangeList(current []model.Config, desired []model.Config, errHandle
 	return changeList
 }
 
-// getErrHandler returns a error handler func that re-adds the athenz domain back to queue
+// getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
 // this explicit func definition takes in the key to avoid data race while accessing key
-func (c *Controller) getErrHandler(key string) processor.OnErrorFunc {
+func (c *Controller) getCallbackHandler(key string) processor.OnCompleteFunc {
 	return func(err error, item *processor.Item) error {
-		if err != nil {
-			if item != nil {
-				log.Printf("Controller: Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err)
-			}
-			c.queue.AddRateLimited(key)
+
+		if err == nil {
+			return nil
 		}
+		if item != nil {
+			log.Errorf("Error performing %s on %s: %s", item.Operation, item.Resource.Key(), err.Error())
+		}
+		if apiErrors.IsNotFound(err) || apiErrors.IsAlreadyExists(err) {
+			log.Infof("Error is non-retryable %s", err)
+			return nil
+		}
+		if !apiErrors.IsConflict(err) {
+			log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), key)
+			return err
+		}
+		if c.queue.NumRequeues(key) >= queueNumRetries {
+			log.Errorf("Max number of retries reached for %s.", key)
+			return nil
+		}
+		if item != nil {
+			log.Infof("Retrying operation %s on %s due to processing error for %s", item.Operation, item.Resource.Key(), key)
+		}
+		c.queue.AddRateLimited(key)
 		return nil
 	}
 }
@@ -157,10 +175,19 @@ func (c *Controller) sync(key string) error {
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain)
 	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
-	errHandler := c.getErrHandler(key)
+	cbHandler := c.getCallbackHandler(key)
 
-	changeList := computeChangeList(currentCRs, desiredCRs, errHandler)
+	changeList := computeChangeList(currentCRs, desiredCRs, cbHandler)
+
+	// If change list is empty, nothing to do
+	if len(changeList) == 0 {
+		log.Infof("Everything is up-to-date for key: %s", key)
+		c.queue.Forget(key)
+		return nil
+	}
+
 	for _, item := range changeList {
+		log.Infof("Adding resource action to processor queue: %s on %s for key: %s", item.Operation, item.Resource.Key(), key)
 		c.processor.ProcessConfigChange(item)
 	}
 
@@ -184,7 +211,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
-	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, v1.NamespaceAll, 0, cache.Indexers{})
+	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
 	c := &Controller{
 		serviceIndexInformer: serviceIndexInformer,
@@ -224,14 +251,13 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 		c.queue.Add(key)
 		return
 	}
-	log.Println("Controller: processEvent(): Error calling key func:", err)
+	log.Errorf("Error calling key func: %s", err.Error())
 }
 
-// processEvent is responsible for adding the key of the item to the queue
+// processConfigEvent is responsible for adding the key of the item to the queue
 func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
-	domain := util.NamespaceToDomain(config.Namespace)
-	key := config.Namespace + "/" + domain
-	c.queue.Add(key)
+	domain := athenz.NamespaceToDomain(config.Namespace)
+	c.queue.Add(domain)
 }
 
 // Run starts the main controller loop running sync at every poll interval. It
@@ -245,7 +271,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.adIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
-		log.Panicln("Controller: Run(): Timed out waiting for namespace cache to sync.")
+		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
 	// crc controller must wait for service informer to sync before starting
@@ -274,22 +300,22 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(keyRaw)
 	key, ok := keyRaw.(string)
 	if !ok {
-		log.Printf("Controller: processNextItem(): String cast failed for key %v", key)
+		log.Errorf("String cast failed for key %v", key)
+		c.queue.Forget(keyRaw)
 		return true
 	}
 
-	log.Println("Controller: processNextItem(): Processing key:", key)
+	log.Infof("Processing key: %s", key)
 	err := c.sync(key)
 	if err != nil {
-		log.Printf("Controller: processNextItem(): Error syncing athenz state for key %s: %s", keyRaw, err)
+		log.Errorf("Error syncing athenz state for key %s: %s", keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Printf("Controller: processNextItem(): Retrying key %s due to sync error", keyRaw)
+			log.Infof("Retrying key %s due to sync error", keyRaw)
 			c.queue.AddRateLimited(keyRaw)
 			return true
 		}
 	}
 
-	c.queue.Forget(keyRaw)
 	return true
 }
 
@@ -301,13 +327,13 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-t.C:
-			log.Println("Running resync for athenz domains...")
+			log.Infoln("Running resync for athenz domains...")
 			adListRaw := c.adIndexInformer.GetIndexer().List()
 			for _, adRaw := range adListRaw {
 				c.processEvent(cache.MetaNamespaceKeyFunc, adRaw)
 			}
 		case <-stopCh:
-			log.Println("Stopping athenz domain resync...")
+			log.Infoln("Stopping athenz domain resync...")
 			return
 		}
 	}

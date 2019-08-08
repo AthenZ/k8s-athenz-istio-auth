@@ -4,11 +4,12 @@
 package processor
 
 import (
-	"log"
-
 	"istio.io/istio/pilot/pkg/model"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 )
 
 const queueNumRetries = 3
@@ -18,12 +19,15 @@ type Controller struct {
 	queue            workqueue.RateLimitingInterface
 }
 
-type OnErrorFunc func(err error, item *Item) error
+type OnCompleteFunc func(err error, item *Item) error
 
 type Item struct {
-	Operation    model.Event
-	Resource     model.Config
-	ErrorHandler OnErrorFunc
+	Operation model.Event
+	Resource  model.Config
+
+	// Handler function that should be invoked with the status of the current sync operation on the item
+	// If the handler returns an error, the operation is retried up to `queueNumRetries`
+	CallbackHandler OnCompleteFunc
 }
 
 // NewController is responsible for creating the processing controller workqueue
@@ -40,7 +44,7 @@ func NewController(configStoreCache model.ConfigStoreCache) *Controller {
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
 func (c *Controller) ProcessConfigChange(item *Item) {
-	log.Printf("Processor: ProcessConfigChange() Item added to queue Resource: %s, Action: %s", item.Resource.Key(), item.Operation)
+	log.Infof("Item added to queue Resource: %s, Action: %s", item.Resource.Key(), item.Operation)
 	c.queue.Add(item)
 }
 
@@ -68,25 +72,33 @@ func (c *Controller) processNextItem() bool {
 
 	item, ok := itemRaw.(*Item)
 	if !ok {
-		log.Printf("Processor: processNextItem() Item cast failed for resource %v", item)
+		log.Errorf("Item cast failed for resource %v", item)
 		return true
 	}
 
-	log.Printf("Processor: processNextItem() Processing %s for resource: %s", item.Operation, item.Resource.Key())
+	log.Infof("Processing %s for resource: %s", item.Operation, item.Resource.Key())
 	err := c.sync(item)
 	if err != nil {
-		log.Printf("Processor: processNextItem() Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
-		if item.ErrorHandler != nil {
-			err := item.ErrorHandler(err, item)
-			if err != nil && c.queue.NumRequeues(itemRaw) < queueNumRetries {
-				log.Printf("Processor: processNextItem() Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
-				c.queue.AddRateLimited(itemRaw)
-				return true
-			}
-		}
+		log.Errorf("Error performing %s for resource: %s: %s", item.Operation, item.Resource.Key(), err)
+	}
+	if item.CallbackHandler == nil {
+		c.queue.Forget(itemRaw)
+		return true
 	}
 
-	c.queue.Forget(itemRaw)
+	// All errors/successes should be handled by the CallbackHandler()
+	err = item.CallbackHandler(err, item)
+	if err == nil {
+		c.queue.Forget(itemRaw)
+		return true
+	}
+	// If callback returns an error, retry if within limit
+	if c.queue.NumRequeues(itemRaw) < queueNumRetries {
+		log.Infof("Retrying %s for resource: %s due to sync error", item.Operation, item.Resource.Key())
+		c.queue.AddRateLimited(itemRaw)
+		return true
+	}
+	log.Errorf("Max number of retries reached for operation %s on %s", item.Operation, item.Resource.Key())
 	return true
 }
 

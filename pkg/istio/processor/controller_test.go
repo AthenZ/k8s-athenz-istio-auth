@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
@@ -13,6 +14,10 @@ import (
 
 	"k8s.io/api/core/v1"
 )
+
+func init() {
+	log.InitLogger("", "debug")
+}
 
 func newSrSpec() *v1alpha1.ServiceRole {
 	return &v1alpha1.ServiceRole{
@@ -80,8 +85,8 @@ func TestSync(t *testing.T) {
 		model.ServiceRoleBinding,
 	}
 
-	errHandler := func(err error, i *Item) error {
-		assert.Fail(t, "ErrorHandler should not be called")
+	cbHandler := func(err error, i *Item) error {
+		assert.Fail(t, "CallbackHandler should not be called")
 		return nil
 	}
 
@@ -105,9 +110,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should perfom valid create operation",
 			input: &Item{
-				Operation:    model.EventAdd,
-				Resource:     newSr("test-ns", "test-role"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventAdd,
+				Resource:        newSr("test-ns", "test-role"),
+				CallbackHandler: cbHandler,
 			},
 			startingCache: memory.NewController(memory.Make(configDescriptor)),
 			expectedCache: func() model.ConfigStoreCache {
@@ -139,7 +144,7 @@ func TestSync(t *testing.T) {
 					})
 					return *obj
 				}(),
-				ErrorHandler: errHandler,
+				CallbackHandler: cbHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: func() model.ConfigStoreCache {
@@ -167,9 +172,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should perfom valid delete operation",
 			input: &Item{
-				Operation:    model.EventDelete,
-				Resource:     newSr("test-ns", "test-svc"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventDelete,
+				Resource:        newSr("test-ns", "test-svc"),
+				CallbackHandler: cbHandler,
 			},
 			startingCache: func() model.ConfigStoreCache {
 				c, err := cacheWithItems()
@@ -187,9 +192,9 @@ func TestSync(t *testing.T) {
 		{
 			name: "should return error if valid update operation",
 			input: &Item{
-				Operation:    model.EventUpdate,
-				Resource:     newSr("test-ns", "test-svc"),
-				ErrorHandler: errHandler,
+				Operation:       model.EventUpdate,
+				Resource:        newSr("test-ns", "test-svc"),
+				CallbackHandler: cbHandler,
 			},
 			startingCache: updateTestCache,
 			expectedCache: updateTestCache,

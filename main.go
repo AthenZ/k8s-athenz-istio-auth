@@ -5,7 +5,6 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,8 +18,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	adClientset "github.com/yahoo/k8s-athenz-istio-auth/pkg/client/clientset/versioned"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 )
 
 func main() {
@@ -28,7 +28,11 @@ func main() {
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
+	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
+	logLevel := flag.String("log-level", "info", "logging level")
+
 	flag.Parse()
+	log.InitLogger(*logFile, *logLevel)
 
 	configDescriptor := model.ConfigDescriptor{
 		model.ServiceRole,
@@ -46,32 +50,32 @@ func main() {
 
 	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix)
 	if err != nil {
-		log.Panicln("Error creating istio crd client:", err.Error())
+		log.Panicf("Error creating istio crd client: %s", err.Error())
 	}
 
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		log.Panicln("Error creating kubernetes in cluster config: " + err.Error())
+		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
 	}
 
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Panicln("Error creating k8s client:", err.Error())
+		log.Panicf("Error creating k8s client: %s", err.Error())
 	}
 
 	adClient, err := adClientset.NewForConfig(config)
 	if err != nil {
-		log.Panicln("Error creating athenz domain client:", err.Error())
+		log.Panicf("Error creating athenz domain client: %s", err.Error())
 	}
 
 	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
 	if err != nil {
-		log.Panicln("Error parsing ad-resync-interval duration:", err.Error())
+		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
 	}
 
 	crcResyncInterval, err := time.ParseDuration(*crcResyncIntervalRaw)
 	if err != nil {
-		log.Panicln("Error parsing crc-resync-interval duration:", err.Error())
+		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval)
@@ -84,11 +88,11 @@ func main() {
 	for {
 		select {
 		case <-signalCh:
-			log.Println("Shutdown signal received, stopping controllers...")
+			log.Infoln("Shutdown signal received, stopping controllers...")
 			close(stopCh)
 			// sleep to allow go routines to successfully exit
 			time.Sleep(time.Second)
-			log.Println("Shutting down...")
+			log.Infoln("Shutting down...")
 			os.Exit(0)
 		}
 	}
