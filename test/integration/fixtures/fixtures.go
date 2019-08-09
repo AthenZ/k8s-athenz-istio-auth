@@ -2,13 +2,10 @@
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in
 // github.com/yahoo/k8s-athenz-istio-auth for terms.
 
-// +build integration
-
 package fixtures
 
 import (
 	"log"
-	"time"
 
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -20,9 +17,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CreateAthenzDomainCrd creates the athenz domain custom resource definition
-func CreateAthenzDomainCrd(clientset *apiextensionsclient.Clientset) error {
-	crd := &v1beta1.CustomResourceDefinition{
+// getAthenzDomainCrd returns the athenz domain custom resource definition
+func getAthenzDomainCrd() *v1beta1.CustomResourceDefinition {
+	return &v1beta1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "CustomResourceDefinition",
 			APIVersion: "apiextensions.k8s.io/v1beta1",
@@ -49,19 +46,122 @@ func CreateAthenzDomainCrd(clientset *apiextensionsclient.Clientset) error {
 			},
 		},
 	}
+}
 
-	created, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if err != nil {
-		return err
+// getServiceRoleCrd returns the service role custom resource definition
+func getServiceRoleCrd() *v1beta1.CustomResourceDefinition {
+	return &v1beta1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "serviceroles.rbac.istio.io",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group: "rbac.istio.io",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Plural:   "serviceroles",
+				Singular: "servicerole",
+				Kind:     "ServiceRole",
+				Categories: []string{
+					"istio-io",
+					"rbac-istio-io",
+				},
+			},
+			Scope: v1beta1.NamespaceScoped,
+			Versions: []v1beta1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1alpha1",
+					Served:  true,
+					Storage: true,
+				},
+			},
+		},
 	}
-	log.Println("created:", created)
+}
 
-	got, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get("athenzdomains.athenz.io", metav1.GetOptions{})
-	if err != nil {
-		return err
+// getServiceRoleBindingCrd returns the service role binding custom resource definition
+func getServiceRoleBindingCrd() *v1beta1.CustomResourceDefinition {
+	return &v1beta1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "servicerolebindings.rbac.istio.io",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group: "rbac.istio.io",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Plural:   "servicerolebindings",
+				Singular: "servicerolebinding",
+				Kind:     "ServiceRoleBinding",
+				Categories: []string{
+					"istio-io",
+					"rbac-istio-io",
+				},
+			},
+			Scope: v1beta1.NamespaceScoped,
+			Versions: []v1beta1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1alpha1",
+					Served:  true,
+					Storage: true,
+				},
+			},
+		},
 	}
-	log.Println("got:", got)
-	time.Sleep(time.Second)
+}
+
+// getClusterRbacConfigCrd returns the cluster rbac config custom resource definition
+func getClusterRbacConfigCrd() *v1beta1.CustomResourceDefinition {
+	return &v1beta1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "clusterrbacconfigs.rbac.istio.io",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group: "rbac.istio.io",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Plural:   "clusterrbacconfigs",
+				Singular: "clusterrbacconfig",
+				Kind:     "ClusterRbacConfig",
+				Categories: []string{
+					"istio-io",
+					"rbac-istio-io",
+				},
+			},
+			Scope: v1beta1.ClusterScoped,
+			Versions: []v1beta1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1alpha1",
+					Served:  true,
+					Storage: true,
+				},
+			},
+		},
+	}
+}
+
+// CreateCrds creates the athenz domain, service role, service role binding, and
+// cluster rbac config custom resource definitions
+func CreateCrds(clientset *apiextensionsclient.Clientset) error {
+	athenzDomainCrd := getAthenzDomainCrd()
+	serviceRoleCrd := getServiceRoleCrd()
+	serviceRoleBindingCrd := getServiceRoleBindingCrd()
+	clusterRbacConfigCrd := getClusterRbacConfigCrd()
+	crds := []*v1beta1.CustomResourceDefinition{athenzDomainCrd, serviceRoleCrd, serviceRoleBindingCrd, clusterRbacConfigCrd}
+
+	for _, crd := range crds {
+		_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
