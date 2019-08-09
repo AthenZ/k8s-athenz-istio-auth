@@ -18,12 +18,14 @@ import (
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 )
 
 type Framework struct {
+	K8sClientset          *kubernetes.Clientset
 	AthenzDomainClientset *athenzdomainclientset.Clientset
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
@@ -93,12 +95,18 @@ func Setup() (*Framework, error) {
 		return nil, err
 	}
 
+	k8sClientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	athenzDomainClientset, err := athenzdomainclientset.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Framework{
+		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		etcd:                  etcd,
 		stopCh:                stopCh,
