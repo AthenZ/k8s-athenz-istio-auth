@@ -67,11 +67,11 @@ require (
 )
 
 replace (
-    k8s.io/api => /Users/mcieplak/go/src/k8s.io/kubernetes/staging/src/k8s.io/api
-    k8s.io/apimachinery => /Users/mcieplak/go/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
-    k8s.io/apiserver => /Users/mcieplak/go/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
-    k8s.io/client-go => /Users/mcieplak/go/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
-    k8s.io/kube-aggregator => /Users/mcieplak/go/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
-    k8s.io/kube-openapi => /Users/mcieplak/go/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
-    k8s.io/kubernetes => /Users/mcieplak/go/src/k8s.io/kubernetes
+    k8s.io/api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api
+    k8s.io/apimachinery => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
+    k8s.io/apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
+    k8s.io/client-go => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
+    k8s.io/kube-aggregator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
+    k8s.io/kube-openapi => /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
+    k8s.io/kubernetes => /home/travis/gopath/src/k8s.io/kubernetes
 )

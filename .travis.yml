@@ -13,7 +13,7 @@ script:
 #- go test -v -race ./...
 
 after_script:
-- cd /home/travis/gopath/src/github.com
+- cd /home/travis/gopath/src
 - mkdir k8s.io
 - cd k8s.io
 - git clone https://github.com/kubernetes/kubernetes.git
