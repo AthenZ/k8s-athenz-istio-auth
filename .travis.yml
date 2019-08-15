@@ -6,10 +6,15 @@ go:
 - 1.12.x
 
 script:
-- go build -v -race ./...
-- diff -u <(echo -n) <(gofmt -d .)
-- go vet ./...
-- go test -v -race ./...
+- ls
+#- go build -v -race ./...
+#- diff -u <(echo -n) <(gofmt -d .)
+#- go vet ./...
+#- go test -v -race ./...
+
+after_script:
+- git clone https://github.com/kubernetes/kubernetes.git
+- git checkout release-1.11
 
 branches:
   only: 

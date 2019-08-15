@@ -2,8 +2,6 @@
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in
 // github.com/yahoo/k8s-athenz-istio-auth for terms.
 
-// +build integration
-
 package fixtures
 
 import (
@@ -168,7 +166,7 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 }
 
 // CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(clientset *athenzdomainclientset.Clientset) {
+func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
 	domain := "home.foo"
 	fakeDomain := getFakeDomain()
 	newCR := &athenzdomain.AthenzDomain{

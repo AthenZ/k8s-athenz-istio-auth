@@ -2,17 +2,16 @@
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in
 // github.com/yahoo/k8s-athenz-istio-auth for terms.
 
-// +build integration
-
 package framework
 
 import (
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 
 	"github.com/coreos/etcd/embed"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 
@@ -22,11 +21,15 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
+
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+	"time"
 )
 
 type Framework struct {
-	K8sClientset          *kubernetes.Clientset
-	AthenzDomainClientset *athenzdomainclientset.Clientset
+	K8sClientset          kubernetes.Interface
+	AthenzDomainClientset athenzdomainclientset.Interface
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -49,8 +52,8 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 
 	// TODO, remove the webhooks and api server certs
 	s.InsecureServing.BindAddress = net.ParseIP("127.0.0.1")
-	s.InsecureServing.BindPort = 9999
-	s.Etcd.StorageConfig.Transport.ServerList = []string{"http://127.0.0.1:2379"}
+	s.InsecureServing.BindPort = 8080
+	s.Etcd.StorageConfig.ServerList = []string{"http://127.0.0.1:2379"}
 	s.SecureServing.ServerCert.CertDirectory = certDir
 
 	completedOptions, err := app.Complete(s)
@@ -69,7 +72,7 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 	}
 
 	restConfig := &rest.Config{}
-	restConfig.Host = "http://127.0.0.1:9999"
+	restConfig.Host = "http://127.0.0.1:8080"
 	return restConfig, stopCh, server.PrepareRun().NonBlockingRun(stopCh)
 }
 
@@ -104,6 +107,21 @@ func Setup() (*Framework, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	configDescriptor := model.ConfigDescriptor{
+		model.ServiceRole,
+		model.ServiceRoleBinding,
+		model.ClusterRbacConfig,
+	}
+
+	log.InitLogger("/tmp/foo", "debug")
+	istioClient, err := crd.NewClient("/Users/mcieplak/.kube/config", "default-context", configDescriptor, "svc.cluster.local")
+	if err != nil {
+		log.Printf("Error creating istio crd client: %s", err.Error())
+	}
+
+	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
+	go c.Run(stopCh)
 
 	return &Framework{
 		K8sClientset:          k8sClientset,
