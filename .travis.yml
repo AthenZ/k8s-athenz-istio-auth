@@ -6,7 +6,7 @@ go:
 - 1.12.x
 
 script:
-- ls
+- pwd
 #- go build -v -race ./...
 #- diff -u <(echo -n) <(gofmt -d .)
 #- go vet ./...
