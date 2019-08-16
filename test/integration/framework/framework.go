@@ -115,19 +115,19 @@ func Setup() (*Framework, error) {
 		model.ClusterRbacConfig,
 	}
 
-	istioClient, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
+	istioClientset, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
 	if err != nil {
-		log.Printf("Error creating istio crd client: %s", err.Error())
+		return nil, err
 	}
 
 	log.InitLogger("", "debug")
-	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
+	c := controller.NewController("svc.cluster.local", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
 	go c.Run(stopCh)
 
 	return &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
-		IstioClientset:        istioClient,
+		IstioClientset:        istioClientset,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}, nil
