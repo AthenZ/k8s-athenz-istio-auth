@@ -69,6 +69,7 @@ require (
 replace (
     k8s.io/api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api
     k8s.io/apimachinery => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
+	k8s.io/apiextensions-apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver
     k8s.io/apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
     k8s.io/client-go => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
     k8s.io/kube-aggregator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
