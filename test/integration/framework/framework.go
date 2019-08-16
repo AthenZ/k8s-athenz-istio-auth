@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"time"
 
 	"github.com/coreos/etcd/embed"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
@@ -24,12 +25,12 @@ import (
 
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
-	"time"
 )
 
 type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
+	IstioClientset        *crd.Client
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -114,18 +115,19 @@ func Setup() (*Framework, error) {
 		model.ClusterRbacConfig,
 	}
 
-	log.InitLogger("/tmp/foo", "debug")
-	istioClient, err := crd.NewClient("/Users/mcieplak/.kube/config", "default-context", configDescriptor, "svc.cluster.local")
+	istioClient, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
 	if err != nil {
 		log.Printf("Error creating istio crd client: %s", err.Error())
 	}
 
+	log.InitLogger("", "debug")
 	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
 	go c.Run(stopCh)
 
 	return &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
+		IstioClientset:        istioClient,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}, nil
