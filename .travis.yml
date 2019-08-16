@@ -14,7 +14,7 @@ script:
 
 after_script:
 - cd /home/travis/gopath/src; mkdir k8s.io; cd k8s.io
-- git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.11; GO111MODULE=auto make; go mod init;
+- git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.11; GO111MODULE=auto hack/make-rules/build.sh ./vendor/k8s.io/code-generator/cmd/openapi-gen; go mod init;
 - cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver; go mod init
 - cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery; go mod init
 - cd /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
