@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 )
 
@@ -18,6 +19,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(time.Second * 15)
 	exitCode := m.Run()
+	fixtures.CreateAthenzDomain(f.AthenzDomainClientset)
 	f.Teardown()
 	os.Exit(exitCode)
 }

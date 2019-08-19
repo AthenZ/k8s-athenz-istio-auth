@@ -16,14 +16,14 @@ after_script:
 - git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.11
 - GO111MODULE=auto make WHAT=cmd/kube-apiserver
 - go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/client-go; go mod init
-- cd /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api; go mod init
-- cd /home/travis/gopath/src/github.com/yahoo/k8s-athenz-istio-auth/test/integration; go test -v ./...
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/client-go; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/api; go mod init
+- cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth/test/integration; go test -v ./...
 
 branches:
   only: 

@@ -31,6 +31,7 @@ type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
 	IstioClientset        *crd.Client
+	Controller            *controller.Controller
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -128,6 +129,7 @@ func Setup() (*Framework, error) {
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClientset,
+		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}, nil
@@ -135,11 +137,10 @@ func Setup() (*Framework, error) {
 
 // Teardown will request the api server to shutdown
 func (f *Framework) Teardown() {
+	close(f.stopCh)
+	f.etcd.Close()
 	err := os.RemoveAll(f.etcd.Server.Cfg.DataDir)
 	if err != nil {
 		log.Println(err)
 	}
-
-	close(f.stopCh)
-	f.etcd.Close()
 }
