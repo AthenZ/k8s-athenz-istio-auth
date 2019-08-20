@@ -15,6 +15,7 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"istio.io/api/rbac/v1alpha1"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -167,7 +168,7 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
-	domain := "home.foo"
+	domain := "default"
 	fakeDomain := getFakeDomain()
 	newCR := &athenzdomain.AthenzDomain{
 		TypeMeta: metav1.TypeMeta{
@@ -215,7 +216,7 @@ func getFakeDomain() zms.SignedDomain {
 		panic(err)
 	}
 
-	domainName := "home.foo"
+	domainName := "default"
 	username := "user.foo"
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
@@ -264,5 +265,27 @@ func getFakeDomain() zms.SignedDomain {
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
+	}
+}
+
+// TODO, use constants
+func GetServiceRole() *v1alpha1.ServiceRole {
+	return &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{"*"},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: "destination.labels[svc]",
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
+		},
 	}
 }

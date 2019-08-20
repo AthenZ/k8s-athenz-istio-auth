@@ -36,6 +36,8 @@ type Framework struct {
 	stopCh                chan struct{}
 }
 
+var F *Framework
+
 // runEtcd will setup up the etcd configuration and run the etcd server
 func runEtcd() (*embed.Etcd, error) {
 	etcdDataDir, err := ioutil.TempDir(os.TempDir(), "integration_test_etcd_data")
@@ -125,14 +127,16 @@ func Setup() (*Framework, error) {
 	c := controller.NewController("svc.cluster.local", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
 	go c.Run(stopCh)
 
-	return &Framework{
+	framework := &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClientset,
 		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
-	}, nil
+	}
+	F = framework
+	return framework, nil
 }
 
 // Teardown will request the api server to shutdown
