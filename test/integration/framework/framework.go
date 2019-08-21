@@ -27,6 +27,8 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 )
 
+var Global *Framework
+
 type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
@@ -79,35 +81,35 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 }
 
 // Setup will run both etcd and api server together
-func Setup() (*Framework, error) {
+func Setup() error {
 	etcd, err := runEtcd()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	restConfig, stopCh, err := runApiServer(etcd.Server.Cfg.DataDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	crdClientset, err := apiextensionsclient.NewForConfig(restConfig)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = fixtures.CreateCrds(crdClientset)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	k8sClientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	athenzDomainClientset, err := athenzdomainclientset.NewForConfig(restConfig)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	configDescriptor := model.ConfigDescriptor{
@@ -118,29 +120,32 @@ func Setup() (*Framework, error) {
 
 	istioClientset, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	log.InitLogger("", "debug")
 	c := controller.NewController("svc.cluster.local", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
 	go c.Run(stopCh)
 
-	return &Framework{
+	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClientset,
 		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
-	}, nil
+	}
+
+	return nil
 }
 
 // Teardown will request the api server to shutdown
-func (f *Framework) Teardown() {
-	close(f.stopCh)
-	f.etcd.Close()
-	err := os.RemoveAll(f.etcd.Server.Cfg.DataDir)
+func Teardown() {
+	close(Global.stopCh)
+	Global.etcd.Close()
+	err := os.RemoveAll(Global.etcd.Server.Cfg.DataDir)
 	if err != nil {
 		log.Println(err)
 	}
+	Global = nil
 }

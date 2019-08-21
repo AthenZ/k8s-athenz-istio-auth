@@ -11,7 +11,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	f, err := framework.Setup()
+	err := framework.Setup()
 	if err != nil {
 		log.Println("Error setting up test framework:", err)
 		os.Exit(1)
@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(time.Second * 15)
 	exitCode := m.Run()
-	fixtures.CreateAthenzDomain(f.AthenzDomainClientset)
-	f.Teardown()
+	fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	framework.Teardown()
 	os.Exit(exitCode)
 }
