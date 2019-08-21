@@ -10,16 +10,18 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 )
 
-// TODO, figure out how to make these run in different folders
 func TestMain(m *testing.M) {
-	f, err := framework.Setup()
+	err := framework.Setup()
 	if err != nil {
 		log.Println("Error setting up test framework:", err)
 		os.Exit(1)
 	}
-	time.Sleep(time.Second * 15)
-	fixtures.CreateAthenzDomain(f.AthenzDomainClientset)
+
+	time.Sleep(time.Second * 5)
+	fixtures.CreateNamespace(framework.Global.K8sClientset)
+	fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	time.Sleep(time.Second * 5)
 	exitCode := m.Run()
-	f.Teardown()
+	framework.Teardown()
 	os.Exit(exitCode)
 }

@@ -15,7 +15,10 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"istio.io/api/rbac/v1alpha1"
+	"k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -168,7 +171,7 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
-	domain := "default"
+	domain := "athenz.domain"
 	fakeDomain := getFakeDomain()
 	newCR := &athenzdomain.AthenzDomain{
 		TypeMeta: metav1.TypeMeta{
@@ -216,7 +219,7 @@ func getFakeDomain() zms.SignedDomain {
 		panic(err)
 	}
 
-	domainName := "default"
+	domainName := "athenz.domain"
 	username := "user.foo"
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
@@ -229,10 +232,10 @@ func getFakeDomain() zms.SignedDomain {
 						{
 							Assertions: []*zms.Assertion{
 								{
-									Role:     domainName + ":role.admin",
-									Resource: domainName + ".test:*",
-									Action:   "*",
 									Effect:   &allow,
+									Action:   "put",
+									Role:     "athenz.domain:role.client-writer-role",
+									Resource: "athenz.domain:svc.my-service-name",
 								},
 							},
 							Modified: &timestamp,
@@ -247,17 +250,12 @@ func getFakeDomain() zms.SignedDomain {
 				{
 					Members:  []zms.MemberName{zms.MemberName(username)},
 					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.admin"),
+					Name:     zms.ResourceName("athenz.domain:role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
 						},
 					},
-				},
-				{
-					Trust:    "parent.domain",
-					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.trust"),
 				},
 			},
 			Services: []*zms.ServiceIdentity{},
@@ -265,6 +263,15 @@ func getFakeDomain() zms.SignedDomain {
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
+	}
+}
+
+func CreateNamespace(clientset kubernetes.Interface) {
+	ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "athenz-domain"}}
+	_, err := clientset.CoreV1().Namespaces().Create(ns)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 }
 
