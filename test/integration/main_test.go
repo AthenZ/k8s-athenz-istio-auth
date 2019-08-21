@@ -18,8 +18,9 @@ func TestMain(m *testing.M) {
 	}
 
 	time.Sleep(time.Second * 5)
+	// TODO, move to framework setup?
 	fixtures.CreateNamespace(framework.Global.K8sClientset)
-	fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	//fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
 	time.Sleep(time.Second * 5)
 	exitCode := m.Run()
 	framework.Teardown()

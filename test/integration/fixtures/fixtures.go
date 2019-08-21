@@ -16,7 +16,9 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -169,46 +171,120 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
-// CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
-	domain := "athenz.domain"
-	fakeDomain := getFakeDomain()
-	newCR := &athenzdomain.AthenzDomain{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AthenzDomain",
-			APIVersion: "athenz.io/v1",
+func getExpectedSR() model.Config {
+	foo := &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
 		},
+	}
+
+	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", foo)
+}
+
+func GetExpectedSR() model.Config {
+	foo := &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
+			{
+				Methods: []string{
+					"GET",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", foo)
+}
+
+func getExpectedSRB() model.Config {
+	foo2 := &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Name: "client-writer-role",
+			Kind: common.ServiceRoleKind,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "user/sa/foo",
+			},
+		},
+	}
+	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", foo2)
+}
+
+// CreateAthenzDomain creates an athenz domain custom resource
+func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
+	domain := "athenz.domain"
+	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: domain,
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: fakeDomain,
-		},
-		Status: athenzdomain.AthenzDomainStatus{
-			Message: "",
+			SignedDomain: getFakeDomain(),
 		},
 	}
 
-	list, err := clientset.AthenzV1().AthenzDomains().List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println("list:", list)
+	sr := getExpectedSR()
+	srb := getExpectedSRB()
+	expectedCRs := []model.Config{sr, srb}
 
-	created, err := clientset.AthenzV1().AthenzDomains().Create(newCR)
-	if err != nil {
-		log.Println("error creating athenz domain:", err)
-		return
-	}
-	log.Println("created cr:", created)
+	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
+	return ad, expectedCRs, err
+}
 
-	got, err := clientset.AthenzV1().AthenzDomains().Get(domain, metav1.GetOptions{})
-	if err != nil {
-		log.Println(err)
-		return
+func CreateAthenzDomainSROnly(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
+	domain := "athenz.domain"
+	signedDomain := getFakeDomain()
+	signedDomain.Domain.Roles = []*zms.Role{}
+
+	ad := &athenzdomain.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: domain,
+		},
+		Spec: athenzdomain.AthenzDomainSpec{
+			SignedDomain: getFakeDomain(),
+		},
 	}
-	log.Println("got cr:", got)
+
+	sr := getExpectedSR()
+	expectedCRs := []model.Config{sr}
+
+	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
+	return ad, expectedCRs, err
 }
 
 // getFakeDomain provides a populated fake domain object
@@ -275,24 +351,23 @@ func CreateNamespace(clientset kubernetes.Interface) {
 	}
 }
 
-// TODO, use constants
-func GetServiceRole() *v1alpha1.ServiceRole {
-	return &v1alpha1.ServiceRole{
-		Rules: []*v1alpha1.AccessRule{
+func GetNewPolicy() *zms.Policy {
+	allow := zms.ALLOW
+	timestamp, err := rdl.TimestampParse("2019-06-21T19:28:09.305Z")
+	if err != nil {
+		panic(err)
+	}
+	domainName := "athenz.domain"
+	return &zms.Policy{
+		Assertions: []*zms.Assertion{
 			{
-				Methods: []string{
-					"PUT",
-				},
-				Services: []string{"*"},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
-					{
-						Key: "destination.labels[svc]",
-						Values: []string{
-							"my-service-name",
-						},
-					},
-				},
+				Effect:   &allow,
+				Action:   "GET",
+				Role:     "athenz.domain:role.client-writer-role",
+				Resource: "athenz.domain:svc.my-service-name",
 			},
 		},
+		Modified: &timestamp,
+		Name:     zms.ResourceName(domainName + ":policy.admin"),
 	}
 }
