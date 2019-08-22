@@ -5,6 +5,7 @@
 package fixtures
 
 import (
+	"errors"
 	"log"
 
 	"github.com/ardielle/ardielle-go/rdl"
@@ -171,49 +172,21 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
+func GetExpectedSR(modelSR model.Config, modify func(sr *v1alpha1.ServiceRole)) (model.Config, error) {
+	sr, ok := modelSR.Spec.(*v1alpha1.ServiceRole)
+	if !ok {
+		return modelSR, errors.New("Could not cast to service role object")
+	}
+	modify(sr)
+	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", sr), nil
+}
+
 func getExpectedSR() model.Config {
 	foo := &v1alpha1.ServiceRole{
 		Rules: []*v1alpha1.AccessRule{
 			{
 				Methods: []string{
 					"PUT",
-				},
-				Services: []string{common.WildCardAll},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
-					{
-						Key: common.ConstraintSvcKey,
-						Values: []string{
-							"my-service-name",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", foo)
-}
-
-func GetExpectedSR() model.Config {
-	foo := &v1alpha1.ServiceRole{
-		Rules: []*v1alpha1.AccessRule{
-			{
-				Methods: []string{
-					"PUT",
-				},
-				Services: []string{common.WildCardAll},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
-					{
-						Key: common.ConstraintSvcKey,
-						Values: []string{
-							"my-service-name",
-						},
-					},
-				},
-			},
-			{
-				Methods: []string{
-					"GET",
 				},
 				Services: []string{common.WildCardAll},
 				Constraints: []*v1alpha1.AccessRule_Constraint{
@@ -246,15 +219,25 @@ func getExpectedSRB() model.Config {
 	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", foo2)
 }
 
+func GetExpectedSRB(modelSRB model.Config, modify func(srb *v1alpha1.ServiceRoleBinding)) (model.Config, error) {
+	srb, ok := modelSRB.Spec.(*v1alpha1.ServiceRoleBinding)
+	if !ok {
+		return modelSRB, errors.New("Could not cast to service role binding object")
+	}
+	modify(srb)
+	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", srb), nil
+}
+
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
 	domain := "athenz.domain"
+	signedDomain := getFakeDomain()
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: domain,
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: getFakeDomain(),
+			SignedDomain: signedDomain,
 		},
 	}
 
@@ -266,17 +249,18 @@ func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomai
 	return ad, expectedCRs, err
 }
 
-func CreateAthenzDomainSROnly(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
+func CreateAthenzDomainSROnly(clientset athenzdomainclientset.Interface, modify func(signedDomain *zms.SignedDomain)) (*athenzdomain.AthenzDomain, []model.Config, error) {
 	domain := "athenz.domain"
 	signedDomain := getFakeDomain()
-	signedDomain.Domain.Roles = []*zms.Role{}
+
+	modify(&signedDomain)
 
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: domain,
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: getFakeDomain(),
+			SignedDomain: signedDomain,
 		},
 	}
 
@@ -314,8 +298,7 @@ func getFakeDomain() zms.SignedDomain {
 									Resource: "athenz.domain:svc.my-service-name",
 								},
 							},
-							Modified: &timestamp,
-							Name:     zms.ResourceName(domainName + ":policy.admin"),
+							Name: zms.ResourceName(domainName + ":policy.admin"),
 						},
 					},
 				},
@@ -324,9 +307,8 @@ func getFakeDomain() zms.SignedDomain {
 			},
 			Roles: []*zms.Role{
 				{
-					Members:  []zms.MemberName{zms.MemberName(username)},
-					Modified: &timestamp,
-					Name:     zms.ResourceName("athenz.domain:role.client-writer-role"),
+					Members: []zms.MemberName{zms.MemberName(username)},
+					Name:    zms.ResourceName("athenz.domain:role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
@@ -348,26 +330,5 @@ func CreateNamespace(clientset kubernetes.Interface) {
 	if err != nil {
 		log.Println(err)
 		return
-	}
-}
-
-func GetNewPolicy() *zms.Policy {
-	allow := zms.ALLOW
-	timestamp, err := rdl.TimestampParse("2019-06-21T19:28:09.305Z")
-	if err != nil {
-		panic(err)
-	}
-	domainName := "athenz.domain"
-	return &zms.Policy{
-		Assertions: []*zms.Assertion{
-			{
-				Effect:   &allow,
-				Action:   "GET",
-				Role:     "athenz.domain:role.client-writer-role",
-				Resource: "athenz.domain:svc.my-service-name",
-			},
-		},
-		Modified: &timestamp,
-		Name:     zms.ResourceName(domainName + ":policy.admin"),
 	}
 }
