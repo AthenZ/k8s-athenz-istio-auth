@@ -33,13 +33,14 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		// Check if there are any policies/assertions defined for this role
 		assertions, exists := m.Rules[roleFQDN]
 		if !exists {
+			log.Debugf("Policies/assertions not defined for role %s", roleFQDN)
 			continue
 		}
 
 		// Extract only the role name from the <domain>:role.<roleName> format
 		roleName, err := common.ParseRoleFQDN(m.Name, string(roleFQDN))
 		if err != nil {
-			log.Debugf(err.Error())
+			log.Debugln(err.Error())
 			continue
 		}
 

@@ -23,6 +23,7 @@ import (
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 
+	"flag"
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 )
@@ -80,8 +81,11 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 	return restConfig, stopCh, server.PrepareRun().NonBlockingRun(stopCh)
 }
 
+// TODO, initialize klog
 // Setup will run both etcd and api server together
 func Setup() error {
+	flag.Parse()
+
 	etcd, err := runEtcd()
 	if err != nil {
 		return err

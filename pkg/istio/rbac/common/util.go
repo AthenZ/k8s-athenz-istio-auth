@@ -51,6 +51,7 @@ func NewConfig(configType string, namespace string, name string, spec proto.Mess
 		Version:   schema.Version,
 		Namespace: namespace,
 		Name:      name,
+		Domain: "svc.cluster.local", // TODO, figure out
 	}
 	return model.Config{
 		ConfigMeta: meta,

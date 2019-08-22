@@ -5,6 +5,7 @@
 package fixtures
 
 import (
+	"errors"
 	"log"
 
 	"github.com/ardielle/ardielle-go/rdl"
@@ -15,6 +16,12 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/model"
+	"k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -165,46 +172,103 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
-// CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
-	domain := "home.foo"
-	fakeDomain := getFakeDomain()
-	newCR := &athenzdomain.AthenzDomain{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AthenzDomain",
-			APIVersion: "athenz.io/v1",
+func GetExpectedSR(modelSR model.Config, modify func(sr *v1alpha1.ServiceRole)) (model.Config, error) {
+	sr, ok := modelSR.Spec.(*v1alpha1.ServiceRole)
+	if !ok {
+		return modelSR, errors.New("Could not cast to service role object")
+	}
+	modify(sr)
+	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", sr), nil
+}
+
+func getExpectedSR() model.Config {
+	foo := &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
 		},
+	}
+
+	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", foo)
+}
+
+func getExpectedSRB() model.Config {
+	foo2 := &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Name: "client-writer-role",
+			Kind: common.ServiceRoleKind,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "user/sa/foo",
+			},
+		},
+	}
+	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", foo2)
+}
+
+func GetExpectedSRB(modelSRB model.Config, modify func(srb *v1alpha1.ServiceRoleBinding)) (model.Config, error) {
+	srb, ok := modelSRB.Spec.(*v1alpha1.ServiceRoleBinding)
+	if !ok {
+		return modelSRB, errors.New("Could not cast to service role binding object")
+	}
+	modify(srb)
+	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", srb), nil
+}
+
+// CreateAthenzDomain creates an athenz domain custom resource
+func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
+	domain := "athenz.domain"
+	signedDomain := getFakeDomain()
+	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: domain,
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: fakeDomain,
-		},
-		Status: athenzdomain.AthenzDomainStatus{
-			Message: "",
+			SignedDomain: signedDomain,
 		},
 	}
 
-	list, err := clientset.AthenzV1().AthenzDomains().List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println("list:", list)
+	sr := getExpectedSR()
+	srb := getExpectedSRB()
+	expectedCRs := []model.Config{sr, srb}
 
-	created, err := clientset.AthenzV1().AthenzDomains().Create(newCR)
-	if err != nil {
-		log.Println("error creating athenz domain:", err)
-		return
-	}
-	log.Println("created cr:", created)
+	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
+	return ad, expectedCRs, err
+}
 
-	got, err := clientset.AthenzV1().AthenzDomains().Get(domain, metav1.GetOptions{})
-	if err != nil {
-		log.Println(err)
-		return
+func CreateAthenzDomainSROnly(clientset athenzdomainclientset.Interface, modify func(signedDomain *zms.SignedDomain)) (*athenzdomain.AthenzDomain, []model.Config, error) {
+	domain := "athenz.domain"
+	signedDomain := getFakeDomain()
+
+	modify(&signedDomain)
+
+	ad := &athenzdomain.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: domain,
+		},
+		Spec: athenzdomain.AthenzDomainSpec{
+			SignedDomain: signedDomain,
+		},
 	}
-	log.Println("got cr:", got)
+
+	sr := getExpectedSR()
+	expectedCRs := []model.Config{sr}
+
+	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
+	return ad, expectedCRs, err
 }
 
 // getFakeDomain provides a populated fake domain object
@@ -215,7 +279,7 @@ func getFakeDomain() zms.SignedDomain {
 		panic(err)
 	}
 
-	domainName := "home.foo"
+	domainName := "athenz.domain"
 	username := "user.foo"
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
@@ -228,14 +292,13 @@ func getFakeDomain() zms.SignedDomain {
 						{
 							Assertions: []*zms.Assertion{
 								{
-									Role:     domainName + ":role.admin",
-									Resource: domainName + ".test:*",
-									Action:   "*",
 									Effect:   &allow,
+									Action:   "put",
+									Role:     "athenz.domain:role.client-writer-role",
+									Resource: "athenz.domain:svc.my-service-name",
 								},
 							},
-							Modified: &timestamp,
-							Name:     zms.ResourceName(domainName + ":policy.admin"),
+							Name: zms.ResourceName(domainName + ":policy.admin"),
 						},
 					},
 				},
@@ -244,19 +307,13 @@ func getFakeDomain() zms.SignedDomain {
 			},
 			Roles: []*zms.Role{
 				{
-					Members:  []zms.MemberName{zms.MemberName(username)},
-					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.admin"),
+					Members: []zms.MemberName{zms.MemberName(username)},
+					Name:    zms.ResourceName("athenz.domain:role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
 						},
 					},
-				},
-				{
-					Trust:    "parent.domain",
-					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.trust"),
 				},
 			},
 			Services: []*zms.ServiceIdentity{},
@@ -264,5 +321,14 @@ func getFakeDomain() zms.SignedDomain {
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
+	}
+}
+
+func CreateNamespace(clientset kubernetes.Interface) {
+	ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "athenz-domain"}}
+	_, err := clientset.CoreV1().Namespaces().Create(ns)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 }
