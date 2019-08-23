@@ -221,11 +221,13 @@ type Override struct {
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 	signedDomain := getFakeDomain()
-	domainName := string(signedDomain.Domain.Name)
 
 	if o.ModifyAD != nil {
 		o.ModifyAD(&signedDomain)
 	}
+
+	domainName := string(signedDomain.Domain.Name)
+	ns := athenz.DomainToNamespace(domainName)
 
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
@@ -241,7 +243,6 @@ func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 		o.ModifySR(sr)
 	}
 
-	ns := athenz.DomainToNamespace(domainName)
 	roleFQDN := string(signedDomain.Domain.Roles[0].Name)
 	roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
 	modelSR := common.NewConfig(model.ServiceRole.Type, ns, roleName, sr)
