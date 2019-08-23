@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"time"
 )
@@ -189,3 +190,59 @@ func TestUpdateDeleteRoleMember(t *testing.T) {
 	expectedModelConfigs(t, configs)
 	deleteResources(t, configs)
 }
+
+// 2.3 Add unrelated AD changes (not conformant to RBAC)
+func TestUpdateUnrelatedADField(t *testing.T) {
+	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
+	assert.Nil(t, err, "should be nil")
+	time.Sleep(time.Second * 5)
+	expectedModelConfigs(t, configs)
+
+	modifyAd := func(signedDomain *zms.SignedDomain) {
+		signedDomain.KeyId = "col-env-1.2"
+	}
+
+	ad, _ = fixtures.CreateAthenzDomain(modifyAd, nil, nil)
+	updateAD(t, ad)
+	expectedModelConfigs(t, configs)
+	deleteResources(t, configs)
+}
+
+func checkDeletion(t *testing.T, configs []model.Config) {
+	for _, config := range configs {
+		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
+		assert.Nil(t, c, "should be nil")
+	}
+}
+
+// 2.4 Update role name and expect the old SR/SRB to be deleted
+func TestUpdateRoleName(t *testing.T) {
+	ad, originalConfigs := fixtures.CreateAthenzDomain(nil, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
+	assert.Nil(t, err, "should be nil")
+	time.Sleep(time.Second * 5)
+	expectedModelConfigs(t, originalConfigs)
+
+	// TODO, figure out which role we're using
+	modifyAd := func(signedDomain *zms.SignedDomain) {
+		signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain:role.client-reader-role"
+		signedDomain.Domain.Roles[0].Name = "athenz.domain:role.client-reader-role"
+	}
+
+	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
+		srb.RoleRef.Name = "client-reader-role"
+	}
+
+	// TODO, allow name overrides
+	ad, configs := fixtures.CreateAthenzDomain(modifyAd, nil, modifySRB)
+	configs[0].Name = "client-reader-role"
+	configs[1].Name = "client-reader-role"
+	spew.Dump(ad)
+	updateAD(t, ad)
+	expectedModelConfigs(t, configs)
+	checkDeletion(t, originalConfigs)
+	deleteResources(t, configs)
+}
+
+// 2.5 Test updates with multiple namespaces / AD
