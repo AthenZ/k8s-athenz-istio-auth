@@ -5,14 +5,11 @@
 package fixtures
 
 import (
-	"errors"
 	"log"
 
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
-
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -172,17 +169,8 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
-func GetExpectedSR(modelSR model.Config, modify func(sr *v1alpha1.ServiceRole)) (model.Config, error) {
-	sr, ok := modelSR.Spec.(*v1alpha1.ServiceRole)
-	if !ok {
-		return modelSR, errors.New("Could not cast to service role object")
-	}
-	modify(sr)
-	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", sr), nil
-}
-
-func getExpectedSR() model.Config {
-	foo := &v1alpha1.ServiceRole{
+func getExpectedSR() *v1alpha1.ServiceRole {
+	return &v1alpha1.ServiceRole{
 		Rules: []*v1alpha1.AccessRule{
 			{
 				Methods: []string{
@@ -200,12 +188,10 @@ func getExpectedSR() model.Config {
 			},
 		},
 	}
-
-	return common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", foo)
 }
 
-func getExpectedSRB() model.Config {
-	foo2 := &v1alpha1.ServiceRoleBinding{
+func getExpectedSRB() *v1alpha1.ServiceRoleBinding {
+	return &v1alpha1.ServiceRoleBinding{
 		RoleRef: &v1alpha1.RoleRef{
 			Name: "client-writer-role",
 			Kind: common.ServiceRoleKind,
@@ -216,22 +202,19 @@ func getExpectedSRB() model.Config {
 			},
 		},
 	}
-	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", foo2)
-}
-
-func GetExpectedSRB(modelSRB model.Config, modify func(srb *v1alpha1.ServiceRoleBinding)) (model.Config, error) {
-	srb, ok := modelSRB.Spec.(*v1alpha1.ServiceRoleBinding)
-	if !ok {
-		return modelSRB, errors.New("Could not cast to service role binding object")
-	}
-	modify(srb)
-	return common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", srb), nil
 }
 
 // CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomain.AthenzDomain, []model.Config, error) {
+func CreateAthenzDomain(modifyAD func(signedDomain *zms.SignedDomain),
+	modifySR func(sr *v1alpha1.ServiceRole), modifySRB func(srb *v1alpha1.ServiceRoleBinding)) (*athenzdomain.AthenzDomain, []model.Config) {
+
 	domain := "athenz.domain"
 	signedDomain := getFakeDomain()
+
+	if modifyAD != nil {
+		modifyAD(&signedDomain)
+	}
+
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: domain,
@@ -242,33 +225,19 @@ func CreateAthenzDomain(clientset athenzdomainclientset.Interface) (*athenzdomai
 	}
 
 	sr := getExpectedSR()
+	if modifySR != nil {
+		modifySR(sr)
+	}
+
 	srb := getExpectedSRB()
-	expectedCRs := []model.Config{sr, srb}
-
-	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
-	return ad, expectedCRs, err
-}
-
-func CreateAthenzDomainSROnly(clientset athenzdomainclientset.Interface, modify func(signedDomain *zms.SignedDomain)) (*athenzdomain.AthenzDomain, []model.Config, error) {
-	domain := "athenz.domain"
-	signedDomain := getFakeDomain()
-
-	modify(&signedDomain)
-
-	ad := &athenzdomain.AthenzDomain{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: domain,
-		},
-		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: signedDomain,
-		},
+	if modifySRB != nil {
+		modifySRB(srb)
 	}
 
-	sr := getExpectedSR()
-	expectedCRs := []model.Config{sr}
-
-	_, err := clientset.AthenzV1().AthenzDomains().Create(ad)
-	return ad, expectedCRs, err
+	modelSR := common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", sr)
+	modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", srb)
+	expectedCRs := []model.Config{modelSR, modelSRB}
+	return ad, expectedCRs
 }
 
 // getFakeDomain provides a populated fake domain object

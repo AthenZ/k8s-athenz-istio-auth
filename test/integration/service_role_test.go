@@ -44,11 +44,12 @@ func deleteResources(t *testing.T, input []model.Config) {
 	}
 }
 
-func updateAD(t *testing.T, ad *athenzdomain.AthenzDomain, modify func(ad *athenzdomain.AthenzDomain)) {
-	ad, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(ad.Name, v1.GetOptions{})
+// TODO, add informer / indexer?
+func updateAD(t *testing.T, ad *athenzdomain.AthenzDomain) {
+	currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(ad.Name, v1.GetOptions{})
 	assert.Nil(t, err, "error should be nil")
 
-	modify(ad)
+	ad.ResourceVersion = currentAD.ResourceVersion
 
 	_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(ad)
 	assert.Nil(t, err, "error should be nil")
@@ -60,7 +61,8 @@ func updateAD(t *testing.T, ad *athenzdomain.AthenzDomain, modify func(ad *athen
 // Input Actions: Create AD with roles and policies
 // Output: SR / SRB created with matching rules and bindings
 func TestServiceRoleAndBindingCreation(t *testing.T) {
-	_, configs, err := fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
 	assert.Nil(t, err, "should be nil")
 	time.Sleep(time.Second * 5)
 	expectedModelConfigs(t, configs)
@@ -70,13 +72,15 @@ func TestServiceRoleAndBindingCreation(t *testing.T) {
 // 1.1 Create SR only if there are no role members for SRB creation
 // TODO, make sure srb is not there
 func TestServiceRoleOnlyCreation(t *testing.T) {
-	_, configs, err := fixtures.CreateAthenzDomainSROnly(framework.Global.AthenzDomainClientset, func(signedDomain *zms.SignedDomain) {
+	ad, configs := fixtures.CreateAthenzDomain(func(signedDomain *zms.SignedDomain) {
 		signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
-	})
+	}, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
 	assert.Nil(t, err, "should be nil")
 	time.Sleep(time.Second * 10)
-	expectedModelConfigs(t, configs)
-	deleteResources(t, configs)
+	// TODO, remove srb
+	expectedModelConfigs(t, configs[0:1])
+	deleteResources(t, configs[0:1])
 }
 
 // 2. Test case:
@@ -84,12 +88,13 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 // Input Actions: Update AD with additional roles, policies
 // Output: SR / SRB updated with matching rules and bindings
 func TestUpdateRoleAssertion(t *testing.T) {
-	ad, configs, err := fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
 	assert.Nil(t, err, "should be nil")
 	time.Sleep(time.Second * 5)
 	expectedModelConfigs(t, configs)
 
-	updateAD(t, ad, func(ad *athenzdomain.AthenzDomain) {
+	modifyAD := func(signedDomain *zms.SignedDomain) {
 		allow := zms.ALLOW
 		domainName := "athenz.domain"
 		policy := &zms.Policy{
@@ -103,10 +108,10 @@ func TestUpdateRoleAssertion(t *testing.T) {
 			},
 			Name: zms.ResourceName(domainName + ":policy.admin"),
 		}
-		ad.Spec.Domain.Policies.Contents.Policies = append(ad.Spec.Domain.Policies.Contents.Policies, policy)
-	})
+		signedDomain.Domain.Policies.Contents.Policies = append(signedDomain.Domain.Policies.Contents.Policies, policy)
+	}
 
-	configs[0], err = fixtures.GetExpectedSR(configs[0], func(sr *v1alpha1.ServiceRole) {
+	modifySR := func(sr *v1alpha1.ServiceRole) {
 		sr.Rules = append(sr.Rules, &v1alpha1.AccessRule{
 			Methods: []string{
 				"GET",
@@ -121,8 +126,10 @@ func TestUpdateRoleAssertion(t *testing.T) {
 				},
 			},
 		})
-	})
-	assert.Nil(t, err, "should be nil")
+	}
+
+	ad, configs = fixtures.CreateAthenzDomain(modifyAD, modifySR, nil)
+	updateAD(t, ad)
 
 	expectedModelConfigs(t, configs)
 	deleteResources(t, configs)
@@ -130,24 +137,27 @@ func TestUpdateRoleAssertion(t *testing.T) {
 
 // 2.1 Update existing assertion / roleMember / action
 func TestUpdateRoleMember(t *testing.T) {
-	ad, configs, err := fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
+	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
 	assert.Nil(t, err, "should be nil")
 	time.Sleep(time.Second * 5)
 	expectedModelConfigs(t, configs)
 
-	updateAD(t, ad, func(ad *athenzdomain.AthenzDomain) {
+	modifyAD := func(signedDomain *zms.SignedDomain) {
 		roleMember := &zms.RoleMember{
 			MemberName: zms.MemberName("user.bar"),
 		}
-		ad.Spec.Domain.Roles[0].RoleMembers = append(ad.Spec.Domain.Roles[0].RoleMembers, roleMember)
-	})
+		signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+	}
 
-	configs[1], err = fixtures.GetExpectedSRB(configs[1], func(srb *v1alpha1.ServiceRoleBinding) {
+	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
 		srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
 			User: "user/sa/bar",
 		})
-	})
-	assert.Nil(t, err, "should be nil")
+	}
+
+	ad, configs = fixtures.CreateAthenzDomain(modifyAD, nil, modifySRB)
+	updateAD(t, ad)
 
 	expectedModelConfigs(t, configs)
 	deleteResources(t, configs)
@@ -155,34 +165,27 @@ func TestUpdateRoleMember(t *testing.T) {
 
 // 2.2 Delete existing roleMember / assertion
 func TestUpdateDeleteRoleMember(t *testing.T) {
-	ad, configs, err := fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
-	original := configs[1]
-
-	updateAD(t, ad, func(ad *athenzdomain.AthenzDomain) {
+	modifyAD := func(signedDomain *zms.SignedDomain) {
 		roleMember := &zms.RoleMember{
 			MemberName: zms.MemberName("user.bar"),
 		}
-		ad.Spec.Domain.Roles[0].RoleMembers = append(ad.Spec.Domain.Roles[0].RoleMembers, roleMember)
-	})
+		signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+	}
 
-	configs[1], err = fixtures.GetExpectedSRB(configs[1], func(srb *v1alpha1.ServiceRoleBinding) {
+	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
 		srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
 			User: "user/sa/bar",
 		})
-	})
-	assert.Nil(t, err, "should be nil")
+	}
 
+	ad, configs := fixtures.CreateAthenzDomain(modifyAD, nil, modifySRB)
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
+	assert.Nil(t, err, "should be nil")
+	time.Sleep(time.Second * 5)
 	expectedModelConfigs(t, configs)
 
-	updateAD(t, ad, func(ad *athenzdomain.AthenzDomain) {
-		ad.Spec.Domain.Roles[0].RoleMembers = ad.Spec.Domain.Roles[0].RoleMembers[0:1]
-	})
-
-	// TODO, fix expected check
-	configs[1] = original
-	//expectedModelConfigs(t, configs)
+	ad, configs = fixtures.CreateAthenzDomain(nil, nil, nil)
+	updateAD(t, ad)
+	expectedModelConfigs(t, configs)
 	deleteResources(t, configs)
 }
