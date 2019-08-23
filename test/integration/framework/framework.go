@@ -111,6 +111,11 @@ func Setup() error {
 		return err
 	}
 
+	err = fixtures.CreateNamespaces(k8sClientset)
+	if err != nil {
+		return err
+	}
+
 	athenzDomainClientset, err := athenzdomainclientset.NewForConfig(restConfig)
 	if err != nil {
 		return err

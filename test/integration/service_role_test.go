@@ -5,28 +5,23 @@ import (
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
-	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"istio.io/api/rbac/v1alpha1"
 	"time"
 )
 
-// TODO, logging for callback weird [controller.(*Controller).getCallbackHandler/controller.go] [func1]
-// TODO, look into logrus function logging
-// TODO, should we sync if athenz domain is not found but namespace is there and delete sr / srb? https://github.com/yahoo/k8s-athenz-istio-auth/blob/master/pkg/controller/controller.go#L163-L167
 // TODO, figure out why the warnings disappeared
 // TODO, make the integration go.mod point to the local authz controller as opposed to the version
-// TODO, add for loop to wait for athenz domain created
-// TODO, validate if role actually exists from policy / assertion
-// TODO, add back build tags?
-// TODO, figure out which role we're using
-
-// TODO, make it work with update and check for actual resources
 // TODO, add informer / indexer for get?
-
+// TODO, see if we need more test cases like both role and policy changes
+// TODO, go through document
+// TODO, go through each test and make sure it's working correctly
 type action int
 
 const (
@@ -71,11 +66,20 @@ func rolloutAndValidate(t *testing.T, adPair *fixtures.AthenzDomainPair, a actio
 		time.Sleep(time.Second)
 	}
 
+	configs, err := framework.Global.IstioClientset.List(model.ServiceRole.Type, "athenz-domain")
+	assert.Nil(t, err)
+	log.Println("service roles:")
+	spew.Dump(configs)
+	configs, err = framework.Global.IstioClientset.List(model.ServiceRoleBinding.Type, "athenz-domain")
+	log.Println("service role bindings:")
+	spew.Dump(configs)
+	time.Sleep(time.Second * 5)
 	validateConfigs(t, adPair)
 }
 
-// TODO, consolidate
 func validateConfigs(t *testing.T, adPair *fixtures.AthenzDomainPair) {
+	log.Println("model configs array:")
+	spew.Dump(adPair.ModelConfigs)
 	for _, curr := range adPair.ModelConfigs {
 		got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
 		assert.NotNil(t, got, "not nil")
@@ -95,9 +99,10 @@ func cleanup(t *testing.T, adPair *fixtures.AthenzDomainPair) {
 	}
 }
 
-// 1. Create Test case:
+// STATUS: DONE
+// 1. Create: Create SR / SRB with valid AD
 // Initial: No AD, SR, SRB existing
-// Input Actions: Create AD with roles and policies
+// Input actions: Create AD with roles and policies
 // Output: SR / SRB created with matching rules and bindings
 func TestServiceRoleAndBindingCreation(t *testing.T) {
 	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
@@ -105,8 +110,12 @@ func TestServiceRoleAndBindingCreation(t *testing.T) {
 	cleanup(t, adPair)
 }
 
-// 1.1 Create: Create SR only if there are no role members for SRB creation
+// STATUS: IN PROGRESS
 // TODO, make sure srb is not there
+// 1.1 Create: Create SR only if there are no role members for SRB creation
+// Initial: No AD, SR, SRB existing
+// Input actions: Created AD with policies
+// Output: SR created with matching rules
 func TestServiceRoleOnlyCreation(t *testing.T) {
 	o := &fixtures.Override{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
@@ -118,7 +127,8 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 	cleanup(t, adPair)
 }
 
-// 2. Update: Test case:
+// STATUS: DONE
+// 2. Update: Update existing roles / policy
 // Initial: Existing AD, SR, SRB
 // Input Actions: Update AD with additional roles, policies
 // Output: SR / SRB updated with matching rules and bindings
@@ -135,53 +145,113 @@ func TestUpdateRoleAssertion(t *testing.T) {
 					{
 						Effect:   &allow,
 						Action:   "GET",
-						Role:     "athenz.domain:role.client-writer-role",
+						Role:     "athenz.domain:role.client-reader-role",
 						Resource: "athenz.domain:svc.my-service-name",
 					},
 				},
 				Name: zms.ResourceName(domainName + ":policy.admin"),
 			}
 			signedDomain.Domain.Policies.Contents.Policies = append(signedDomain.Domain.Policies.Contents.Policies, policy)
-		},
-		ModifySR: func(sr *v1alpha1.ServiceRole) {
-			sr.Rules = append(sr.Rules, &v1alpha1.AccessRule{
-				Methods: []string{
-					"GET",
-				},
-				Services: []string{common.WildCardAll},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
+			role := &zms.Role{
+				Members: []zms.MemberName{zms.MemberName("user.bar")},
+				Name:    zms.ResourceName("athenz.domain:role.client-reader-role"),
+				RoleMembers: []*zms.RoleMember{
 					{
-						Key: common.ConstraintSvcKey,
-						Values: []string{
-							"my-service-name",
-						},
+						MemberName: zms.MemberName("user.bar"),
 					},
 				},
-			})
+			}
+			signedDomain.Domain.Roles = append(signedDomain.Domain.Roles, role)
+		},
+		ModifySRAndSRBPair: []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+			},
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+				sr.Rules = []*v1alpha1.AccessRule{
+					{
+						Methods: []string{
+							"GET",
+						},
+						Services: []string{common.WildCardAll},
+						Constraints: []*v1alpha1.AccessRule_Constraint{
+							{
+								Key: common.ConstraintSvcKey,
+								Values: []string{
+									"my-service-name",
+								},
+							},
+						},
+					},
+				}
+				srb.Subjects = []*v1alpha1.Subject{
+					{
+						User: "user/sa/bar",
+					},
+				}
+			},
 		},
 	}
 
 	adPair = fixtures.CreateAthenzDomain(o)
+
+	spew.Dump(adPair)
 	rolloutAndValidate(t, adPair, update)
 	cleanup(t, adPair)
 }
 
-// 2.1 Update: Update existing assertion / roleMember / action
-func TestUpdateRoleMember(t *testing.T) {
+// STATUS: IN PROGRESS
+// 2.1 Update: Update existing assertion / role member / action
+func TestUpdateAssertionRoleMemberAction(t *testing.T) {
 	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
 	rolloutAndValidate(t, adPair, create)
 
 	o := &fixtures.Override{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			allow := zms.ALLOW
+			domainName := "athenz.domain"
+			policy := &zms.Policy{
+				Assertions: []*zms.Assertion{
+					{
+						Effect:   &allow,
+						Action:   "POST",
+						Role:     "athenz.domain:role.client-writer-role",
+						Resource: "athenz.domain:svc.my-service-name-two",
+					},
+				},
+				Name: zms.ResourceName(domainName + ":policy.admin"),
+			}
+			signedDomain.Domain.Policies.Contents.Policies = []*zms.Policy{policy}
+
 			roleMember := &zms.RoleMember{
 				MemberName: zms.MemberName("user.bar"),
 			}
-			signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{roleMember}
+			signedDomain.Domain.Roles[0].Members = []zms.MemberName{zms.MemberName("user.bar")}
 		},
-		ModifySRB: func(srb *v1alpha1.ServiceRoleBinding) {
-			srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
-				User: "user/sa/bar",
-			})
+		ModifySRAndSRBPair: []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+				sr.Rules = []*v1alpha1.AccessRule{
+					{
+						Methods: []string{
+							"POST",
+						},
+						Services: []string{common.WildCardAll},
+						Constraints: []*v1alpha1.AccessRule_Constraint{
+							{
+								Key: common.ConstraintSvcKey,
+								Values: []string{
+									"my-service-name-two",
+								},
+							},
+						},
+					},
+				}
+				srb.Subjects = []*v1alpha1.Subject{
+					{
+						User: "user/sa/bar",
+					},
+				}
+			},
 		},
 	}
 
@@ -200,10 +270,12 @@ func TestUpdateDeleteRoleMember(t *testing.T) {
 			}
 			signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
 		},
-		ModifySRB: func(srb *v1alpha1.ServiceRoleBinding) {
-			srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
-				User: "user/sa/bar",
-			})
+		ModifySRAndSRBPair: []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+				srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
+					User: "user/sa/bar",
+				})
+			},
 		},
 	}
 

@@ -5,21 +5,18 @@
 package fixtures
 
 import (
-	"log"
-
+	"fmt"
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
-	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"fmt"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"strings"
 )
@@ -172,39 +169,20 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
-func getExpectedSR() *v1alpha1.ServiceRole {
-	return &v1alpha1.ServiceRole{
-		Rules: []*v1alpha1.AccessRule{
-			{
-				Methods: []string{
-					"PUT",
-				},
-				Services: []string{common.WildCardAll},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
-					{
-						Key: common.ConstraintSvcKey,
-						Values: []string{
-							"my-service-name",
-						},
-					},
-				},
+// CreateNamespaces creates testing namespaces
+func CreateNamespaces(clientset kubernetes.Interface) error {
+	for _, nsName := range []string{"athenz-domain", "athenz-domain-one", "athenz-domain-two"} {
+		ns := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
 			},
-		},
+		}
+		_, err := clientset.CoreV1().Namespaces().Create(ns)
+		if err != nil {
+			return err
+		}
 	}
-}
-
-func getExpectedSRB() *v1alpha1.ServiceRoleBinding {
-	return &v1alpha1.ServiceRoleBinding{
-		RoleRef: &v1alpha1.RoleRef{
-			Name: "client-writer-role",
-			Kind: common.ServiceRoleKind,
-		},
-		Subjects: []*v1alpha1.Subject{
-			{
-				User: "user/sa/foo",
-			},
-		},
-	}
+	return nil
 }
 
 type AthenzDomainPair struct {
@@ -213,14 +191,13 @@ type AthenzDomainPair struct {
 }
 
 type Override struct {
-	ModifyAD  func(signedDomain *zms.SignedDomain)
-	ModifySR  func(sr *v1alpha1.ServiceRole)
-	ModifySRB func(srb *v1alpha1.ServiceRoleBinding)
+	ModifyAD           func(signedDomain *zms.SignedDomain)
+	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(o *Override) *AthenzDomainPair {
-	signedDomain := getFakeDomain()
+	signedDomain := getDefaultSignedDomain()
 
 	if o.ModifyAD != nil {
 		o.ModifyAD(&signedDomain)
@@ -238,25 +215,25 @@ func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 		},
 	}
 
-	sr := getExpectedSR()
-	if o.ModifySR != nil {
-		o.ModifySR(sr)
-	}
+	var modelConfig []model.Config
 
-	roleFQDN := string(signedDomain.Domain.Roles[0].Name)
-	roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
-	modelSR := common.NewConfig(model.ServiceRole.Type, ns, roleName, sr)
-	modelConfig := []model.Config{modelSR}
-
-	// TODO, make more dynamic
-	if len(signedDomain.Domain.Roles[0].RoleMembers) > 0 {
-		srb := getExpectedSRB()
-		if o.ModifySRB != nil {
-			o.ModifySRB(srb)
+	for i, fn := range o.ModifySRAndSRBPair {
+		srSpec := getDefaultServiceRole()
+		srbSpec := getDefaultServiceRoleBinding()
+		if o.ModifySRAndSRBPair != nil {
+			fn(srSpec, srbSpec)
 		}
-		srb.RoleRef.Name = modelSR.Name
-		modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srb)
-		modelConfig = append(modelConfig, modelSRB)
+
+		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
+		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
+		sr := common.NewConfig(model.ServiceRole.Type, ns, roleName, srSpec)
+		modelConfig = append(modelConfig, sr)
+
+		if len(signedDomain.Domain.Roles[i].RoleMembers) > 0 {
+			srbSpec.RoleRef.Name = sr.Name
+			srb := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srbSpec)
+			modelConfig = append(modelConfig, srb)
+		}
 	}
 
 	return &AthenzDomainPair{
@@ -265,8 +242,8 @@ func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 	}
 }
 
-// getFakeDomain provides a populated fake domain object
-func getFakeDomain() zms.SignedDomain {
+// getDefaultSignedDomain returns a default testing spec for a signed domain object
+func getDefaultSignedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2019-06-21T19:28:09.305Z")
 	if err != nil {
@@ -318,15 +295,40 @@ func getFakeDomain() zms.SignedDomain {
 	}
 }
 
-func CreateNamespace(clientset kubernetes.Interface) {
-	for _, nsName := range []string{"athenz-domain", "athenz-domain-one", "athenz-domain-two"} {
-		ns := &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: nsName}}
-		_, err := clientset.CoreV1().Namespaces().Create(ns)
-		if err != nil {
-			log.Println(err)
-			return
-		}
+// getDefaultServiceRole returns a default testing spec for a service role object
+func getDefaultServiceRole() *v1alpha1.ServiceRole {
+	return &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// getDefaultServiceRoleBinding returns a default testing spec for a service
+// role binding object
+func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
+	return &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Name: "client-writer-role",
+			Kind: common.ServiceRoleKind,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "user/sa/foo",
+			},
+		},
 	}
 }
