@@ -24,8 +24,10 @@ import (
 // TODO, add for loop to wait for athenz domain created
 // TODO, validate if role actually exists from policy / assertion
 // TODO, add back build tags?
+// TODO, figure out which role we're using
 
 // TODO, make it work with update and check for actual resources
+// TODO, add informer / indexer for get?
 func rolloutAndValidate(t *testing.T, ad *athenzdomain.AthenzDomain, input []model.Config, update bool) {
 	if update {
 		currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(ad.Name, v1.GetOptions{})
@@ -65,18 +67,6 @@ func rolloutAndValidate(t *testing.T, ad *athenzdomain.AthenzDomain, input []mod
 	}
 }
 
-func expectedModelConfigs(t *testing.T, input []model.Config) {
-	// TODO, add wait until they are created
-	time.Sleep(time.Second * 5)
-	for _, curr := range input {
-		got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
-		assert.NotNil(t, got, "not nil")
-		curr.ResourceVersion = got.ResourceVersion
-		curr.CreationTimestamp = got.CreationTimestamp
-		assert.Equal(t, curr, *got, "should be equal")
-	}
-}
-
 func deleteResources(t *testing.T, input []model.Config) {
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete("athenz.domain", &v1.DeleteOptions{})
 	assert.Nil(t, err, "nil")
@@ -87,37 +77,29 @@ func deleteResources(t *testing.T, input []model.Config) {
 	}
 }
 
-// TODO, add informer / indexer?
-func updateAD(t *testing.T, ad *athenzdomain.AthenzDomain) {
-	currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(ad.Name, v1.GetOptions{})
-	assert.Nil(t, err, "error should be nil")
-
-	ad.ResourceVersion = currentAD.ResourceVersion
-
-	_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(ad)
-	assert.Nil(t, err, "error should be nil")
-	time.Sleep(time.Second * 5)
-}
-
 // 1. Test case:
 // Initial: No AD, SR, SRB existing
 // Input Actions: Create AD with roles and policies
 // Output: SR / SRB created with matching rules and bindings
 func TestServiceRoleAndBindingCreation(t *testing.T) {
-	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	rolloutAndValidate(t, ad, configs, false)
-	deleteResources(t, configs)
+	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, false)
+	deleteResources(t, []model.Config{adPair.SR, adPair.SRB})
 }
 
 // 1.1 Create SR only if there are no role members for SRB creation
 // TODO, make sure srb is not there
 func TestServiceRoleOnlyCreation(t *testing.T) {
-	ad, configs := fixtures.CreateAthenzDomain(func(signedDomain *zms.SignedDomain) {
-		signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
-	}, nil, nil)
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
+		},
+	}
+	adPair := fixtures.CreateAthenzDomain(o)
+
 	// TODO, remove srb
-	rolloutAndValidate(t, ad, configs[0:1], false)
-	deleteResources(t, configs[0:1])
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR}, false)
+	deleteResources(t, []model.Config{adPair.SR})
 }
 
 // 2. Test case:
@@ -125,112 +107,113 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 // Input Actions: Update AD with additional roles, policies
 // Output: SR / SRB updated with matching rules and bindings
 func TestUpdateRoleAssertion(t *testing.T) {
-	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	rolloutAndValidate(t, ad, configs, false)
+	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, false)
 
-	modifyAD := func(signedDomain *zms.SignedDomain) {
-		allow := zms.ALLOW
-		domainName := "athenz.domain"
-		policy := &zms.Policy{
-			Assertions: []*zms.Assertion{
-				{
-					Effect:   &allow,
-					Action:   "GET",
-					Role:     "athenz.domain:role.client-writer-role",
-					Resource: "athenz.domain:svc.my-service-name",
-				},
-			},
-			Name: zms.ResourceName(domainName + ":policy.admin"),
-		}
-		signedDomain.Domain.Policies.Contents.Policies = append(signedDomain.Domain.Policies.Contents.Policies, policy)
-	}
-
-	modifySR := func(sr *v1alpha1.ServiceRole) {
-		sr.Rules = append(sr.Rules, &v1alpha1.AccessRule{
-			Methods: []string{
-				"GET",
-			},
-			Services: []string{common.WildCardAll},
-			Constraints: []*v1alpha1.AccessRule_Constraint{
-				{
-					Key: common.ConstraintSvcKey,
-					Values: []string{
-						"my-service-name",
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			allow := zms.ALLOW
+			domainName := "athenz.domain"
+			policy := &zms.Policy{
+				Assertions: []*zms.Assertion{
+					{
+						Effect:   &allow,
+						Action:   "GET",
+						Role:     "athenz.domain:role.client-writer-role",
+						Resource: "athenz.domain:svc.my-service-name",
 					},
 				},
-			},
-		})
+				Name: zms.ResourceName(domainName + ":policy.admin"),
+			}
+			signedDomain.Domain.Policies.Contents.Policies = append(signedDomain.Domain.Policies.Contents.Policies, policy)
+		},
+		ModifySR: func(sr *v1alpha1.ServiceRole) {
+			sr.Rules = append(sr.Rules, &v1alpha1.AccessRule{
+				Methods: []string{
+					"GET",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			})
+		},
 	}
 
-	ad, configs = fixtures.CreateAthenzDomain(modifyAD, modifySR, nil)
-	updateAD(t, ad)
-
-	expectedModelConfigs(t, configs)
-	deleteResources(t, configs)
+	adPair = fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, true)
+	deleteResources(t, []model.Config{adPair.SR, adPair.SRB})
 }
 
 // 2.1 Update existing assertion / roleMember / action
 func TestUpdateRoleMember(t *testing.T) {
-	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	rolloutAndValidate(t, ad, configs, false)
+	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, false)
 
-	modifyAD := func(signedDomain *zms.SignedDomain) {
-		roleMember := &zms.RoleMember{
-			MemberName: zms.MemberName("user.bar"),
-		}
-		signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			roleMember := &zms.RoleMember{
+				MemberName: zms.MemberName("user.bar"),
+			}
+			signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+		},
+		ModifySRB: func(srb *v1alpha1.ServiceRoleBinding) {
+			srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
+				User: "user/sa/bar",
+			})
+		},
 	}
 
-	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
-		srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
-			User: "user/sa/bar",
-		})
-	}
-
-	ad, configs = fixtures.CreateAthenzDomain(modifyAD, nil, modifySRB)
-	updateAD(t, ad)
-
-	expectedModelConfigs(t, configs)
-	deleteResources(t, configs)
+	adPair = fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, true)
+	deleteResources(t, []model.Config{adPair.SR, adPair.SRB})
 }
 
 // 2.2 Delete existing roleMember / assertion
 func TestUpdateDeleteRoleMember(t *testing.T) {
-	modifyAD := func(signedDomain *zms.SignedDomain) {
-		roleMember := &zms.RoleMember{
-			MemberName: zms.MemberName("user.bar"),
-		}
-		signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			roleMember := &zms.RoleMember{
+				MemberName: zms.MemberName("user.bar"),
+			}
+			signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, roleMember)
+		},
+		ModifySRB: func(srb *v1alpha1.ServiceRoleBinding) {
+			srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
+				User: "user/sa/bar",
+			})
+		},
 	}
 
-	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
-		srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
-			User: "user/sa/bar",
-		})
-	}
+	adPair := fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, false)
 
-	ad, configs := fixtures.CreateAthenzDomain(modifyAD, nil, modifySRB)
-	rolloutAndValidate(t, ad, configs, false)
-
-	ad, configs = fixtures.CreateAthenzDomain(nil, nil, nil)
-	updateAD(t, ad)
-	expectedModelConfigs(t, configs)
-	deleteResources(t, configs)
+	adPair = fixtures.CreateAthenzDomain(&fixtures.Override{})
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, true)
+	deleteResources(t, []model.Config{adPair.SR, adPair.SRB})
 }
 
 // 2.3 Add unrelated AD changes (not conformant to RBAC)
 func TestUpdateUnrelatedADField(t *testing.T) {
-	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	rolloutAndValidate(t, ad, configs, false)
+	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, false)
+	og := []model.Config{adPair.SR, adPair.SRB}
 
-	modifyAd := func(signedDomain *zms.SignedDomain) {
-		signedDomain.KeyId = "col-env-1.2"
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			signedDomain.KeyId = "col-env-1.2"
+		},
 	}
 
-	ad, _ = fixtures.CreateAthenzDomain(modifyAd, nil, nil)
-	updateAD(t, ad)
-	expectedModelConfigs(t, configs)
-	deleteResources(t, configs)
+	adPair = fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, adPair.AD, og, true)
+	deleteResources(t, og)
 }
 
 func checkDeletion(t *testing.T, configs []model.Config) {
@@ -242,27 +225,24 @@ func checkDeletion(t *testing.T, configs []model.Config) {
 
 // 2.4 Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
-	ad, originalConfigs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	rolloutAndValidate(t, ad, originalConfigs, false)
+	adPair := fixtures.CreateAthenzDomain(&fixtures.Override{})
+	originalConfigs := []model.Config{adPair.SR, adPair.SRB}
+	rolloutAndValidate(t, adPair.AD, originalConfigs, false)
 
-	// TODO, figure out which role we're using
-	modifyAd := func(signedDomain *zms.SignedDomain) {
-		signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain:role.client-reader-role"
-		signedDomain.Domain.Roles[0].Name = "athenz.domain:role.client-reader-role"
+	o := &fixtures.Override{
+		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain:role.client-reader-role"
+			signedDomain.Domain.Roles[0].Name = "athenz.domain:role.client-reader-role"
+		},
 	}
 
-	modifySRB := func(srb *v1alpha1.ServiceRoleBinding) {
-		srb.RoleRef.Name = "client-reader-role"
-	}
-
-	// TODO, allow name overrides
-	ad, configs := fixtures.CreateAthenzDomain(modifyAd, nil, modifySRB)
-	configs[0].Name = "client-reader-role"
-	configs[1].Name = "client-reader-role"
-	updateAD(t, ad)
-	expectedModelConfigs(t, configs)
+	adPair = fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, adPair.AD, []model.Config{adPair.SR, adPair.SRB}, true)
 	checkDeletion(t, originalConfigs)
-	deleteResources(t, configs)
+	deleteResources(t, []model.Config{adPair.SR, adPair.SRB})
 }
 
 // 2.5 Test updates with multiple namespaces / AD
+func TestMultipleAD(t *testing.T) {
+
+}

@@ -14,11 +14,14 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"fmt"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"strings"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -204,19 +207,31 @@ func getExpectedSRB() *v1alpha1.ServiceRoleBinding {
 	}
 }
 
+type AthenzDomainPair struct {
+	AD  *athenzdomain.AthenzDomain
+	SR  model.Config
+	SRB model.Config
+}
+
+type Override struct {
+	ModifyAD  func(signedDomain *zms.SignedDomain)
+	ModifySR  func(sr *v1alpha1.ServiceRole)
+	ModifySRB func(srb *v1alpha1.ServiceRoleBinding)
+}
+
 // CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(modifyAD func(signedDomain *zms.SignedDomain),
-	modifySR func(sr *v1alpha1.ServiceRole), modifySRB func(srb *v1alpha1.ServiceRoleBinding)) (*athenzdomain.AthenzDomain, []model.Config) {
+func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 
 	signedDomain := getFakeDomain()
+	domainName := string(signedDomain.Domain.Name)
 
-	if modifyAD != nil {
-		modifyAD(&signedDomain)
+	if o.ModifyAD != nil {
+		o.ModifyAD(&signedDomain)
 	}
 
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: string(signedDomain.Domain.Name),
+			Name: domainName,
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
 			SignedDomain: signedDomain,
@@ -224,19 +239,27 @@ func CreateAthenzDomain(modifyAD func(signedDomain *zms.SignedDomain),
 	}
 
 	sr := getExpectedSR()
-	if modifySR != nil {
-		modifySR(sr)
+	if o.ModifySR != nil {
+		o.ModifySR(sr)
 	}
+
+	ns := athenz.DomainToNamespace(domainName)
+	roleFQDN := string(signedDomain.Domain.Roles[0].Name)
+	roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
+	modelSR := common.NewConfig(model.ServiceRole.Type, ns, roleName, sr)
 
 	srb := getExpectedSRB()
-	if modifySRB != nil {
-		modifySRB(srb)
+	if o.ModifySRB != nil {
+		o.ModifySRB(srb)
 	}
+	srb.RoleRef.Name = modelSR.Name
+	modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srb)
 
-	modelSR := common.NewConfig(model.ServiceRole.Type, "athenz-domain", "client-writer-role", sr)
-	modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, "athenz-domain", "client-writer-role", srb)
-	expectedCRs := []model.Config{modelSR, modelSRB}
-	return ad, expectedCRs
+	return &AthenzDomainPair{
+		AD:  ad,
+		SR:  modelSR,
+		SRB: modelSRB,
+	}
 }
 
 // getFakeDomain provides a populated fake domain object
@@ -293,10 +316,14 @@ func getFakeDomain() zms.SignedDomain {
 }
 
 func CreateNamespace(clientset kubernetes.Interface) {
-	ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "athenz-domain"}}
-	_, err := clientset.CoreV1().Namespaces().Create(ns)
-	if err != nil {
-		log.Println(err)
-		return
+	for _, nsName := range []string{"athenz-domain", "athenz-domain-one", "athenz-domain-two"} {
+		ns := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName}}
+		_, err := clientset.CoreV1().Namespaces().Create(ns)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
 }
