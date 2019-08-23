@@ -12,7 +12,6 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"time"
 )
@@ -24,8 +23,51 @@ import (
 // TODO, make the integration go.mod point to the local authz controller as opposed to the version
 // TODO, add for loop to wait for athenz domain created
 // TODO, validate if role actually exists from policy / assertion
+// TODO, add back build tags?
+
+// TODO, make it work with update and check for actual resources
+func rolloutAndValidate(t *testing.T, ad *athenzdomain.AthenzDomain, input []model.Config, update bool) {
+	if update {
+		currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(ad.Name, v1.GetOptions{})
+		assert.Nil(t, err, "error should be nil")
+
+		ad.ResourceVersion = currentAD.ResourceVersion
+
+		_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(ad)
+		assert.Nil(t, err, "error should be nil")
+	} else {
+		_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
+		assert.Nil(t, err, "should be nil")
+	}
+
+	// TODO, might need deep equal check here for rollout
+	for {
+		index := 0
+		for _, curr := range input {
+			got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
+			if got != nil {
+				index++
+			}
+		}
+
+		if index == len(input) {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	for _, curr := range input {
+		got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
+		assert.NotNil(t, got, "not nil")
+		curr.ResourceVersion = got.ResourceVersion
+		curr.CreationTimestamp = got.CreationTimestamp
+		assert.Equal(t, curr, *got, "should be equal")
+	}
+}
 
 func expectedModelConfigs(t *testing.T, input []model.Config) {
+	// TODO, add wait until they are created
+	time.Sleep(time.Second * 5)
 	for _, curr := range input {
 		got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
 		assert.NotNil(t, got, "not nil")
@@ -63,10 +105,7 @@ func updateAD(t *testing.T, ad *athenzdomain.AthenzDomain) {
 // Output: SR / SRB created with matching rules and bindings
 func TestServiceRoleAndBindingCreation(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
+	rolloutAndValidate(t, ad, configs, false)
 	deleteResources(t, configs)
 }
 
@@ -76,11 +115,8 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(func(signedDomain *zms.SignedDomain) {
 		signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
 	}, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 10)
 	// TODO, remove srb
-	expectedModelConfigs(t, configs[0:1])
+	rolloutAndValidate(t, ad, configs[0:1], false)
 	deleteResources(t, configs[0:1])
 }
 
@@ -90,10 +126,7 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 // Output: SR / SRB updated with matching rules and bindings
 func TestUpdateRoleAssertion(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
+	rolloutAndValidate(t, ad, configs, false)
 
 	modifyAD := func(signedDomain *zms.SignedDomain) {
 		allow := zms.ALLOW
@@ -139,10 +172,7 @@ func TestUpdateRoleAssertion(t *testing.T) {
 // 2.1 Update existing assertion / roleMember / action
 func TestUpdateRoleMember(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
+	rolloutAndValidate(t, ad, configs, false)
 
 	modifyAD := func(signedDomain *zms.SignedDomain) {
 		roleMember := &zms.RoleMember{
@@ -180,10 +210,7 @@ func TestUpdateDeleteRoleMember(t *testing.T) {
 	}
 
 	ad, configs := fixtures.CreateAthenzDomain(modifyAD, nil, modifySRB)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
+	rolloutAndValidate(t, ad, configs, false)
 
 	ad, configs = fixtures.CreateAthenzDomain(nil, nil, nil)
 	updateAD(t, ad)
@@ -194,10 +221,7 @@ func TestUpdateDeleteRoleMember(t *testing.T) {
 // 2.3 Add unrelated AD changes (not conformant to RBAC)
 func TestUpdateUnrelatedADField(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, configs)
+	rolloutAndValidate(t, ad, configs, false)
 
 	modifyAd := func(signedDomain *zms.SignedDomain) {
 		signedDomain.KeyId = "col-env-1.2"
@@ -219,10 +243,7 @@ func checkDeletion(t *testing.T, configs []model.Config) {
 // 2.4 Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
 	ad, originalConfigs := fixtures.CreateAthenzDomain(nil, nil, nil)
-	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(ad)
-	assert.Nil(t, err, "should be nil")
-	time.Sleep(time.Second * 5)
-	expectedModelConfigs(t, originalConfigs)
+	rolloutAndValidate(t, ad, originalConfigs, false)
 
 	// TODO, figure out which role we're using
 	modifyAd := func(signedDomain *zms.SignedDomain) {
@@ -238,7 +259,6 @@ func TestUpdateRoleName(t *testing.T) {
 	ad, configs := fixtures.CreateAthenzDomain(modifyAd, nil, modifySRB)
 	configs[0].Name = "client-reader-role"
 	configs[1].Name = "client-reader-role"
-	spew.Dump(ad)
 	updateAD(t, ad)
 	expectedModelConfigs(t, configs)
 	checkDeletion(t, originalConfigs)

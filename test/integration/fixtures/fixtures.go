@@ -208,7 +208,6 @@ func getExpectedSRB() *v1alpha1.ServiceRoleBinding {
 func CreateAthenzDomain(modifyAD func(signedDomain *zms.SignedDomain),
 	modifySR func(sr *v1alpha1.ServiceRole), modifySRB func(srb *v1alpha1.ServiceRoleBinding)) (*athenzdomain.AthenzDomain, []model.Config) {
 
-	domain := "athenz.domain"
 	signedDomain := getFakeDomain()
 
 	if modifyAD != nil {
@@ -217,7 +216,7 @@ func CreateAthenzDomain(modifyAD func(signedDomain *zms.SignedDomain),
 
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: domain,
+			Name: string(signedDomain.Domain.Name),
 		},
 		Spec: athenzdomain.AthenzDomainSpec{
 			SignedDomain: signedDomain,
