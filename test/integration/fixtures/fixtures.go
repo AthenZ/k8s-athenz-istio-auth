@@ -208,9 +208,8 @@ func getExpectedSRB() *v1alpha1.ServiceRoleBinding {
 }
 
 type AthenzDomainPair struct {
-	AD  *athenzdomain.AthenzDomain
-	SR  model.Config
-	SRB model.Config
+	AD           *athenzdomain.AthenzDomain
+	ModelConfigs []model.Config
 }
 
 type Override struct {
@@ -221,7 +220,6 @@ type Override struct {
 
 // CreateAthenzDomain creates an athenz domain custom resource
 func CreateAthenzDomain(o *Override) *AthenzDomainPair {
-
 	signedDomain := getFakeDomain()
 	domainName := string(signedDomain.Domain.Name)
 
@@ -247,18 +245,22 @@ func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 	roleFQDN := string(signedDomain.Domain.Roles[0].Name)
 	roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
 	modelSR := common.NewConfig(model.ServiceRole.Type, ns, roleName, sr)
+	modelConfig := []model.Config{modelSR}
 
-	srb := getExpectedSRB()
-	if o.ModifySRB != nil {
-		o.ModifySRB(srb)
+	// TODO, make more dynamic
+	if len(signedDomain.Domain.Roles[0].RoleMembers) > 0 {
+		srb := getExpectedSRB()
+		if o.ModifySRB != nil {
+			o.ModifySRB(srb)
+		}
+		srb.RoleRef.Name = modelSR.Name
+		modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srb)
+		modelConfig = append(modelConfig, modelSRB)
 	}
-	srb.RoleRef.Name = modelSR.Name
-	modelSRB := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srb)
 
 	return &AthenzDomainPair{
-		AD:  ad,
-		SR:  modelSR,
-		SRB: modelSRB,
+		AD:           ad,
+		ModelConfigs: modelConfig,
 	}
 }
 
