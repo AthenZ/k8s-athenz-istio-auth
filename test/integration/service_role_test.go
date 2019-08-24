@@ -15,11 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TODO, figure out why the warnings disappeared
-// TODO, make the integration go.mod point to the local authz controller as opposed to the version
-// TODO, add informer / indexer for get?
-// TODO, go through document
-// TODO, go through each test and make sure it's working correctly
 type action int
 
 const (
@@ -102,9 +97,6 @@ func TestServiceRoleAndBindingCreation(t *testing.T) {
 
 // TODO, make sure srb is not there
 // 1.1 Create: Create SR only if there are no role members for SRB creation
-// Initial: No AD, SR, SRB existing
-// Input actions: Created AD with policies
-// Output: SR created with matching rules
 func TestServiceRoleOnlyCreation(t *testing.T) {
 	o := &fixtures.OverrideResources{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
@@ -117,9 +109,6 @@ func TestServiceRoleOnlyCreation(t *testing.T) {
 }
 
 // 2. Update: Update existing roles / policy
-// Initial: Existing AD, SR, SRB
-// Input Actions: Update AD with additional roles, policies
-// Output: SR / SRB updated with matching rules and bindings
 func TestUpdateRoleAssertion(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
@@ -318,7 +307,6 @@ func TestUpdateUnrelatedADField(t *testing.T) {
 	cleanup(t, r)
 }
 
-// STATUS: DONE
 // 2.4 Update: Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
