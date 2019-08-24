@@ -185,18 +185,18 @@ func CreateNamespaces(clientset kubernetes.Interface) error {
 	return nil
 }
 
-type AthenzDomainPair struct {
+type ExpectedResources struct {
 	AD           *athenzdomain.AthenzDomain
 	ModelConfigs []model.Config
 }
 
-type Override struct {
+type OverrideResources struct {
 	ModifyAD           func(signedDomain *zms.SignedDomain)
 	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
 // CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(o *Override) *AthenzDomainPair {
+func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
 	signedDomain := getDefaultSignedDomain()
 
 	if o.ModifyAD != nil {
@@ -236,7 +236,7 @@ func CreateAthenzDomain(o *Override) *AthenzDomainPair {
 		}
 	}
 
-	return &AthenzDomainPair{
+	return &ExpectedResources{
 		AD:           ad,
 		ModelConfigs: modelConfig,
 	}
