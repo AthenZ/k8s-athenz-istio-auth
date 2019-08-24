@@ -23,6 +23,7 @@ const (
 	noop
 )
 
+// TODO, update to potentially use timer here
 // rolloutAndValidate will create / update / noop the athenz domain resource and wait for the
 // associated service role / service role bindings to be created. Once these are rolled out,
 // they are validated against the expected output.

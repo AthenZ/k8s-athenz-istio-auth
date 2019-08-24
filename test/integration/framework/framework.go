@@ -5,6 +5,7 @@
 package framework
 
 import (
+	"flag"
 	"io/ioutil"
 	"net"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 
-	"flag"
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 )
