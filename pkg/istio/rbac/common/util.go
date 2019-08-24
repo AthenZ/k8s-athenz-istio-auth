@@ -51,7 +51,6 @@ func NewConfig(configType string, namespace string, name string, spec proto.Mess
 		Version:   schema.Version,
 		Namespace: namespace,
 		Name:      name,
-		Domain:    "",
 	}
 	return model.Config{
 		ConfigMeta: meta,
