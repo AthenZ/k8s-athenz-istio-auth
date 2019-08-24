@@ -1,17 +1,18 @@
 package integration
 
 import (
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/api/rbac/v1alpha1"
-	"reflect"
-	"time"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TODO, figure out why the warnings disappeared
@@ -71,21 +72,21 @@ func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
 func validateConfigs(t *testing.T, r *fixtures.ExpectedResources) {
 	for _, curr := range r.ModelConfigs {
 		got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
-		assert.NotNil(t, got, "not nil")
+		assert.NotNil(t, got, "istio custom resource should exist on the cluster")
 		curr.ResourceVersion = got.ResourceVersion
 		curr.CreationTimestamp = got.CreationTimestamp
-		assert.Equal(t, curr, *got, "should be equal")
+		assert.Equal(t, curr, *got, "istio resource should be equal to expected")
 	}
 }
 
 // cleanup will clean up the athenz domain and service role / service role binding objects on the cluster
 func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
-	assert.Nil(t, err, "nil")
+	assert.Nil(t, err, "athenz domain delete error should be nil")
 
 	for _, curr := range r.ModelConfigs {
 		err := framework.Global.IstioClientset.Delete(curr.Type, curr.Name, curr.Namespace)
-		assert.Nil(t, err, "nil")
+		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 }
 
@@ -335,7 +336,7 @@ func TestUpdateRoleName(t *testing.T) {
 	rolloutAndValidate(t, r, update)
 	for _, config := range r.ModelConfigs {
 		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
-		assert.Nil(t, c, "should be nil")
+		assert.Nil(t, c, "istio custom resource get should return nil")
 	}
 	cleanup(t, newR)
 }
@@ -383,7 +384,7 @@ func TestAthenzDomainDelete(t *testing.T) {
 	rolloutAndValidate(t, r, create)
 
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
-	assert.Nil(t, err, "not nil")
+	assert.Nil(t, err, "athenz domain delete error should be nil")
 
 	validateConfigs(t, r)
 }
@@ -395,7 +396,7 @@ func TestDeleteSRAndSRB(t *testing.T) {
 
 	for _, curr := range r.ModelConfigs {
 		err := framework.Global.IstioClientset.Delete(curr.Type, curr.Name, curr.Namespace)
-		assert.Nil(t, err, "nil")
+		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 
 	rolloutAndValidate(t, r, noop)
