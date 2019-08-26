@@ -14,6 +14,7 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type action int
@@ -39,28 +40,26 @@ func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
 		assert.Nil(t, err, "should be nil")
 	}
 
-	ticker := time.NewTicker(time.Second)
-	timeout := time.After(time.Second * 5)
-	for {
-		select {
-		case <-ticker.C:
-			index := 0
-			for _, curr := range r.ModelConfigs {
-				got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
-				if got != nil && reflect.DeepEqual(curr.Spec, got.Spec) {
-					index++
-				}
+	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
+		for _, curr := range r.ModelConfigs {
+			got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
+			if got == nil {
+				return false, nil
 			}
 
-			if index == len(r.ModelConfigs) {
-				validateConfigs(t, r)
-				return
+			if !reflect.DeepEqual(curr.Spec, got.Spec) {
+				return false, nil
 			}
-		case <-timeout:
-			t.Error("time out waiting for rollout for ad", r.AD.Name)
-			return
 		}
+
+		return true, nil
+	})
+
+	if err != nil {
+		t.Error("time out waiting for rollout for ad", r.AD.Name, "with error", err)
 	}
+
+	validateConfigs(t, r)
 }
 
 // validateConfigs will validate the service role / service role bindings on the
