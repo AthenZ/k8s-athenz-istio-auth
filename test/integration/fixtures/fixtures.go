@@ -22,6 +22,7 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -335,6 +336,33 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 		Subjects: []*v1alpha1.Subject{
 			{
 				User: "user/sa/foo",
+			},
+		},
+	}
+}
+
+// GetDefaultService returns a default onboarded service object
+func GetDefaultService() *v1.Service {
+	targetPort := intstr.IntOrString{
+		Type: intstr.Int,
+		IntVal: 80,
+	}
+
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-service",
+			Namespace: "athenz-domain",
+			Annotations: map[string]string{
+				"authz.istio.io/enabled": "true",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Name: "http",
+					Port: 80,
+					TargetPort: targetPort,
+				},
 			},
 		},
 	}
