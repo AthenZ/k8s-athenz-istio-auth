@@ -218,14 +218,18 @@ func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
 		},
 	}
 
-	var modelConfig []model.Config
+	if len(o.ModifySRAndSRBPair) == 0 {
+		o.ModifySRAndSRBPair = []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+			},
+		}
+	}
 
+	var modelConfig []model.Config
 	for i, fn := range o.ModifySRAndSRBPair {
 		srSpec := getDefaultServiceRole()
 		srbSpec := getDefaultServiceRoleBinding()
-		if o.ModifySRAndSRBPair != nil {
-			fn(srSpec, srbSpec)
-		}
+		fn(srSpec, srbSpec)
 
 		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
 		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))

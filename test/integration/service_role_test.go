@@ -12,6 +12,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 
 	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -23,7 +24,6 @@ const (
 	noop
 )
 
-// TODO, update to potentially use timer here
 // rolloutAndValidate will create / update / noop the athenz domain resource and wait for the
 // associated service role / service role bindings to be created. Once these are rolled out,
 // they are validated against the expected output.
@@ -39,28 +39,29 @@ func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
 		assert.Nil(t, err, "should be nil")
 	}
 
-	rolloutCount := 0
+	ticker := time.NewTicker(time.Second)
+	timeout := time.After(time.Second * 5)
+
 	for {
-		rolloutCount++
-		if rolloutCount > 5 {
-			t.Error("time out waiting for rollout for ad", r.AD.Name)
-		}
-
-		index := 0
-		for _, curr := range r.ModelConfigs {
-			got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
-			if got != nil && reflect.DeepEqual(got.Spec, curr.Spec) {
-				index++
+		select {
+		case <-ticker.C:
+			index := 0
+			for _, curr := range r.ModelConfigs {
+				got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
+				if got != nil && reflect.DeepEqual(curr.Spec, got.Spec) {
+					index++
+				}
 			}
-		}
 
-		if index == len(r.ModelConfigs) {
-			break
+			if index == len(r.ModelConfigs) {
+				validateConfigs(t, r)
+				return
+			}
+		case <-timeout:
+			t.Error("time out waiting for rollout for ad", r.AD.Name)
+			return
 		}
-		time.Sleep(time.Second)
 	}
-
-	validateConfigs(t, r)
 }
 
 // validateConfigs will validate the service role / service role bindings on the
@@ -86,31 +87,30 @@ func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 	}
 }
 
-// 1. Create: Create SR / SRB with valid AD
-// Initial: No AD, SR, SRB existing
-// Input actions: Create AD with roles and policies
-// Output: SR / SRB created with matching rules and bindings
-func TestServiceRoleAndBindingCreation(t *testing.T) {
+// 1.0 Create SR / SRB with valid AD
+func TestCreateServiceRoleAndBinding(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 	cleanup(t, r)
 }
 
-// TODO, make sure srb is not there
-// 1.1 Create: Create SR only if there are no role members for SRB creation
-func TestServiceRoleOnlyCreation(t *testing.T) {
+// 1.1 Create SR only if there are no role members for SRB creation
+func TestCreateServiceRoleOnly(t *testing.T) {
 	o := &fixtures.OverrideResources{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
+			signedDomain.Domain.Roles[0].Members = []zms.MemberName{}
 		},
 	}
 	r := fixtures.CreateAthenzDomain(o)
 	rolloutAndValidate(t, r, create)
+	srb := framework.Global.IstioClientset.Get(model.ServiceRoleBinding.Type, "client-writer-role", r.AD.Namespace)
+	assert.Nil(t, srb, "service role binding should not exist")
 	cleanup(t, r)
 }
 
-// 2. Update: Update existing roles / policy
-func TestUpdateRoleAssertion(t *testing.T) {
+// 2.0 Update existing role / policy
+func TestUpdateRoleAndPolicy(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
@@ -175,8 +175,8 @@ func TestUpdateRoleAssertion(t *testing.T) {
 	cleanup(t, r)
 }
 
-// 2.1 Update: Update existing assertion / role member / action
-func TestUpdateAssertionRoleMemberAction(t *testing.T) {
+// 2.1 Update existing assertion / role member / action
+func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
@@ -235,8 +235,8 @@ func TestUpdateAssertionRoleMemberAction(t *testing.T) {
 	cleanup(t, r)
 }
 
-// 2.2 Update: Delete existing roleMember / assertion
-func TestUpdateDeleteRoleMemberAssertion(t *testing.T) {
+// 2.2 Delete existing roleMember / assertion
+func TestUpdateDeleteRoleMemberAndAssertion(t *testing.T) {
 	o := &fixtures.OverrideResources{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			allow := zms.ALLOW
@@ -290,25 +290,25 @@ func TestUpdateDeleteRoleMemberAssertion(t *testing.T) {
 	cleanup(t, r)
 }
 
-// 2.3 Update: Add unrelated AD changes (not conformant to RBAC)
-func TestUpdateUnrelatedADField(t *testing.T) {
+// 2.3 Add unrelated AD changes (not conformant to RBAC)
+func TestUpdateUnrelatedAthenzDomainField(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	o := &fixtures.OverrideResources{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
+			signedDomain.Domain.Policies.KeyId = "col-env-1.2"
 			signedDomain.KeyId = "col-env-1.2"
 		},
 	}
 
 	newR := fixtures.CreateAthenzDomain(o)
-	r.AD = newR.AD
 
-	rolloutAndValidate(t, r, update)
+	rolloutAndValidate(t, newR, update)
 	cleanup(t, r)
 }
 
-// 2.4 Update: Update role name and expect the old SR/SRB to be deleted
+// 2.4 Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
@@ -321,8 +321,7 @@ func TestUpdateRoleName(t *testing.T) {
 	}
 
 	newR := fixtures.CreateAthenzDomain(o)
-	r.AD = newR.AD
-	rolloutAndValidate(t, r, update)
+	rolloutAndValidate(t, newR, update)
 	for _, config := range r.ModelConfigs {
 		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
 		assert.Nil(t, c, "istio custom resource get should return nil")
@@ -330,8 +329,8 @@ func TestUpdateRoleName(t *testing.T) {
 	cleanup(t, newR)
 }
 
-// 2.5 Update: Test updates with multiple namespaces / AD
-func TestMultipleAD(t *testing.T) {
+// 2.5 Test updates with multiple namespaces / AD
+func TestMultipleAthenzDomain(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
@@ -364,21 +363,22 @@ func TestMultipleAD(t *testing.T) {
 	cleanup(t, rThree)
 }
 
-// 3 Delete
-//Initial: Existing AD, SR, SRB
-//Input Actions: Delete entire AD
-//Output: SR / SRB deleted in namespace
+// 3.0 Delete athenz domain
+// TODO: currently the controller does not delete the service role / binding
+// due to checking for the existence of the athenz domain. This test assumes
+// these still exist. Update this test once the controller core logic changes.
 func TestAthenzDomainDelete(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
+	// TODO, update this logic once we update the controller logic
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
 	assert.Nil(t, err, "athenz domain delete error should be nil")
 
 	validateConfigs(t, r)
 }
 
-// 3.1 Delete: Delete SR / SRB if AD still exists, expect the controller to sync it back
+// 3.1 Delete SR / SRB if AD still exists, expect the controller to sync it back
 func TestDeleteSRAndSRB(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
