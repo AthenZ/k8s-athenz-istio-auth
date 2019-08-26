@@ -198,8 +198,9 @@ type OverrideResources struct {
 	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
-// CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
+// GetExpectedResources returns an expected resources object which contains the
+// athenz domain along with its service roles / bindings objects
+func GetExpectedResources(o *OverrideResources) *ExpectedResources {
 	signedDomain := getDefaultSignedDomain()
 
 	if o.ModifyAD != nil {

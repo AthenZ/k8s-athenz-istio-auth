@@ -87,7 +87,7 @@ func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 
 // 1.0 Create SR / SRB with valid AD
 func TestCreateServiceRoleAndBinding(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 	cleanup(t, r)
 }
@@ -100,7 +100,7 @@ func TestCreateServiceRoleOnly(t *testing.T) {
 			signedDomain.Domain.Roles[0].Members = []zms.MemberName{}
 		},
 	}
-	r := fixtures.CreateAthenzDomain(o)
+	r := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, r, create)
 	srb := framework.Global.IstioClientset.Get(model.ServiceRoleBinding.Type, "client-writer-role", r.AD.Namespace)
 	assert.Nil(t, srb, "service role binding should not exist")
@@ -109,7 +109,7 @@ func TestCreateServiceRoleOnly(t *testing.T) {
 
 // 2.0 Update existing role / policy
 func TestUpdateRoleAndPolicy(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	o := &fixtures.OverrideResources{
@@ -168,14 +168,14 @@ func TestUpdateRoleAndPolicy(t *testing.T) {
 		},
 	}
 
-	r = fixtures.CreateAthenzDomain(o)
+	r = fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, r, update)
 	cleanup(t, r)
 }
 
 // 2.1 Update existing assertion / role member / action
 func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	o := &fixtures.OverrideResources{
@@ -228,7 +228,7 @@ func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
 		},
 	}
 
-	r = fixtures.CreateAthenzDomain(o)
+	r = fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, r, update)
 	cleanup(t, r)
 }
@@ -280,17 +280,17 @@ func TestUpdateDeleteRoleMemberAndAssertion(t *testing.T) {
 		},
 	}
 
-	r := fixtures.CreateAthenzDomain(o)
+	r := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, r, create)
 
-	r = fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r = fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, update)
 	cleanup(t, r)
 }
 
 // 2.3 Add unrelated AD changes (not conformant to RBAC)
 func TestUpdateUnrelatedAthenzDomainField(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	o := &fixtures.OverrideResources{
@@ -300,14 +300,14 @@ func TestUpdateUnrelatedAthenzDomainField(t *testing.T) {
 		},
 	}
 
-	updatedR := fixtures.CreateAthenzDomain(o)
+	updatedR := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, updatedR, update)
 	cleanup(t, r)
 }
 
 // 2.4 Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	o := &fixtures.OverrideResources{
@@ -317,7 +317,7 @@ func TestUpdateRoleName(t *testing.T) {
 		},
 	}
 
-	updatedR := fixtures.CreateAthenzDomain(o)
+	updatedR := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, updatedR, update)
 	for _, config := range r.ModelConfigs {
 		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
@@ -328,7 +328,7 @@ func TestUpdateRoleName(t *testing.T) {
 
 // 2.5 Test updates with multiple namespaces / AD
 func TestMultipleAthenzDomain(t *testing.T) {
-	rOne := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	rOne := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, rOne, create)
 
 	o := &fixtures.OverrideResources{
@@ -340,7 +340,7 @@ func TestMultipleAthenzDomain(t *testing.T) {
 		},
 	}
 
-	rTwo := fixtures.CreateAthenzDomain(o)
+	rTwo := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, rTwo, create)
 
 	o = &fixtures.OverrideResources{
@@ -352,7 +352,7 @@ func TestMultipleAthenzDomain(t *testing.T) {
 		},
 	}
 
-	rThree := fixtures.CreateAthenzDomain(o)
+	rThree := fixtures.GetExpectedResources(o)
 	rolloutAndValidate(t, rThree, create)
 
 	cleanup(t, rOne)
@@ -365,7 +365,7 @@ func TestMultipleAthenzDomain(t *testing.T) {
 // due to checking for the existence of the athenz domain. This test assumes
 // these still exist. Update this test once the controller core logic changes.
 func TestAthenzDomainDelete(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
@@ -376,7 +376,7 @@ func TestAthenzDomainDelete(t *testing.T) {
 
 // 3.1 Delete SR / SRB if AD still exists, expect the controller to sync it back
 func TestDeleteSRAndSRB(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	r := fixtures.GetExpectedResources(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
 	for _, curr := range r.ModelConfigs {
