@@ -41,7 +41,6 @@ func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
 
 	ticker := time.NewTicker(time.Second)
 	timeout := time.After(time.Second * 5)
-
 	for {
 		select {
 		case <-ticker.C:
@@ -302,9 +301,8 @@ func TestUpdateUnrelatedAthenzDomainField(t *testing.T) {
 		},
 	}
 
-	newR := fixtures.CreateAthenzDomain(o)
-
-	rolloutAndValidate(t, newR, update)
+	updatedR := fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, updatedR, update)
 	cleanup(t, r)
 }
 
@@ -320,19 +318,19 @@ func TestUpdateRoleName(t *testing.T) {
 		},
 	}
 
-	newR := fixtures.CreateAthenzDomain(o)
-	rolloutAndValidate(t, newR, update)
+	updatedR := fixtures.CreateAthenzDomain(o)
+	rolloutAndValidate(t, updatedR, update)
 	for _, config := range r.ModelConfigs {
 		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
 		assert.Nil(t, c, "istio custom resource get should return nil")
 	}
-	cleanup(t, newR)
+	cleanup(t, updatedR)
 }
 
 // 2.5 Test updates with multiple namespaces / AD
 func TestMultipleAthenzDomain(t *testing.T) {
-	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
-	rolloutAndValidate(t, r, create)
+	rOne := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
+	rolloutAndValidate(t, rOne, create)
 
 	o := &fixtures.OverrideResources{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
@@ -358,7 +356,7 @@ func TestMultipleAthenzDomain(t *testing.T) {
 	rThree := fixtures.CreateAthenzDomain(o)
 	rolloutAndValidate(t, rThree, create)
 
-	cleanup(t, r)
+	cleanup(t, rOne)
 	cleanup(t, rTwo)
 	cleanup(t, rThree)
 }
@@ -371,7 +369,6 @@ func TestAthenzDomainDelete(t *testing.T) {
 	r := fixtures.CreateAthenzDomain(&fixtures.OverrideResources{})
 	rolloutAndValidate(t, r, create)
 
-	// TODO, update this logic once we update the controller logic
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
 	assert.Nil(t, err, "athenz domain delete error should be nil")
 

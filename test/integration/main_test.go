@@ -16,6 +16,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// TODO, remove sleep after merging with crd rollout code
 	time.Sleep(time.Second * 5)
 	exitCode := m.Run()
 	framework.Teardown()

@@ -81,9 +81,9 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 	return restConfig, stopCh, server.PrepareRun().NonBlockingRun(stopCh)
 }
 
-// TODO, initialize klog
 // Setup will run both etcd and api server together
 func Setup() error {
+	// initializes klog flags
 	flag.Parse()
 
 	etcd, err := runEtcd()
