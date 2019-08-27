@@ -5,7 +5,7 @@ env:
 go:
 - 1.12.x
 
-before_travis_install_go_dependencies:
+before_install:
 - echo 'foobar'
 
 script:
