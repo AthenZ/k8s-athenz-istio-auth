@@ -74,6 +74,7 @@ func validateConfigs(t *testing.T, r *fixtures.ExpectedResources) {
 	}
 }
 
+// TODO, rename add wrapper for list of deletes
 // cleanup will clean up the athenz domain and service role / service role binding objects on the cluster
 func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})

@@ -21,8 +21,8 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -341,16 +341,30 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 	}
 }
 
+func GetOverrideService(o []func(*v1.Service)) []*v1.Service {
+	var services []*v1.Service
+	if o != nil {
+		for _, fn := range o {
+			s := GetDefaultService()
+			fn(s)
+			services = append(services, s)
+		}
+	} else {
+		services = append(services, GetDefaultService())
+	}
+	return services
+}
+
 // GetDefaultService returns a default onboarded service object
 func GetDefaultService() *v1.Service {
 	targetPort := intstr.IntOrString{
-		Type: intstr.Int,
+		Type:   intstr.Int,
 		IntVal: 80,
 	}
 
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-service",
+			Name:      "test-service",
 			Namespace: "athenz-domain",
 			Annotations: map[string]string{
 				"authz.istio.io/enabled": "true",
@@ -359,8 +373,8 @@ func GetDefaultService() *v1.Service {
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
 				{
-					Name: "http",
-					Port: 80,
+					Name:       "http",
+					Port:       80,
 					TargetPort: targetPort,
 				},
 			},
