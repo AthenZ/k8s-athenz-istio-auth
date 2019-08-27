@@ -5,13 +5,16 @@ env:
 go:
 - 1.12.x
 
+before_travis_install_go_dependencies:
+- echo 'foobar'
+
 script:
 - pwd
 - cd $GOPATH/src
 - mkdir istio.io; cd istio.io
 - git clone https://github.com/istio/istio.git; cd istio; git checkout eec7a74473de
-- git show d71e7927b040e873bf3053cd4c840bd42010a57:./controller/client.go > client.go
 - cd pilot/pkg/config/kube/crd
+- git show d71e7927b040e873bf3053cd4c840bd42010a57:./controller/client.go > client.go
 - go build -v -race ./...
 - diff -u <(echo -n) <(gofmt -d .)
 - go vet ./...
