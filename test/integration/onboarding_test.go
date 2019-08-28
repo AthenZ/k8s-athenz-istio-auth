@@ -24,6 +24,14 @@ func rolloutAndValidateCRC(t *testing.T, services []*v1.Service, a action) {
 		createServices(t, services)
 	}
 
+	onboardedServices := 0
+	for _, s := range services {
+		enabled := s.Annotations["authz.istio.io/enabled"]
+		if enabled == "true" {
+			onboardedServices++
+		}
+	}
+
 	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
 		crc := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, "default", "")
 		if crc == nil {
@@ -34,7 +42,7 @@ func rolloutAndValidateCRC(t *testing.T, services []*v1.Service, a action) {
 			return false, nil
 		}
 
-		if len(clusterRbacConfig.Inclusion.Services) == len(services) {
+		if len(clusterRbacConfig.Inclusion.Services) == onboardedServices {
 			return true, nil
 		}
 
@@ -153,7 +161,7 @@ func TestDeleteCRC(t *testing.T) {
 	services := fixtures.GetOverrideService(nil)
 	rolloutAndValidateCRC(t, services, create)
 
-	err := framework.Global.K8sClientset.CoreV1().Services(s.Namespace).Delete(s.Name, &metav1.DeleteOptions{})
+	err := framework.Global.K8sClientset.CoreV1().Services(services[0].Namespace).Delete(services[0].Name, &metav1.DeleteOptions{})
 	assert.Nil(t, err, "")
 
 	rolloutAndValidateCRC(t, []*v1.Service{}, noop)
@@ -161,9 +169,7 @@ func TestDeleteCRC(t *testing.T) {
 
 // 3.1 Delete CRC if onboarded services still exist, expect the controller to sync it back
 func TestDeleteCRCIfServiceExists(t *testing.T) {
-	s := fixtures.GetDefaultService()
-	services := []*v1.Service{s}
-	createServices(t, services)
+	services := fixtures.GetOverrideService(nil)
 	rolloutAndValidateCRC(t, services, create)
 
 	err := framework.Global.IstioClientset.Delete(model.ClusterRbacConfig.Type, "default", "")
