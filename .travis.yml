@@ -10,7 +10,7 @@ before_install:
 - mkdir istio.io; cd istio.io
 - git clone https://github.com/istio/istio.git; cd istio; git checkout eec7a74473de
 - cd pilot/pkg/config/kube/crd
-- sed -i -e 's|Namespace(out.GetObjectMeta().Namespace)|NamespaceIfScoped(out.GetObjectMeta().Namespace, !schema.ClusterScoped)|g' -e 's|Namespace(namespace)|NamespaceIfScoped(namespace, !s.ClusterScoped)|' client.go
+- sed -i -e 's|Namespace(out.GetObjectMeta().Namespace)|NamespaceIfScoped(out.GetObjectMeta().Namespace, !schema.ClusterScoped)|g' -e 's|Namespace(namespace)|NamespaceIfScoped(namespace, !schema.ClusterScoped)|' client.go
 - cat client.go
 
 script:
