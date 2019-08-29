@@ -341,18 +341,39 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 	}
 }
 
-func GetOverrideService(o []func(*v1.Service)) []*v1.Service {
+type ExpectedServiceResources struct {
+	Services   []*v1.Service
+	ServiceDNS []string
+}
+
+// GetOverrideService returns an expected resources object which contains the
+// services along with a list of their full DNS names
+func GetOverrideService(o []func(*v1.Service)) *ExpectedServiceResources {
 	var services []*v1.Service
-	if o != nil {
-		for _, fn := range o {
-			s := GetDefaultService()
-			fn(s)
-			services = append(services, s)
+	var serviceDNS []string
+
+	if o == nil {
+		o = []func(*v1.Service){
+			func(s *v1.Service) {
+			},
 		}
-	} else {
-		services = append(services, GetDefaultService())
 	}
-	return services
+
+	for _, fn := range o {
+		s := GetDefaultService()
+		fn(s)
+		services = append(services, s)
+
+		enabled := s.Annotations["authz.istio.io/enabled"]
+		if enabled == "true" {
+			serviceDNS = append(serviceDNS, s.Name+"."+s.Namespace+".svc.cluster.local")
+		}
+	}
+
+	return &ExpectedServiceResources{
+		Services:   services,
+		ServiceDNS: serviceDNS,
+	}
 }
 
 // GetDefaultService returns a default onboarded service object
