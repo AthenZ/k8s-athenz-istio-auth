@@ -235,11 +235,13 @@ func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
 		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
 		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
 		sr := common.NewConfig(model.ServiceRole.Type, ns, roleName, srSpec)
+		sr.Domain = "svc.cluster.local"
 		modelConfig = append(modelConfig, sr)
 
 		if len(signedDomain.Domain.Roles[i].RoleMembers) > 0 {
 			srbSpec.RoleRef.Name = sr.Name
 			srb := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srbSpec)
+			srb.Domain = "svc.cluster.local"
 			modelConfig = append(modelConfig, srb)
 		}
 	}
