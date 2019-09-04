@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 )
 
@@ -17,9 +16,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	time.Sleep(time.Second * 15)
+	// TODO, remove sleep after merging with crd rollout code
+	time.Sleep(time.Second * 5)
 	exitCode := m.Run()
-	fixtures.CreateAthenzDomain(framework.Global.AthenzDomainClientset)
 	framework.Teardown()
 	os.Exit(exitCode)
 }

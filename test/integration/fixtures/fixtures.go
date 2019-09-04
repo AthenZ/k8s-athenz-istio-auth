@@ -5,16 +5,23 @@
 package fixtures
 
 import (
-	"log"
+	"fmt"
+	"strings"
 
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 
+	"istio.io/api/rbac/v1alpha1"
+	"istio.io/istio/pilot/pkg/model"
+
+	"k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // getAthenzDomainCrd returns the athenz domain custom resource definition
@@ -165,57 +172,97 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	return nil
 }
 
-// CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(clientset athenzdomainclientset.Interface) {
-	domain := "home.foo"
-	fakeDomain := getFakeDomain()
-	newCR := &athenzdomain.AthenzDomain{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AthenzDomain",
-			APIVersion: "athenz.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: domain,
-		},
-		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: fakeDomain,
-		},
-		Status: athenzdomain.AthenzDomainStatus{
-			Message: "",
-		},
+// CreateNamespaces creates testing namespaces
+func CreateNamespaces(clientset kubernetes.Interface) error {
+	for _, nsName := range []string{"athenz-domain", "athenz-domain-one", "athenz-domain-two"} {
+		ns := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
+			},
+		}
+		_, err := clientset.CoreV1().Namespaces().Create(ns)
+		if err != nil {
+			return err
+		}
 	}
-
-	list, err := clientset.AthenzV1().AthenzDomains().List(metav1.ListOptions{})
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println("list:", list)
-
-	created, err := clientset.AthenzV1().AthenzDomains().Create(newCR)
-	if err != nil {
-		log.Println("error creating athenz domain:", err)
-		return
-	}
-	log.Println("created cr:", created)
-
-	got, err := clientset.AthenzV1().AthenzDomains().Get(domain, metav1.GetOptions{})
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println("got cr:", got)
+	return nil
 }
 
-// getFakeDomain provides a populated fake domain object
-func getFakeDomain() zms.SignedDomain {
+type ExpectedResources struct {
+	AD           *athenzdomain.AthenzDomain
+	ModelConfigs []model.Config
+}
+
+type OverrideResources struct {
+	ModifyAD           func(signedDomain *zms.SignedDomain)
+	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
+}
+
+// GetExpectedResources returns an expected resources object which contains the
+// athenz domain along with its service roles / bindings objects
+func GetExpectedResources(o *OverrideResources) *ExpectedResources {
+	signedDomain := getDefaultSignedDomain()
+
+	if o == nil {
+		o = &OverrideResources{}
+	}
+
+	if o.ModifyAD != nil {
+		o.ModifyAD(&signedDomain)
+	}
+
+	domainName := string(signedDomain.Domain.Name)
+	ns := athenz.DomainToNamespace(domainName)
+
+	ad := &athenzdomain.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: domainName,
+		},
+		Spec: athenzdomain.AthenzDomainSpec{
+			SignedDomain: signedDomain,
+		},
+	}
+
+	if len(o.ModifySRAndSRBPair) == 0 {
+		o.ModifySRAndSRBPair = []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
+			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
+			},
+		}
+	}
+
+	var modelConfig []model.Config
+	for i, fn := range o.ModifySRAndSRBPair {
+		srSpec := getDefaultServiceRole()
+		srbSpec := getDefaultServiceRoleBinding()
+		fn(srSpec, srbSpec)
+
+		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
+		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
+		sr := common.NewConfig(model.ServiceRole.Type, ns, roleName, srSpec)
+		modelConfig = append(modelConfig, sr)
+
+		if len(signedDomain.Domain.Roles[i].RoleMembers) > 0 {
+			srbSpec.RoleRef.Name = sr.Name
+			srb := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srbSpec)
+			modelConfig = append(modelConfig, srb)
+		}
+	}
+
+	return &ExpectedResources{
+		AD:           ad,
+		ModelConfigs: modelConfig,
+	}
+}
+
+// getDefaultSignedDomain returns a default testing spec for a signed domain object
+func getDefaultSignedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2019-06-21T19:28:09.305Z")
 	if err != nil {
 		panic(err)
 	}
 
-	domainName := "home.foo"
+	domainName := "athenz.domain"
 	username := "user.foo"
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
@@ -228,14 +275,13 @@ func getFakeDomain() zms.SignedDomain {
 						{
 							Assertions: []*zms.Assertion{
 								{
-									Role:     domainName + ":role.admin",
-									Resource: domainName + ".test:*",
-									Action:   "*",
 									Effect:   &allow,
+									Action:   "put",
+									Role:     domainName + ":role.client-writer-role",
+									Resource: domainName + ":svc.my-service-name",
 								},
 							},
-							Modified: &timestamp,
-							Name:     zms.ResourceName(domainName + ":policy.admin"),
+							Name: zms.ResourceName(domainName + ":policy.admin"),
 						},
 					},
 				},
@@ -244,19 +290,13 @@ func getFakeDomain() zms.SignedDomain {
 			},
 			Roles: []*zms.Role{
 				{
-					Members:  []zms.MemberName{zms.MemberName(username)},
-					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.admin"),
+					Members: []zms.MemberName{zms.MemberName(username)},
+					Name:    zms.ResourceName(domainName + ":role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
 						},
 					},
-				},
-				{
-					Trust:    "parent.domain",
-					Modified: &timestamp,
-					Name:     zms.ResourceName(domainName + ":role.trust"),
 				},
 			},
 			Services: []*zms.ServiceIdentity{},
@@ -264,5 +304,43 @@ func getFakeDomain() zms.SignedDomain {
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
+	}
+}
+
+// getDefaultServiceRole returns a default testing spec for a service role object
+func getDefaultServiceRole() *v1alpha1.ServiceRole {
+	return &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Methods: []string{
+					"PUT",
+				},
+				Services: []string{common.WildCardAll},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key: common.ConstraintSvcKey,
+						Values: []string{
+							"my-service-name",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// getDefaultServiceRoleBinding returns a default testing spec for a service
+// role binding object
+func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
+	return &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Name: "client-writer-role",
+			Kind: common.ServiceRoleKind,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "user/sa/foo",
+			},
+		},
 	}
 }

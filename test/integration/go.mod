@@ -75,4 +75,5 @@ replace (
     k8s.io/kube-aggregator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
     k8s.io/kube-openapi => /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
     k8s.io/kubernetes => /home/travis/gopath/src/k8s.io/kubernetes
+    github.com/yahoo/k8s-athenz-istio-auth => /home/travis/gopath/src/github.com/yahoo/k8s-athenz-istio-auth
 )
