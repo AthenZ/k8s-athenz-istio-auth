@@ -128,7 +128,7 @@ func Setup() error {
 		model.ClusterRbacConfig,
 	}
 
-	istioClientset, err := crd.NewClient("", "", configDescriptor, "svc.cluster.local")
+	istioClientset, err := crd.NewClient("", "", configDescriptor, "")
 	if err != nil {
 		return err
 	}

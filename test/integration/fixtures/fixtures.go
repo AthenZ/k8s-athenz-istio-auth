@@ -199,9 +199,14 @@ type OverrideResources struct {
 	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
-// CreateAthenzDomain creates an athenz domain custom resource
-func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
+// GetExpectedResources returns an expected resources object which contains the
+// athenz domain along with its service roles / bindings objects
+func GetExpectedResources(o *OverrideResources) *ExpectedResources {
 	signedDomain := getDefaultSignedDomain()
+
+	if o == nil {
+		o = &OverrideResources{}
+	}
 
 	if o.ModifyAD != nil {
 		o.ModifyAD(&signedDomain)
@@ -235,13 +240,11 @@ func CreateAthenzDomain(o *OverrideResources) *ExpectedResources {
 		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
 		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
 		sr := common.NewConfig(model.ServiceRole.Type, ns, roleName, srSpec)
-		sr.Domain = "svc.cluster.local"
 		modelConfig = append(modelConfig, sr)
 
 		if len(signedDomain.Domain.Roles[i].RoleMembers) > 0 {
 			srbSpec.RoleRef.Name = sr.Name
 			srb := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srbSpec)
-			srb.Domain = "svc.cluster.local"
 			modelConfig = append(modelConfig, srb)
 		}
 	}
@@ -275,8 +278,8 @@ func getDefaultSignedDomain() zms.SignedDomain {
 								{
 									Effect:   &allow,
 									Action:   "put",
-									Role:     "athenz.domain:role.client-writer-role",
-									Resource: "athenz.domain:svc.my-service-name",
+									Role:     domainName + ":role.client-writer-role",
+									Resource: domainName + ":svc.my-service-name",
 								},
 							},
 							Name: zms.ResourceName(domainName + ":policy.admin"),
@@ -289,7 +292,7 @@ func getDefaultSignedDomain() zms.SignedDomain {
 			Roles: []*zms.Role{
 				{
 					Members: []zms.MemberName{zms.MemberName(username)},
-					Name:    zms.ResourceName("athenz.domain:role.client-writer-role"),
+					Name:    zms.ResourceName(domainName + ":role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
