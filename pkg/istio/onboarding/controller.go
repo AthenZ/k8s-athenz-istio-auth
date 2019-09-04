@@ -242,11 +242,11 @@ func (c *Controller) sync() error {
 
 	clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
 	if !ok {
-		return errors.New("Could not cast to ClusterRbacConfig")
+		return errors.New("Could not cast to cluster rbac config")
 	}
 
 	if clusterRbacConfig.Inclusion == nil || clusterRbacConfig.Mode != v1alpha1.RbacConfig_ON_WITH_INCLUSION {
-		log.Infoln("ClusterRBacConfig inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
+		log.Infoln("Cluster rbac config inclusion field is nil or ON_WITH_INCLUSION mode is not set, syncing...")
 		config := model.Config{
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
