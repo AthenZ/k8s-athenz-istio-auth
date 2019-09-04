@@ -88,15 +88,15 @@ func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 	assert.Nil(t, err, "athenz domain delete error should be nil")
 
 	modelConfigTypes := make(map[string]bool)
-	for _, curr := range r.ModelConfigs {
-		modelConfigTypes[curr.Type] = true
-		err := framework.Global.IstioClientset.Delete(curr.Type, curr.Name, curr.Namespace)
+	for _, modelConfig := range r.ModelConfigs {
+		modelConfigTypes[modelConfig.Type] = true
+		err := framework.Global.IstioClientset.Delete(modelConfig.Type, modelConfig.Name, modelConfig.Namespace)
 		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 
 	namespace := athenz.DomainToNamespace(r.AD.Name)
-	for key := range modelConfigTypes {
-		list, err := framework.Global.IstioClientset.List(key, namespace)
+	for modelConfigType := range modelConfigTypes {
+		list, err := framework.Global.IstioClientset.List(modelConfigType, namespace)
 		assert.Nil(t, err, "istio custom resource list error should be nil")
 		assert.Empty(t, list, "all configs must be deleted, list not empty")
 	}
