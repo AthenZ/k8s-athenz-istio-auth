@@ -134,7 +134,7 @@ func Setup() error {
 	}
 
 	log.InitLogger("", "debug")
-	c := controller.NewController("", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
+	c := controller.NewController("svc.cluster.local", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute)
 	go c.Run(stopCh)
 
 	Global = &Framework{

@@ -203,6 +203,10 @@ type OverrideResources struct {
 func GetExpectedResources(o *OverrideResources) *ExpectedResources {
 	signedDomain := getDefaultSignedDomain()
 
+	if o == nil {
+		o = &OverrideResources{}
+	}
+
 	if o.ModifyAD != nil {
 		o.ModifyAD(&signedDomain)
 	}
@@ -273,8 +277,8 @@ func getDefaultSignedDomain() zms.SignedDomain {
 								{
 									Effect:   &allow,
 									Action:   "put",
-									Role:     "athenz.domain:role.client-writer-role",
-									Resource: "athenz.domain:svc.my-service-name",
+									Role:     domainName + ":role.client-writer-role",
+									Resource: domainName + ":svc.my-service-name",
 								},
 							},
 							Name: zms.ResourceName(domainName + ":policy.admin"),
@@ -287,7 +291,7 @@ func getDefaultSignedDomain() zms.SignedDomain {
 			Roles: []*zms.Role{
 				{
 					Members: []zms.MemberName{zms.MemberName(username)},
-					Name:    zms.ResourceName("athenz.domain:role.client-writer-role"),
+					Name:    zms.ResourceName(domainName + ":role.client-writer-role"),
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: zms.MemberName(username),
