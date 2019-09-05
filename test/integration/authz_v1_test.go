@@ -27,10 +27,10 @@ const (
 	noop
 )
 
-// rolloutAndValidate will create / update / noop the athenz domain resource and wait for the
+// rolloutAndValidateRbac will create / update / delete / noop the athenz domain resource and wait for the
 // associated service role / service role bindings to be created. Once these are rolled out,
 // they are validated against the expected output.
-func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
+func rolloutAndValidateRbac(t *testing.T, r *fixtures.ExpectedRbac, a action) {
 	switch a {
 	case create:
 		_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(r.AD)
@@ -82,8 +82,8 @@ func rolloutAndValidate(t *testing.T, r *fixtures.ExpectedResources, a action) {
 	assert.ElementsMatch(t, modelConfigs, r.ModelConfigs, "expected list must match the configs on the cluster")
 }
 
-// cleanup will clean up the athenz domain and service role / service role binding objects on the cluster
-func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
+// cleanupRbac will clean up the athenz domain and service role / service role binding objects on the cluster
+func cleanupRbac(t *testing.T, r *fixtures.ExpectedRbac) {
 	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
 	assert.Nil(t, err, "athenz domain delete error should be nil")
 
@@ -104,33 +104,33 @@ func cleanup(t *testing.T, r *fixtures.ExpectedResources) {
 
 // 1.0 Create SR / SRB with valid AD
 func TestCreateServiceRoleAndBinding(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
-	cleanup(t, r)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
+	cleanupRbac(t, r)
 }
 
 // 1.1 Create SR only if there are no role members for SRB creation
 func TestCreateServiceRoleOnly(t *testing.T) {
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
 			signedDomain.Domain.Roles[0].Members = []zms.MemberName{}
 		},
 	}
-	r := fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, r, create)
 	namespace := athenz.DomainToNamespace(r.AD.Name)
 	srb := framework.Global.IstioClientset.Get(model.ServiceRoleBinding.Type, "client-writer-role", namespace)
 	assert.Nil(t, srb, "service role binding should not exist")
-	cleanup(t, r)
+	cleanupRbac(t, r)
 }
 
 // 2.0 Update existing domain with new role / policy
 func TestUpdateRoleAndPolicy(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
 
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			allow := zms.ALLOW
 			domainName := "athenz.domain"
@@ -186,17 +186,17 @@ func TestUpdateRoleAndPolicy(t *testing.T) {
 		},
 	}
 
-	r = fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, r, update)
-	cleanup(t, r)
+	r = fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, r, update)
+	cleanupRbac(t, r)
 }
 
 // 2.1 Update existing assertion / role member / action
 func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
 
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			allow := zms.ALLOW
 			domainName := "athenz.domain"
@@ -246,14 +246,14 @@ func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
 		},
 	}
 
-	r = fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, r, update)
-	cleanup(t, r)
+	r = fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, r, update)
+	cleanupRbac(t, r)
 }
 
 // 2.2 Delete existing roleMember / assertion
 func TestUpdateDeleteRoleMemberAndAssertion(t *testing.T) {
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			allow := zms.ALLOW
 			domainName := "athenz.domain"
@@ -298,58 +298,58 @@ func TestUpdateDeleteRoleMemberAndAssertion(t *testing.T) {
 		},
 	}
 
-	r := fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, r, create)
 
-	r = fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, update)
-	cleanup(t, r)
+	r = fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, update)
+	cleanupRbac(t, r)
 }
 
 // 2.3 Add unrelated AD changes (not conformant to RBAC)
 func TestUpdateUnrelatedAthenzDomainField(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
 
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Policies.KeyId = "col-env-1.2"
 			signedDomain.KeyId = "col-env-1.2"
 		},
 	}
 
-	updatedR := fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, updatedR, update)
-	cleanup(t, r)
+	updatedR := fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, updatedR, update)
+	cleanupRbac(t, r)
 }
 
 // 2.4 Update role name and expect the old SR/SRB to be deleted
 func TestUpdateRoleName(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
 
-	o := &fixtures.OverrideResources{
+	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain:role.client-reader-role"
 			signedDomain.Domain.Roles[0].Name = "athenz.domain:role.client-reader-role"
 		},
 	}
 
-	updatedR := fixtures.GetExpectedResources(o)
-	rolloutAndValidate(t, updatedR, update)
+	updatedR := fixtures.GetExpectedRbac(o)
+	rolloutAndValidateRbac(t, updatedR, update)
 	for _, config := range r.ModelConfigs {
 		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
 		assert.Nil(t, c, "istio custom resource get should return nil")
 	}
-	cleanup(t, updatedR)
+	cleanupRbac(t, updatedR)
 }
 
 // 2.5 Test updates with multiple namespaces / AD
 func TestMultipleAthenzDomain(t *testing.T) {
-	rOne := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, rOne, create)
+	rOne := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, rOne, create)
 
-	oTwo := &fixtures.OverrideResources{
+	oTwo := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Name = "athenz.domain.one"
 			signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain.one:role.client-reader-role"
@@ -358,10 +358,10 @@ func TestMultipleAthenzDomain(t *testing.T) {
 		},
 	}
 
-	rTwo := fixtures.GetExpectedResources(oTwo)
-	rolloutAndValidate(t, rTwo, create)
+	rTwo := fixtures.GetExpectedRbac(oTwo)
+	rolloutAndValidateRbac(t, rTwo, create)
 
-	oThree := &fixtures.OverrideResources{
+	oThree := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Name = "athenz.domain.two"
 			signedDomain.Domain.Policies.Contents.Policies[0].Assertions[0].Role = "athenz.domain.two:role.client-reader-role"
@@ -370,10 +370,10 @@ func TestMultipleAthenzDomain(t *testing.T) {
 		},
 	}
 
-	rThree := fixtures.GetExpectedResources(oThree)
-	rolloutAndValidate(t, rThree, create)
+	rThree := fixtures.GetExpectedRbac(oThree)
+	rolloutAndValidateRbac(t, rThree, create)
 
-	oOne := &fixtures.OverrideResources{
+	oOne := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			allow := zms.ALLOW
 			domainName := "athenz.domain"
@@ -418,12 +418,12 @@ func TestMultipleAthenzDomain(t *testing.T) {
 		},
 	}
 
-	rOne = fixtures.GetExpectedResources(oOne)
-	rolloutAndValidate(t, rOne, update)
+	rOne = fixtures.GetExpectedRbac(oOne)
+	rolloutAndValidateRbac(t, rOne, update)
 
-	cleanup(t, rOne)
-	cleanup(t, rTwo)
-	cleanup(t, rThree)
+	cleanupRbac(t, rOne)
+	cleanupRbac(t, rTwo)
+	cleanupRbac(t, rThree)
 }
 
 // 3.0 Delete athenz domain
@@ -431,20 +431,20 @@ func TestMultipleAthenzDomain(t *testing.T) {
 // due to checking for the existence of the athenz domain. This test assumes
 // these still exist. Update this test once the controller core logic changes.
 func TestAthenzDomainDelete(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
-	rolloutAndValidate(t, r, delete)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
+	rolloutAndValidateRbac(t, r, delete)
 }
 
 // 3.1 Delete SR / SRB if AD still exists, expect the controller to sync it back
 func TestDeleteSRAndSRB(t *testing.T) {
-	r := fixtures.GetExpectedResources(nil)
-	rolloutAndValidate(t, r, create)
+	r := fixtures.GetExpectedRbac(nil)
+	rolloutAndValidateRbac(t, r, create)
 
 	for _, curr := range r.ModelConfigs {
 		err := framework.Global.IstioClientset.Delete(curr.Type, curr.Name, curr.Namespace)
 		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 
-	rolloutAndValidate(t, r, noop)
+	rolloutAndValidateRbac(t, r, noop)
 }

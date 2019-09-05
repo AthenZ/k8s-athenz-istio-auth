@@ -189,23 +189,23 @@ func CreateNamespaces(clientset kubernetes.Interface) error {
 	return nil
 }
 
-type ExpectedResources struct {
+type ExpectedRbac struct {
 	AD           *athenzdomain.AthenzDomain
 	ModelConfigs []model.Config
 }
 
-type OverrideResources struct {
+type OverrideRbac struct {
 	ModifyAD           func(signedDomain *zms.SignedDomain)
 	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
-// GetExpectedResources returns an expected resources object which contains the
+// GetExpectedRbac returns an expected resources object which contains the
 // athenz domain along with its service roles / bindings objects
-func GetExpectedResources(o *OverrideResources) *ExpectedResources {
+func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
 	signedDomain := getDefaultSignedDomain()
 
 	if o == nil {
-		o = &OverrideResources{}
+		o = &OverrideRbac{}
 	}
 
 	if o.ModifyAD != nil {
@@ -249,7 +249,7 @@ func GetExpectedResources(o *OverrideResources) *ExpectedResources {
 		}
 	}
 
-	return &ExpectedResources{
+	return &ExpectedRbac{
 		AD:           ad,
 		ModelConfigs: modelConfig,
 	}
@@ -346,14 +346,14 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 	}
 }
 
-type ExpectedServiceResources struct {
+type ExpectedServices struct {
 	Services   []*v1.Service
 	ServiceDNS []string
 }
 
-// GetOverrideService returns an expected resources object which contains the
+// GetExpectedServices returns an expected resources object which contains the
 // services along with a list of their full DNS names
-func GetOverrideService(o []func(*v1.Service)) *ExpectedServiceResources {
+func GetExpectedServices(o []func(*v1.Service)) *ExpectedServices {
 	var services []*v1.Service
 	var serviceDNS []string
 
@@ -365,7 +365,7 @@ func GetOverrideService(o []func(*v1.Service)) *ExpectedServiceResources {
 	}
 
 	for _, fn := range o {
-		s := GetDefaultService()
+		s := getDefaultService()
 		fn(s)
 		services = append(services, s)
 
@@ -375,14 +375,14 @@ func GetOverrideService(o []func(*v1.Service)) *ExpectedServiceResources {
 		}
 	}
 
-	return &ExpectedServiceResources{
+	return &ExpectedServices{
 		Services:   services,
 		ServiceDNS: serviceDNS,
 	}
 }
 
-// GetDefaultService returns a default onboarded service object
-func GetDefaultService() *v1.Service {
+// getDefaultService returns a default onboarded service object
+func getDefaultService() *v1.Service {
 	targetPort := intstr.IntOrString{
 		Type:   intstr.Int,
 		IntVal: 80,
