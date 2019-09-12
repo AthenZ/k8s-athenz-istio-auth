@@ -10,6 +10,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/validation"
 )
 
 type v1 struct {
@@ -52,7 +53,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		}
 
 		// Validate the ServiceRole spec
-		err = model.ValidateServiceRole(roleName, m.Namespace, srSpec)
+		err = validation.ValidateServiceRole(roleName, m.Namespace, srSpec)
 		if err != nil {
 			log.Warningf("Error validating the converted ServiceRole spec: %s for role: %s", err.Error(), roleName)
 			continue
@@ -76,7 +77,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		}
 
 		// Validate the ServiceRoleBinding spec
-		err = model.ValidateServiceRoleBinding(roleName, m.Namespace, srbSpec)
+		err = validation.ValidateServiceRoleBinding(roleName, m.Namespace, srbSpec)
 		if err != nil {
 			log.Warningf("Error validating the converted ServiceRoleBinding spec: %s for role: %s", err.Error(), roleName)
 			continue

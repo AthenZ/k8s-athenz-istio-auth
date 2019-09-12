@@ -24,7 +24,7 @@ import (
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 
-	"istio.io/istio/pilot/pkg/config/kube/crd"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 )
 

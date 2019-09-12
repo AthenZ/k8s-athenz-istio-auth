@@ -16,6 +16,7 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/constants"
 )
 
 func init() {
@@ -144,7 +145,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRole.Type,
-						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRole.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
@@ -188,7 +189,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRoleBinding.Type,
-						Group:     model.ServiceRoleBinding.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRoleBinding.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
@@ -211,7 +212,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRole.Type,
-						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRole.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-writer-role",
@@ -258,7 +259,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRoleBinding.Type,
-						Group:     model.ServiceRoleBinding.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRoleBinding.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-writer-role",
@@ -319,7 +320,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRole.Type,
-						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRole.Version,
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
@@ -363,7 +364,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRoleBinding.Type,
-						Group:     model.ServiceRoleBinding.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRoleBinding.Version,
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
@@ -422,7 +423,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRole.Type,
-						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRole.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
@@ -495,7 +496,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				{
 					ConfigMeta: model.ConfigMeta{
 						Type:      model.ServiceRole.Type,
-						Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 						Version:   model.ServiceRole.Version,
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",

@@ -13,6 +13,7 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/constants"
 )
 
 func TestParseRoleFQDN(t *testing.T) {
@@ -142,7 +143,7 @@ func TestNewConfig(t *testing.T) {
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
 					Type:      model.ServiceRole.Type,
-					Group:     model.ServiceRole.Group + model.IstioAPIGroupDomain,
+					Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
 					Version:   model.ServiceRole.Version,
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
@@ -187,7 +188,7 @@ func TestNewConfig(t *testing.T) {
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
 					Type:      model.ServiceRoleBinding.Type,
-					Group:     model.ServiceRoleBinding.Group + model.IstioAPIGroupDomain,
+					Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
 					Version:   model.ServiceRoleBinding.Version,
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
