@@ -5,13 +5,6 @@ env:
 go:
 - 1.12.x
 
-before_install:
-- cd $GOPATH/src
-- mkdir istio.io; cd istio.io
-- git clone https://github.com/istio/istio.git; cd istio; git checkout eec7a74473de
-- cd pilot/pkg/config/kube/crd
-- sed -i -e 's|Namespace(out.GetObjectMeta().Namespace)|NamespaceIfScoped(out.GetObjectMeta().Namespace, !schema.ClusterScoped)|g' -e 's|Namespace(namespace)|NamespaceIfScoped(namespace, !schema.ClusterScoped)|' client.go
-
 script:
 - cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth
 - go build -v -race ./...
@@ -21,7 +14,7 @@ script:
 
 after_script:
 - cd $GOPATH/src; mkdir k8s.io; cd k8s.io
-- git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.11
+- git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.13
 - GO111MODULE=auto make WHAT=cmd/kube-apiserver
 - go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver; go mod init
@@ -31,6 +24,9 @@ after_script:
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator; go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/client-go; go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/api; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/cloud-provider; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/csi-api; go mod init
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap; go mod init
 - cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth/test/integration; go test -v ./...
 
 branches:

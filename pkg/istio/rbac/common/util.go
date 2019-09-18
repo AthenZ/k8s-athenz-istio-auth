@@ -11,6 +11,7 @@ import (
 	"github.com/yahoo/athenz/clients/go/zms"
 
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/constants"
 )
 
 // ParseRoleFQDN parses the Athenz role full name in the format <domainName>:role.<roleName> to roleName
@@ -47,7 +48,7 @@ func NewConfig(configType string, namespace string, name string, spec proto.Mess
 	}
 	meta := model.ConfigMeta{
 		Type:      schema.Type,
-		Group:     schema.Group + model.IstioAPIGroupDomain,
+		Group:     schema.Group + constants.IstioAPIGroupDomain,
 		Version:   schema.Version,
 		Namespace: namespace,
 		Name:      name,

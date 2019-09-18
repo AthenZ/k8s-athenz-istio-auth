@@ -15,6 +15,7 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/constants"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -24,7 +25,7 @@ const (
 	queueNumRetries        = 3
 	authzEnabled           = "true"
 	authzEnabledAnnotation = "authz.istio.io/enabled"
-	queueKey               = v1.NamespaceDefault + "/" + model.DefaultRbacConfigName
+	queueKey               = v1.NamespaceDefault + "/" + constants.DefaultRbacConfigName
 )
 
 type Controller struct {
@@ -149,8 +150,8 @@ func newClusterRbacConfig(services []string) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
 			Type:    model.ClusterRbacConfig.Type,
-			Name:    model.DefaultRbacConfigName,
-			Group:   model.ClusterRbacConfig.Group + model.IstioAPIGroupDomain,
+			Name:    constants.DefaultRbacConfigName,
+			Group:   model.ClusterRbacConfig.Group + constants.IstioAPIGroupDomain,
 			Version: model.ClusterRbacConfig.Version,
 		},
 		Spec: newClusterRbacSpec(services),
@@ -211,7 +212,7 @@ func (c *Controller) callbackHandler(err error, item *processor.Item) error {
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
-	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Infoln("Service list is empty and cluster rbac config does not exist, skipping sync...")
 		c.queue.Forget(queueKey)

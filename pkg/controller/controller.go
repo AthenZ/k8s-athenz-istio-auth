@@ -10,9 +10,9 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 
-	"istio.io/istio/pilot/pkg/config/kube/crd"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pilot/pkg/serviceregistry/kube"
+	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 
 	"k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -205,7 +205,7 @@ func (c *Controller) sync(key string) error {
 // 5. Athenz Domain shared index informer
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface, adResyncInterval, crcResyncInterval time.Duration) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-	configStoreCache := crd.NewController(istioClient, kube.ControllerOptions{})
+	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
 	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)

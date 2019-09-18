@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"istio.io/istio/pilot/pkg/config/kube/crd"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 
 	"k8s.io/client-go/kubernetes"
