@@ -10,6 +10,8 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/constants"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -33,7 +35,7 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 			return true, nil
 		}
 
-		config := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+		config := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
 		if config == nil {
 			return false, nil
 		}
@@ -52,7 +54,7 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 
 	assert.Nil(t, err, "time out waiting for rollout for crc with error")
 
-	crc := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	crc := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
 	if crc == nil && len(s.ServiceDNS) == 0 {
 		return
 	}
@@ -184,7 +186,7 @@ func TestDeleteCRCIfServiceExists(t *testing.T) {
 	s := fixtures.GetExpectedServices(nil)
 	rolloutAndValidateOnboarding(t, s, create)
 
-	err := framework.Global.IstioClientset.Delete(model.ClusterRbacConfig.Type, model.DefaultRbacConfigName, "")
+	err := framework.Global.IstioClientset.Delete(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
 	assert.Nil(t, err, "cluster rbac config delete error should be nil")
 
 	rolloutAndValidateOnboarding(t, s, noop)
