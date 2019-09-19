@@ -27,16 +27,14 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 	case update:
 		updateServices(t, s)
 	case delete:
-		cleanupServices(t, s)
+		deleteServices(t, s)
 	}
 
 	err := wait.PollImmediate(time.Second, time.Second*10, func() (bool, error) {
-		if len(s.ServiceDNS) == 0 {
-			return true, nil
-		}
-
 		config := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
-		if config == nil {
+		if config == nil && len(s.ServiceDNS) == 0 {
+			return true, nil
+		} else if config == nil {
 			return false, nil
 		}
 
@@ -86,8 +84,8 @@ func updateServices(t *testing.T, services *fixtures.ExpectedServices) {
 	}
 }
 
-// cleanupServices will iterate through the service list and delete each object
-func cleanupServices(t *testing.T, s *fixtures.ExpectedServices) {
+// deleteServices will iterate through the service list and delete each object
+func deleteServices(t *testing.T, s *fixtures.ExpectedServices) {
 	for _, service := range s.Services {
 		err := framework.Global.K8sClientset.CoreV1().Services(service.Namespace).Delete(service.Name, &metav1.DeleteOptions{})
 		assert.Nil(t, err, "service delete error should be nil")
@@ -100,7 +98,7 @@ func cleanupServices(t *testing.T, s *fixtures.ExpectedServices) {
 func TestCreateCRC(t *testing.T) {
 	s := fixtures.GetExpectedServices(nil)
 	rolloutAndValidateOnboarding(t, s, create)
-	cleanupServices(t, s)
+	deleteServices(t, s)
 }
 
 // 2.0 Update CRC with new service
@@ -123,8 +121,8 @@ func TestUpdateCRC(t *testing.T) {
 	sTwo.ServiceDNS = append(sTwo.ServiceDNS, sOne.ServiceDNS...)
 	rolloutAndValidateOnboarding(t, sTwo, create)
 
-	cleanupServices(t, sOne)
-	cleanupServices(t, sTwo)
+	deleteServices(t, sOne)
+	deleteServices(t, sTwo)
 }
 
 // 2.1 Test services in different namespace
@@ -144,7 +142,7 @@ func TestMultipleServices(t *testing.T) {
 
 	s := fixtures.GetExpectedServices(o)
 	rolloutAndValidateOnboarding(t, s, create)
-	cleanupServices(t, s)
+	deleteServices(t, s)
 }
 
 // 2.2 Test enable/disable annotation combinations
@@ -171,7 +169,7 @@ func TestEnableDisableAnnotation(t *testing.T) {
 	}
 	s = fixtures.GetExpectedServices(o)
 	rolloutAndValidateOnboarding(t, s, update)
-	cleanupServices(t, s)
+	deleteServices(t, s)
 }
 
 // 3.0 Delete crc if there are no more onboarded services
@@ -190,5 +188,5 @@ func TestDeleteCRCIfServiceExists(t *testing.T) {
 	assert.Nil(t, err, "cluster rbac config delete error should be nil")
 
 	rolloutAndValidateOnboarding(t, s, noop)
-	cleanupServices(t, s)
+	deleteServices(t, s)
 }
