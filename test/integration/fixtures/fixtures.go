@@ -21,6 +21,7 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -188,23 +189,23 @@ func CreateNamespaces(clientset kubernetes.Interface) error {
 	return nil
 }
 
-type ExpectedResources struct {
+type ExpectedRbac struct {
 	AD           *athenzdomain.AthenzDomain
 	ModelConfigs []model.Config
 }
 
-type OverrideResources struct {
+type OverrideRbac struct {
 	ModifyAD           func(signedDomain *zms.SignedDomain)
 	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
-// GetExpectedResources returns an expected resources object which contains the
+// GetExpectedRbac returns an expected resources object which contains the
 // athenz domain along with its service roles / bindings objects
-func GetExpectedResources(o *OverrideResources) *ExpectedResources {
+func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
 	signedDomain := getDefaultSignedDomain()
 
 	if o == nil {
-		o = &OverrideResources{}
+		o = &OverrideRbac{}
 	}
 
 	if o.ModifyAD != nil {
@@ -248,7 +249,7 @@ func GetExpectedResources(o *OverrideResources) *ExpectedResources {
 		}
 	}
 
-	return &ExpectedResources{
+	return &ExpectedRbac{
 		AD:           ad,
 		ModelConfigs: modelConfig,
 	}
@@ -340,6 +341,68 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 		Subjects: []*v1alpha1.Subject{
 			{
 				User: "user/sa/foo",
+			},
+		},
+	}
+}
+
+type ExpectedServices struct {
+	Services   []*v1.Service
+	ServiceDNS []string
+}
+
+// GetExpectedServices returns an expected resources object which contains the
+// services along with a list of their full DNS names
+func GetExpectedServices(o []func(*v1.Service)) *ExpectedServices {
+	var services []*v1.Service
+	var serviceDNS []string
+
+	if o == nil {
+		o = []func(*v1.Service){
+			func(s *v1.Service) {
+			},
+		}
+	}
+
+	for _, fn := range o {
+		s := getDefaultService()
+		fn(s)
+		services = append(services, s)
+
+		enabled := s.Annotations["authz.istio.io/enabled"]
+		if enabled == "true" {
+			serviceDNS = append(serviceDNS, s.Name+"."+s.Namespace+".svc.cluster.local")
+		}
+	}
+
+	return &ExpectedServices{
+		Services:   services,
+		ServiceDNS: serviceDNS,
+	}
+}
+
+// getDefaultService returns a default onboarded service object
+func getDefaultService() *v1.Service {
+	targetPort := intstr.IntOrString{
+		Type:   intstr.Int,
+		IntVal: 80,
+	}
+
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: "athenz-domain",
+			Annotations: map[string]string{
+				"authz.istio.io/enabled": "true",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Name:       "http",
+					Port:       80,
+					TargetPort: targetPort,
+				},
 			},
 		},
 	}
