@@ -1,9 +1,5 @@
-> A controller that polls Athenz to update the ServiceRole and ServiceRoleBinding Istio custom resources.
-
 # K8s-athenz-istio-auth [![Build Status](https://api.travis-ci.com/yahoo/k8s-athenz-istio-auth.svg?branch=master)](https://travis-ci.com/yahoo/k8s-athenz-istio-auth)
-K8s-athenz-istio-auth is a controller that polls Athenz to update the ServiceRole
-and ServiceRoleBinding Istio custom resources; it watches all namespaces and looks
-up the corresponding Athenz domains associated with them.
+K8s-athenz-istio-auth is a controller which converts Athenz domains to Istio RBAC custom resources.
 
 ## Table of Contents
 
@@ -110,6 +106,9 @@ and tested with the Istio 1.3 release.
 roles and policies in their domain. More information and setup steps can be found
 [here](http://www.athenz.io/). The authorization management service (ZMS) and its
 apis are primarily used for this controller.
+- **Athenz syncer** - The Athenz syncer must be fully deployed and syncing Athenz domain
+data into custom resources for this controller to watch. The repo can be found
+[here](https://github.com/yahoo/k8s-athenz-syncer).
 
 ### Setup
 Configuration files which must be applied to run k8s-athenz-istio-auth can be found
@@ -218,7 +217,7 @@ environments.
 This project was presented at the 2019 Service Mesh Day, the slides can be found
 [here](https://docs.google.com/presentation/d/1shgwkhGlIVa3uAMbgPzef3nnx2N_HA3cO3pcE0MQeQg/edit?usp=sharing).
 
-Video presentation of the talk:
+The video of the presentation can be found here:
 
 [![Service Mesh Day Talk](http://img.youtube.com/vi/HcGRou7X0UQ/0.jpg)](http://www.youtube.com/watch?v=HcGRou7X0UQ "Service Mesh Day Talk")
 
