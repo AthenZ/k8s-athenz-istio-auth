@@ -80,6 +80,18 @@ on the cluster, the Istio control plane will pick up the changes and distribute
 the Envoy configuration to the proxies bundled along with their corresponding
 applications which will start enforcing the newest authorization policies right away.
 
+
+### Upcoming features
+We currently have support to map the Athenz IAM to the Istio v1 RBAC which includes
+the service role and service role binding custom resource objects as of the Istio 1.3
+version. In the upcoming versions, we plan to support Istio v2 RBAC which will use
+the authorization policy custom resource.
+
+The code was also designed and written in such a way which allows any IAM provider
+to integrate with this controller to map to Istio RBAC. Currently, we support Athenz
+but Google Cloud, AWS, and Microsoft Azure IAM support can be integrated in the
+future as well.
+
 ## Install
 
 ### Prerequisite
@@ -202,10 +214,13 @@ methods are allowed for the production details environment on the /data path.
 users which are allowed access, an admin user and the product page production
 environments.
 
-## TODO
-Youtube link
-slides link
-add upcoming v2 section
+## References
+This project was presented at the 2019 Service Mesh Day, the slides can be found
+[here](https://docs.google.com/presentation/d/1shgwkhGlIVa3uAMbgPzef3nnx2N_HA3cO3pcE0MQeQg/edit?usp=sharing).
+
+Video presentation of the talk:
+
+[![Service Mesh Day Talk](http://img.youtube.com/vi/HcGRou7X0UQ/0.jpg)](http://www.youtube.com/watch?v=HcGRou7X0UQ "Service Mesh Day Talk")
 
 ## Contribute
 
