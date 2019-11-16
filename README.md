@@ -101,7 +101,7 @@ By turning this annotation to true, the controller will pick up the change and
 onboard the service onto the Istio cluster rbac config which will turn on
 authorization for the application.
 
-Warning: Please define the RBAC in Athenz before doing the onboarded or else
+**Warning**: Please define the RBAC in Athenz before doing the onboarded or else
 the service will start returning 403 forbidden.
 
 ### Controller Design
