@@ -12,7 +12,12 @@ K8s-athenz-istio-auth is a controller which converts Athenz domains to Istio RBA
 - [License](#license)
 
 ## Background
-We needed a controller that can dynamically fetch Athenz role / policy mappings
+[Athenz](https://www.athenz.io/) is an IAM provider which allows users to define
+role based access control (RBAC) for users and services. It also acts as a certificate
+authority (CA) by provisioning instances with unique identities through X.509 certificates.
+
+In order to adopt Athenz as an unified RBAC provider for managing access to Kubernetes
+services, we needed a controller that can dynamically fetch Athenz role / policy mappings
 and convert them to their corresponding Istio custom resources, so we built this
 controller to allow users to define RBAC through Athenz and have it integrate with
 the Istio world.
@@ -99,7 +104,10 @@ annotations:
 ```
 By turning this annotation to true, the controller will pick up the change and
 onboard the service onto the Istio cluster rbac config which will turn on
-authorization for the application.
+authorization for the application. The onboarding controller assumes that the
+ClusterRbacConfig is configured with ```Mode: v1alpha1.RbacConfig_ON_WITH_INCLUSION```
+and the services that require authorization enabled are added individually as FQDNs.
+The controller does not support any other mode at this point.
 
 **Warning**: Please define the RBAC in Athenz before doing the onboarded or else
 the service will start returning 403 forbidden.
