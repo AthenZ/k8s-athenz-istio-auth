@@ -181,6 +181,11 @@ func TestUpdateRoleAndPolicy(t *testing.T) {
 					{
 						User: "user/sa/bar",
 					},
+					{
+						Properties: map[string]string{
+							common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.bar",
+						},
+					},
 				}
 			},
 		},
@@ -241,6 +246,11 @@ func TestUpdateAssertionActionAndRoleMember(t *testing.T) {
 					{
 						User: "user/sa/bar",
 					},
+					{
+						Properties: map[string]string{
+							common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.bar",
+						},
+					},
 				}
 			},
 		},
@@ -293,6 +303,10 @@ func TestUpdateDeleteRoleMemberAndAssertion(t *testing.T) {
 				})
 				srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
 					User: "user/sa/bar",
+				}, &v1alpha1.Subject{
+					Properties: map[string]string{
+						common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.bar",
+					},
 				})
 			},
 		},
@@ -413,6 +427,10 @@ func TestMultipleAthenzDomain(t *testing.T) {
 				})
 				srb.Subjects = append(srb.Subjects, &v1alpha1.Subject{
 					User: "user/sa/bar",
+				}, &v1alpha1.Subject{
+					Properties: map[string]string{
+						common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.bar",
+					},
 				})
 			},
 		},

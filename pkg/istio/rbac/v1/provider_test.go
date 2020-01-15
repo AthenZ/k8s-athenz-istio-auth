@@ -204,7 +204,17 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								User: "some-client.domain/sa/client-serviceA",
 							},
 							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "some-client.domain.client-serviceA",
+								},
+							},
+							{
 								User: "user/sa/athenzuser",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
+								},
 							},
 						},
 					},
@@ -274,7 +284,17 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								User: "writer-domain/sa/client-power-service",
 							},
 							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "writer-domain.client-power-service",
+								},
+							},
+							{
 								User: "user/sa/developer",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.developer",
+								},
 							},
 						},
 					},
@@ -379,7 +399,17 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								User: "some-client.domain/sa/client-serviceA",
 							},
 							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "some-client.domain.client-serviceA",
+								},
+							},
+							{
 								User: "user/sa/athenzuser",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
+								},
 							},
 						},
 					},
@@ -625,6 +655,11 @@ func newSrb(ns, role string) model.Config {
 		Subjects: []*v1alpha1.Subject{
 			{
 				User: "test-user",
+			},
+			{
+				Properties: map[string]string{
+					common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.test-user",
+				},
 			},
 		},
 	}

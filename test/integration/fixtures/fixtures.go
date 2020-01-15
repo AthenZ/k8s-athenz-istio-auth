@@ -342,6 +342,11 @@ func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
 			{
 				User: "user/sa/foo",
 			},
+			{
+				Properties: map[string]string{
+					common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.foo",
+				},
+			},
 		},
 	}
 }

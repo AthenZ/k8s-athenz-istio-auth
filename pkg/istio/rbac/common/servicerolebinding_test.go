@@ -21,54 +21,61 @@ func init() {
 func TestParseMemberName(t *testing.T) {
 
 	cases := []struct {
-		test           string
-		member         *zms.RoleMember
-		expectedMember string
-		expectedErr    error
+		test                         string
+		member                       *zms.RoleMember
+		expectedSpiffeName           string
+		expectedRequestAuthPrincipal string
+		expectedErr                  error
 	}{
 		{
-			test:           "nil member",
-			member:         nil,
-			expectedMember: "",
-			expectedErr:    fmt.Errorf("member is nil"),
+			test:                         "nil member",
+			member:                       nil,
+			expectedSpiffeName:           "",
+			expectedRequestAuthPrincipal: "",
+			expectedErr:                  fmt.Errorf("member is nil"),
 		},
 		{
 			test: "valid service member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
 			},
-			expectedMember: "client.some-domain/sa/dep-svcA",
-			expectedErr:    nil,
+			expectedSpiffeName:           "client.some-domain/sa/dep-svcA",
+			expectedRequestAuthPrincipal: AthenzJwtPrefix + "client.some-domain.dep-svcA",
+			expectedErr:                  nil,
 		},
 		{
 			test: "valid user member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("user.somename"),
 			},
-			expectedMember: "user/sa/somename",
-			expectedErr:    nil,
+			expectedSpiffeName:           "user/sa/somename",
+			expectedRequestAuthPrincipal: AthenzJwtPrefix + "user.somename",
+			expectedErr:                  nil,
 		},
 		{
 			test: "valid wildcard member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("user.*"),
 			},
-			expectedMember: "*",
-			expectedErr:    nil,
+			expectedSpiffeName:           "*",
+			expectedRequestAuthPrincipal: "*",
+			expectedErr:                  nil,
 		},
 		{
 			test: "invalid member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("not-a-valid-principal"),
 			},
-			expectedMember: "",
-			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
+			expectedSpiffeName:           "",
+			expectedRequestAuthPrincipal: "",
+			expectedErr:                  fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
 		},
 	}
 
 	for _, c := range cases {
-		gotMember, gotErr := parseMemberName(c.member)
-		assert.Equal(t, c.expectedMember, gotMember, c.test)
+		gotSpiffeMember, gotRequestAuthPrincipal, gotErr := parseMemberName(c.member)
+		assert.Equal(t, c.expectedSpiffeName, gotSpiffeMember, c.test)
+		assert.Equal(t, c.expectedRequestAuthPrincipal, gotRequestAuthPrincipal, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
 }
@@ -117,7 +124,17 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						User: "athenz.domain/sa/client-serviceA",
 					},
 					{
+						Properties: map[string]string{
+							RequestAuthPrincipalProperty: AthenzJwtPrefix + "athenz.domain.client-serviceA",
+						},
+					},
+					{
 						User: "user/sa/athenzuser",
+					},
+					{
+						Properties: map[string]string{
+							RequestAuthPrincipalProperty: AthenzJwtPrefix + "user.athenzuser",
+						},
 					},
 				},
 			},
