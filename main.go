@@ -28,6 +28,7 @@ func main() {
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
+	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
 
@@ -78,7 +79,7 @@ func main() {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)

@@ -20,59 +20,82 @@ const (
 	RequestAuthPrincipalProperty = "request.auth.principal"
 )
 
-// parseMemberName parses the Athenz role member into a SPIFFE compliant name
-func parseMemberName(member *zms.RoleMember) (string, string, error) {
+// memberToSpiffe parses the Athenz role member into a SPIFFE compliant name.
+// Example: example.domain/sa/service
+func memberToSpiffe(member *zms.RoleMember) (string, error) {
 
 	if member == nil {
-		return "", "", fmt.Errorf("member is nil")
+		return "", fmt.Errorf("member is nil")
 	}
 
 	memberStr := string(member.MemberName)
 
 	// special condition: if member == 'user.*', return '*'
 	if memberStr == allUsers {
-		return WildCardAll, WildCardAll, nil
+		return WildCardAll, nil
 	}
 
-	spiffeName, err := PrincipalToSpiffe(memberStr)
-	if err != nil {
-		return "", "", err
+	return PrincipalToSpiffe(memberStr)
+}
+
+// memberToOriginSubject parses the Athenz role member into the request.auth.principal
+// jwt format. Example: athenz/example.domain.service
+func memberToOriginJwtSubject(member *zms.RoleMember) (string, error) {
+
+	if member == nil {
+		return "", fmt.Errorf("member is nil")
+	}
+
+	memberStr := string(member.MemberName)
+
+	// special condition: if member == 'user.*', return '*'
+	if memberStr == allUsers {
+		return WildCardAll, nil
 	}
 
 	requestAuthPrincipal := AthenzJwtPrefix + memberStr
-	return spiffeName, requestAuthPrincipal, nil
+	return requestAuthPrincipal, nil
 }
 
 // GetServiceRoleBindingSpec returns the ServiceRoleBindingSpec for a given Athenz role and its members
-func GetServiceRoleBindingSpec(k8sRoleName string, members []*zms.RoleMember) (*v1alpha1.ServiceRoleBinding, error) {
+func GetServiceRoleBindingSpec(k8sRoleName string, members []*zms.RoleMember, enableOriginJwtSubject bool) (*v1alpha1.ServiceRoleBinding, error) {
 
 	subjects := make([]*v1alpha1.Subject, 0)
 	for _, member := range members {
 
 		//TODO: handle member.Expiration for expired members, for now ignore expiration
 
-		spiffeName, requestAuthPrincipal, err := parseMemberName(member)
+		spiffeName, err := memberToSpiffe(member)
 		if err != nil {
 			log.Warningln(err.Error())
 			continue
 		}
 
-		// Spiffe and request auth principal subjects MUST be separate or else
-		// the user needs to provide both the certificate and the jwt token. If
-		// one subject is used, the source.principal and request.auth.principal
-		// in the envoy rbac is grouped together into one id principal array as
-		// opposed to being separated to allow either to go through.
 		spiffeSubject := &v1alpha1.Subject{
 			User: spiffeName,
 		}
+		subjects = append(subjects, spiffeSubject)
 
-		requestAuthPrincipalSubject := &v1alpha1.Subject{
-			Properties: map[string]string{
-				RequestAuthPrincipalProperty: requestAuthPrincipal,
-			},
+		if enableOriginJwtSubject {
+			originJwtName, err := memberToOriginJwtSubject(member)
+			if err != nil {
+				log.Warningln(err.Error())
+				continue
+			}
+
+			originJwtSubject := &v1alpha1.Subject{
+				Properties: map[string]string{
+					RequestAuthPrincipalProperty: originJwtName,
+				},
+			}
+
+			// Spiffe and request auth principal subjects MUST be separate or else
+			// the user needs to provide both the certificate and the jwt token. If
+			// one subject is used, the source.principal and request.auth.principal
+			// in the envoy rbac is grouped together into one id principal array as
+			// opposed to being separated to allow either to go through.
+			subjects = append(subjects, originJwtSubject)
 		}
-
-		subjects = append(subjects, spiffeSubject, requestAuthPrincipalSubject)
 	}
 
 	if len(subjects) == 0 {

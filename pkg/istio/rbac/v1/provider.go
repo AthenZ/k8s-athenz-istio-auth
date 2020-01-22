@@ -13,12 +13,15 @@ import (
 	"istio.io/istio/pkg/config/validation"
 )
 
+// implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
 type v1 struct {
-	// implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
+	enableOriginJwtSubject bool
 }
 
-func NewProvider() rbac.Provider {
-	return &v1{}
+func NewProvider(enableOriginJwtSubject bool) rbac.Provider {
+	return &v1{
+		enableOriginJwtSubject: enableOriginJwtSubject,
+	}
 }
 
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into the list of Istio Authorization V1 specific
@@ -70,7 +73,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srbSpec, err := common.GetServiceRoleBindingSpec(k8sRoleName, roleMembers)
+		srbSpec, err := common.GetServiceRoleBindingSpec(k8sRoleName, roleMembers, p.enableOriginJwtSubject)
 		if err != nil {
 			log.Debugf("Error converting the members for role: %s to a ServiceRoleBinding: %s", roleName, err.Error())
 			continue
