@@ -203,7 +203,8 @@ func (c *Controller) sync(key string) error {
 //    cluster rbac config object based on a service label
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
-func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface, adResyncInterval, crcResyncInterval time.Duration) *Controller {
+func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
+	adResyncInterval, crcResyncInterval time.Duration, enableOriginJwtSubject bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -219,7 +220,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		configStoreCache:     configStoreCache,
 		crcController:        crcController,
 		processor:            processor,
-		rbacProvider:         rbacv1.NewProvider(),
+		rbacProvider:         rbacv1.NewProvider(enableOriginJwtSubject),
 		queue:                queue,
 		adResyncInterval:     adResyncInterval,
 	}

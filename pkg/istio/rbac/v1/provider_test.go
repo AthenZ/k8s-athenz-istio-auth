@@ -27,14 +27,16 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 
 	allow := zms.ALLOW
 	cases := []struct {
-		test            string
-		model           athenz.Model
-		expectedConfigs []model.Config
+		test                   string
+		model                  athenz.Model
+		enableOriginJwtSubject bool
+		expectedConfigs        []model.Config
 	}{
 		{
-			test:            "empty model",
-			model:           athenz.Model{},
-			expectedConfigs: []model.Config{},
+			test:                   "empty model",
+			model:                  athenz.Model{},
+			enableOriginJwtSubject: true,
+			expectedConfigs:        []model.Config{},
 		},
 		{
 			test: "valid model with policies and members",
@@ -141,6 +143,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 					},
 				},
 			},
+			enableOriginJwtSubject: true,
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
@@ -204,7 +207,17 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								User: "some-client.domain/sa/client-serviceA",
 							},
 							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "some-client.domain.client-serviceA",
+								},
+							},
+							{
 								User: "user/sa/athenzuser",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
+								},
 							},
 						},
 					},
@@ -274,7 +287,17 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								User: "writer-domain/sa/client-power-service",
 							},
 							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "writer-domain.client-power-service",
+								},
+							},
+							{
 								User: "user/sa/developer",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.developer",
+								},
 							},
 						},
 					},
@@ -316,6 +339,123 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 					},
 				},
 			},
+			enableOriginJwtSubject: true,
+			expectedConfigs: []model.Config{
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRole.Type,
+						Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
+						Version:   model.ServiceRole.Version,
+						Namespace: "athenz-domain",
+						Name:      "client--reader--role",
+					},
+					Spec: &v1alpha1.ServiceRole{
+						Rules: []*v1alpha1.AccessRule{
+							{
+								Methods: []string{
+									"GET",
+								},
+								Paths: []string{
+									"/protected/path",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-service-name",
+										},
+									},
+								},
+							},
+							{
+								Methods: []string{
+									"HEAD",
+								},
+								Services: []string{common.WildCardAll},
+								Constraints: []*v1alpha1.AccessRule_Constraint{
+									{
+										Key: common.ConstraintSvcKey,
+										Values: []string{
+											"my-another-service-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRoleBinding.Type,
+						Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
+						Version:   model.ServiceRoleBinding.Version,
+						Namespace: "athenz-domain",
+						Name:      "client--reader--role",
+					},
+					Spec: &v1alpha1.ServiceRoleBinding{
+						RoleRef: &v1alpha1.RoleRef{
+							Name: "client--reader--role",
+							Kind: common.ServiceRoleKind,
+						},
+						Subjects: []*v1alpha1.Subject{
+							{
+								User: "some-client.domain/sa/client-serviceA",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "some-client.domain.client-serviceA",
+								},
+							},
+							{
+								User: "user/sa/athenzuser",
+							},
+							{
+								Properties: map[string]string{
+									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			test: "valid model with policies and members and role name with underscore with enableOriginJwtSubject flag set to false",
+			model: athenz.Model{
+				Name:      "athenz.domain",
+				Namespace: "athenz-domain",
+				Roles: []zms.ResourceName{
+					zms.ResourceName("athenz.domain:role.client_reader_role"),
+				},
+				Rules: map[zms.ResourceName][]*zms.Assertion{
+					zms.ResourceName("athenz.domain:role.client_reader_role"): {
+						{
+							Effect:   &allow,
+							Action:   "get",
+							Role:     "athenz.domain:role.client_reader_role",
+							Resource: "athenz.domain:svc.my-service-name:/protected/path",
+						},
+						{
+							Effect:   &allow,
+							Action:   "HEAD",
+							Role:     "athenz.domain:role.client_reader_role",
+							Resource: "athenz.domain:svc.my-another-service-name",
+						},
+					},
+				},
+				Members: map[zms.ResourceName][]*zms.RoleMember{
+					zms.ResourceName("athenz.domain:role.client_reader_role"): {
+						{
+							MemberName: "some-client.domain.client-serviceA",
+						},
+						{
+							MemberName: "user.athenzuser",
+						},
+					},
+				},
+			},
+			enableOriginJwtSubject: false,
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
@@ -419,6 +559,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 					},
 				},
 			},
+			enableOriginJwtSubject: true,
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
@@ -492,6 +633,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				Members: map[zms.ResourceName][]*zms.RoleMember{},
 			},
+			enableOriginJwtSubject: true,
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
@@ -575,13 +717,14 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 					},
 				},
 			},
-			expectedConfigs: []model.Config{},
+			enableOriginJwtSubject: true,
+			expectedConfigs:        []model.Config{},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.test, func(t *testing.T) {
-			p := NewProvider()
+			p := NewProvider(c.enableOriginJwtSubject)
 			gotConfigs := p.ConvertAthenzModelIntoIstioRbac(c.model)
 			assert.EqualValues(t, c.expectedConfigs, gotConfigs, c.test)
 		})
@@ -625,6 +768,11 @@ func newSrb(ns, role string) model.Config {
 		Subjects: []*v1alpha1.Subject{
 			{
 				User: "test-user",
+			},
+			{
+				Properties: map[string]string{
+					common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.test-user",
+				},
 			},
 		},
 	}
@@ -682,7 +830,7 @@ func TestGetCurrentIstioRbac(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.test, func(t *testing.T) {
-			p := NewProvider()
+			p := NewProvider(true)
 			gotConfigs := p.GetCurrentIstioRbac(c.input.m, c.input.csc)
 			assert.EqualValues(t, c.expected, gotConfigs, c.test)
 		})

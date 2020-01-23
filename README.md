@@ -247,6 +247,7 @@ dns-suffix (default: svc.cluster.local): dns suffix used for service role target
 kubeconfig (default: ""): (optional) absolute path to the kubeconfig file
 ad-resync-interval (default: 1h): athenz domain resync interval
 crc-resync-interval (default: 1h): cluster rbac config resync interval
+enable-origin-jwt-subject (default: true): enable adding origin jwt subject to service role binding
 log-file (default: /var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log): log file location
 log-level (default: info): logging level
 ```
