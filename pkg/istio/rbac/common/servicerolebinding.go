@@ -58,7 +58,7 @@ func memberToOriginJwtSubject(member *zms.RoleMember) (string, error) {
 }
 
 // GetServiceRoleBindingSpec returns the ServiceRoleBindingSpec for a given Athenz role and its members
-func GetServiceRoleBindingSpec(k8sRoleName string, members []*zms.RoleMember, enableOriginJwtSubject bool) (*v1alpha1.ServiceRoleBinding, error) {
+func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRoleName string, members []*zms.RoleMember, enableOriginJwtSubject bool) (*v1alpha1.ServiceRoleBinding, error) {
 
 	subjects := make([]*v1alpha1.Subject, 0)
 	for _, member := range members {
@@ -99,8 +99,17 @@ func GetServiceRoleBindingSpec(k8sRoleName string, members []*zms.RoleMember, en
 	}
 
 	if len(subjects) == 0 {
-		return nil, fmt.Errorf("no subjects found for the ServiceRoleBinding: %s", k8sRoleName)
+		log.Warningln("no subjects found for the ServiceRoleBinding: %s", k8sRoleName)
 	}
+
+	//add role spiffee for role certificate
+	if athenzDomainName == "" || roleName == "" {
+		return nil, fmt.Errorf("empty string found in athenzDomainName: %s and roleName: %s", athenzDomainName, roleName)
+	}
+	spiffeSubject := &v1alpha1.Subject{
+		User: fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName),
+	}
+	subjects = append(subjects, spiffeSubject)
 
 	roleRef := &v1alpha1.RoleRef{
 		Kind: ServiceRoleKind,
