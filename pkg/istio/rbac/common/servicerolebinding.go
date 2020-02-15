@@ -38,8 +38,6 @@ func memberToSpiffe(member *zms.RoleMember) (string, error) {
 	return PrincipalToSpiffe(memberStr)
 }
 
-fun
-
 // memberToOriginSubject parses the Athenz role member into the request.auth.principal
 // jwt format. Example: athenz/example.domain.service
 func memberToOriginJwtSubject(member *zms.RoleMember) (string, error) {

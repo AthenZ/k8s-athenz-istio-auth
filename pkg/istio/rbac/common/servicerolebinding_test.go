@@ -145,7 +145,19 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 				enableOriginJwtSubject: true,
 			},
 			expectedSpec: nil,
-			expectedErr:  fmt.Errorf("empty string found in athenzDomainName:  and roleName: "),
+			expectedErr:  fmt.Errorf("athenzDomainName is empty"),
+		},
+		{
+			test: "empty roleName args",
+			input: input{
+				athenzDomainName:       "abc",
+				roleName:               "",
+				k8sRoleName:            "",
+				members:                nil,
+				enableOriginJwtSubject: true,
+			},
+			expectedSpec: nil,
+			expectedErr:  fmt.Errorf("roleName is empty"),
 		},
 		{
 			test: "valid role member spec",
