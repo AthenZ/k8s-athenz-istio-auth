@@ -151,7 +151,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 			test: "valid role member spec",
 			input: input{
 				athenzDomainName: "athenz.domain",
-				roleName:         "rolename",
+				roleName:         "client-reader_role",
 				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
@@ -186,7 +186,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						},
 					},
 					{
-						User: "athenz.domain/ra/rolename",
+						User: "athenz.domain/ra/client-reader_role",
 					},
 				},
 			},
@@ -196,7 +196,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 			test: "invalid role member spec",
 			input: input{
 				athenzDomainName: "athenz.domain",
-				roleName:         "rolename",
+				roleName:         "client-reader_role",
 				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
@@ -215,7 +215,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 				},
 				Subjects: []*v1alpha1.Subject{
 					{
-						User: "athenz.domain/ra/rolename",
+						User: "athenz.domain/ra/client-reader_role",
 					},
 				},
 			},
@@ -225,7 +225,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 			test: "test valid role member spec with enableOriginJwtSubject set to false",
 			input: input{
 				athenzDomainName: "athenz.domain",
-				roleName:         "rolename",
+				roleName:         "client-reader_role",
 				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
@@ -250,7 +250,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						User: "user/sa/athenzuser",
 					},
 					{
-						User: "athenz.domain/ra/rolename",
+						User: "athenz.domain/ra/client-reader_role",
 					},
 				},
 			},
