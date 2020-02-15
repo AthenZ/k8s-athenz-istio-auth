@@ -219,6 +219,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
 								},
 							},
+							{
+								User: "athenz.domain/ra/client-reader-role",
+							},
 						},
 					},
 				},
@@ -298,6 +301,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 								Properties: map[string]string{
 									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.developer",
 								},
+							},
+							{
+								User: "athenz.domain/ra/client-writer-role",
 							},
 						},
 					},
@@ -415,6 +421,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 									common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.athenzuser",
 								},
 							},
+							{
+								User: "athenz.domain/ra/client_reader_role",
+							},
 						},
 					},
 				},
@@ -521,6 +530,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 							{
 								User: "user/sa/athenzuser",
 							},
+							{
+								User: "athenz.domain/ra/client_reader_role",
+							},
 						},
 					},
 				},
@@ -601,6 +613,26 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 										},
 									},
 								},
+							},
+						},
+					},
+				},
+				{
+					ConfigMeta: model.ConfigMeta{
+						Type:      model.ServiceRoleBinding.Type,
+						Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
+						Version:   model.ServiceRoleBinding.Version,
+						Namespace: "athenz-domain",
+						Name:      "client-reader-role",
+					},
+					Spec: &v1alpha1.ServiceRoleBinding{
+						RoleRef: &v1alpha1.RoleRef{
+							Name: "client-reader-role",
+							Kind: common.ServiceRoleKind,
+						},
+						Subjects: []*v1alpha1.Subject{
+							{
+								User: "athenz.domain/ra/client-reader-role",
 							},
 						},
 					},
