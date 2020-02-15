@@ -38,6 +38,8 @@ func memberToSpiffe(member *zms.RoleMember) (string, error) {
 	return PrincipalToSpiffe(memberStr)
 }
 
+fun
+
 // memberToOriginSubject parses the Athenz role member into the request.auth.principal
 // jwt format. Example: athenz/example.domain.service
 func memberToOriginJwtSubject(member *zms.RoleMember) (string, error) {
@@ -103,11 +105,13 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 	}
 
 	//add role spiffee for role certificate
-	if athenzDomainName == "" || roleName == "" {
-		return nil, fmt.Errorf("empty string found in athenzDomainName: %s and roleName: %s", athenzDomainName, roleName)
+	roleSpiffeName, err := RoleToSpiffe(athenzDomainName, roleName)
+	if err != nil {
+		return nil, err
 	}
+
 	spiffeSubject := &v1alpha1.Subject{
-		User: fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName),
+		User: roleSpiffeName,
 	}
 	subjects = append(subjects, spiffeSubject)
 
