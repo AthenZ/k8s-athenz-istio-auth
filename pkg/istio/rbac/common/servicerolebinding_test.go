@@ -123,6 +123,8 @@ func TestMemberToOriginJwtSubject(t *testing.T) {
 func TestGetServiceRoleBindingSpec(t *testing.T) {
 
 	type input struct {
+		athenzDomainName       string
+		roleName               string
 		k8sRoleName            string
 		members                []*zms.RoleMember
 		enableOriginJwtSubject bool
@@ -136,17 +138,33 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "empty args",
 			input: input{
+				athenzDomainName:       "",
+				roleName:               "",
 				k8sRoleName:            "",
 				members:                nil,
 				enableOriginJwtSubject: true,
 			},
 			expectedSpec: nil,
-			expectedErr:  fmt.Errorf("no subjects found for the ServiceRoleBinding: "),
+			expectedErr:  fmt.Errorf("athenzDomainName is empty"),
+		},
+		{
+			test: "empty roleName args",
+			input: input{
+				athenzDomainName:       "abc",
+				roleName:               "",
+				k8sRoleName:            "",
+				members:                nil,
+				enableOriginJwtSubject: true,
+			},
+			expectedSpec: nil,
+			expectedErr:  fmt.Errorf("roleName is empty"),
 		},
 		{
 			test: "valid role member spec",
 			input: input{
-				k8sRoleName: "client-reader--role",
+				athenzDomainName: "athenz.domain",
+				roleName:         "client-reader_role",
+				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
 						MemberName: "athenz.domain.client-serviceA",
@@ -179,6 +197,9 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 							RequestAuthPrincipalProperty: AthenzJwtPrefix + "user.athenzuser",
 						},
 					},
+					{
+						User: "athenz.domain/ra/client-reader_role",
+					},
 				},
 			},
 			expectedErr: nil,
@@ -186,7 +207,9 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "invalid role member spec",
 			input: input{
-				k8sRoleName: "client-reader-role",
+				athenzDomainName: "athenz.domain",
+				roleName:         "client-reader_role",
+				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
 						MemberName: "not-a-valid-user",
@@ -197,13 +220,25 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 				},
 				enableOriginJwtSubject: true,
 			},
-			expectedSpec: nil,
-			expectedErr:  fmt.Errorf("no subjects found for the ServiceRoleBinding: client-reader-role"),
+			expectedSpec: &v1alpha1.ServiceRoleBinding{
+				RoleRef: &v1alpha1.RoleRef{
+					Name: "client-reader--role",
+					Kind: ServiceRoleKind,
+				},
+				Subjects: []*v1alpha1.Subject{
+					{
+						User: "athenz.domain/ra/client-reader_role",
+					},
+				},
+			},
+			expectedErr: nil,
 		},
 		{
 			test: "test valid role member spec with enableOriginJwtSubject set to false",
 			input: input{
-				k8sRoleName: "client-reader--role",
+				athenzDomainName: "athenz.domain",
+				roleName:         "client-reader_role",
+				k8sRoleName:      "client-reader--role",
 				members: []*zms.RoleMember{
 					{
 						MemberName: "athenz.domain.client-serviceA",
@@ -226,6 +261,9 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 					{
 						User: "user/sa/athenzuser",
 					},
+					{
+						User: "athenz.domain/ra/client-reader_role",
+					},
 				},
 			},
 			expectedErr: nil,
@@ -233,7 +271,7 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.k8sRoleName, c.input.members, c.input.enableOriginJwtSubject)
+		gotSpec, gotErr := GetServiceRoleBindingSpec(c.input.athenzDomainName, c.input.roleName, c.input.k8sRoleName, c.input.members, c.input.enableOriginJwtSubject)
 		assert.Equal(t, c.expectedSpec, gotSpec, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}

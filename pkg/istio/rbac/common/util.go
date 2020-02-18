@@ -24,6 +24,17 @@ func ParseRoleFQDN(domainName zms.DomainName, roleFQDN string) (string, error) {
 	return roleName, nil
 }
 
+func RoleToSpiffe(athenzDomainName string, roleName string) (string, error) {
+	if len(athenzDomainName) == 0 {
+		return "", fmt.Errorf("athenzDomainName is empty")
+	}
+	if len(roleName) == 0 {
+		return "", fmt.Errorf("roleName is empty")
+	}
+	spiffeName := fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName)
+	return spiffeName, nil
+}
+
 // PrincipalToSpiffe converts the Athenz principal into a SPIFFE compliant format
 // e.g. client-domain.frontend.some-app -> client-domain.frontend/sa/some-app
 func PrincipalToSpiffe(principal string) (string, error) {
