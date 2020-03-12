@@ -10,6 +10,9 @@ import (
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
+	athenzInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func toRDLTimestamp(s string) (rdl.Timestamp, error) {
@@ -469,8 +472,11 @@ func TestGetMembersForRole(t *testing.T) {
 		},
 	}
 
+	athenzclientset := fake.NewSimpleClientset()
+	crIndexInformer := athenzInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+
 	for _, c := range cases {
-		if got := getMembersForRole(c.domain); !reflect.DeepEqual(got, c.expected) {
+		if got := getMembersForRole(c.domain, &crIndexInformer); !reflect.DeepEqual(got, c.expected) {
 			assert.Equal(t, c.expected, got, c.test)
 		}
 	}
@@ -706,8 +712,11 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 		},
 	}
 
+	athenzclientset := fake.NewSimpleClientset()
+	crIndexInformer := athenzInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+
 	for _, c := range cases {
-		if got := ConvertAthenzPoliciesIntoRbacModel(c.domain); !reflect.DeepEqual(got, c.expected) {
+		if got := ConvertAthenzPoliciesIntoRbacModel(c.domain, &crIndexInformer); !reflect.DeepEqual(got, c.expected) {
 			assert.Equal(t, c.expected, got, c.test)
 		}
 	}
