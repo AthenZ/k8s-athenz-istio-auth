@@ -124,6 +124,7 @@ func ConvertAthenzPoliciesIntoRbacModel(domain *zms.DomainData, crCache *cache.S
 	}
 }
 
+// processTrustDomain -  in delegated domain check assume_role action in policy that contains current role as a resource, return role's member list
 func processTrustDomain(informer *cache.SharedIndexInformer, trust zms.DomainName, roleName string) ([]*zms.RoleMember, error) {
 	var res []*zms.RoleMember
 	// handle case which crIndexInformer is not initialized at the beginning, return directly.
@@ -131,8 +132,6 @@ func processTrustDomain(informer *cache.SharedIndexInformer, trust zms.DomainNam
 		return res, nil
 	}
 	trustDomain := string(trust)
-	// initialize a clientset to get information of this trust athenz domain
-	// storage := c.crIndexInformer.GetStore()
 	crContent, exists, _ := (*informer).GetStore().GetByKey(trustDomain)
 	if !exists {
 		return res, fmt.Errorf("Error when finding trustDomain %s for this role name %s in the cache: Domain cr is not found in the cache store", trustDomain, roleName)
