@@ -10,6 +10,27 @@ import (
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
+	v1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	"github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
+	athenzInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
+)
+
+const (
+	trustDomainName = "test.trust.domain"
+	trustusername   = "trustuser.name"
+)
+
+var (
+	ad1 = &v1.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: trustDomainName,
+		},
+		Spec: v1.AthenzDomainSpec{
+			SignedDomain: getFakeTrustDomain(),
+		},
+	}
 )
 
 func toRDLTimestamp(s string) (rdl.Timestamp, error) {
@@ -469,8 +490,11 @@ func TestGetMembersForRole(t *testing.T) {
 		},
 	}
 
+	athenzclientset := fake.NewSimpleClientset()
+	crIndexInformer := athenzInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+
 	for _, c := range cases {
-		if got := getMembersForRole(c.domain); !reflect.DeepEqual(got, c.expected) {
+		if got := getMembersForRole(c.domain, &crIndexInformer); !reflect.DeepEqual(got, c.expected) {
 			assert.Equal(t, c.expected, got, c.test)
 		}
 	}
@@ -704,11 +728,171 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 				},
 			},
 		},
+		{
+			test: "valid athenz domain object with delegated role, mutiple roles, multiple policies",
+			domain: &zms.DomainData{
+				Name: "home.domain",
+				Roles: []*zms.Role{
+					{
+						Name:     "home.domain:role.admin",
+						Modified: &modified,
+						RoleMembers: []*zms.RoleMember{
+							{
+								MemberName: zms.MemberName("user.name"),
+							},
+						},
+					},
+					{
+						Modified: &modified,
+						Name:     zms.ResourceName("home.domain:role.delegated"),
+						Trust:    trustDomainName,
+					},
+				},
+				Policies: &zms.SignedPolicies{
+					Contents: &zms.DomainPolicies{
+						Domain: zms.DomainName("home.domain"),
+						Policies: []*zms.Policy{
+							{
+								Assertions: []*zms.Assertion{
+									{
+										Role:     "home.domain:role.admin",
+										Resource: "home.domain:*",
+										Action:   "*",
+										Effect:   &allow,
+									},
+								},
+								Modified: &modified,
+								Name:     zms.ResourceName("home.domain:policy.admin"),
+							},
+							{
+								Assertions: []*zms.Assertion{
+									{
+										Role:     "home.domain:role.delegated",
+										Resource: "home.domain:svc.my-service-name:*",
+										Action:   "get",
+										Effect:   &allow,
+									},
+								},
+								Modified: &modified,
+								Name:     zms.ResourceName("home.domain:policy.delegated"),
+							},
+						},
+					},
+				},
+			},
+			expected: Model{
+				Name:      zms.DomainName("home.domain"),
+				Namespace: "home-domain",
+				Roles: Roles{
+					zms.ResourceName("home.domain:role.admin"),
+					zms.ResourceName("home.domain:role.delegated"),
+				},
+				Rules: RoleAssertions{
+					zms.ResourceName("home.domain:role.admin"): []*zms.Assertion{
+						{
+							Role:     "home.domain:role.admin",
+							Resource: "home.domain:*",
+							Action:   "*",
+							Effect:   &allow,
+						},
+					},
+					zms.ResourceName("home.domain:role.delegated"): []*zms.Assertion{
+						{
+							Role:     "home.domain:role.delegated",
+							Resource: "home.domain:svc.my-service-name:*",
+							Action:   "get",
+							Effect:   &allow,
+						},
+					},
+				},
+				Members: RoleMembers{
+					zms.ResourceName("home.domain:role.admin"): []*zms.RoleMember{
+						{
+							MemberName: "user.name",
+						},
+					},
+					zms.ResourceName("home.domain:role.delegated"): []*zms.RoleMember{
+						{
+							MemberName: trustusername,
+						},
+					},
+				},
+			},
+		},
 	}
 
+	athenzclientset := fake.NewSimpleClientset()
+	crIndexInformer := athenzInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+	crIndexInformer.GetStore().Add(ad1.DeepCopy())
+
 	for _, c := range cases {
-		if got := ConvertAthenzPoliciesIntoRbacModel(c.domain); !reflect.DeepEqual(got, c.expected) {
+		if got := ConvertAthenzPoliciesIntoRbacModel(c.domain, &crIndexInformer); !reflect.DeepEqual(got, c.expected) {
 			assert.Equal(t, c.expected, got, c.test)
 		}
+	}
+}
+
+func getFakeTrustAthenzDomain() *v1.AthenzDomain {
+	spec := v1.AthenzDomainSpec{
+		SignedDomain: getFakeTrustDomain(),
+	}
+	item := &v1.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: trustDomainName,
+		},
+		Spec: spec,
+	}
+	return item
+}
+
+func getFakeTrustDomain() zms.SignedDomain {
+	allow := zms.ALLOW
+	timestamp, err := rdl.TimestampParse("2019-07-22T20:29:10.305Z")
+	if err != nil {
+		panic(err)
+	}
+
+	return zms.SignedDomain{
+		Domain: &zms.DomainData{
+			Modified: timestamp,
+			Name:     zms.DomainName(trustDomainName),
+			Policies: &zms.SignedPolicies{
+				Contents: &zms.DomainPolicies{
+					Domain: zms.DomainName(trustDomainName),
+					Policies: []*zms.Policy{
+						{
+							Assertions: []*zms.Assertion{
+								{
+									Role:     trustDomainName + ":role.admin",
+									Resource: "*:role.delegated",
+									Action:   "assume_role",
+									Effect:   &allow,
+								},
+							},
+							Modified: &timestamp,
+							Name:     zms.ResourceName(trustDomainName + ":policy.admin"),
+						},
+					},
+				},
+				KeyId:     "col-env-1.1",
+				Signature: "signature-policy",
+			},
+			Roles: []*zms.Role{
+				{
+					Members:  []zms.MemberName{zms.MemberName(trustusername)},
+					Modified: &timestamp,
+					Name:     zms.ResourceName(trustDomainName + ":role.admin"),
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: zms.MemberName(trustusername),
+						},
+					},
+				},
+			},
+			Services: []*zms.ServiceIdentity{},
+			Entities: []*zms.Entity{},
+		},
+		KeyId:     "colo-env-1.1",
+		Signature: "signature",
 	}
 }
