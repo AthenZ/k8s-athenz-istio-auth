@@ -12,7 +12,9 @@ import (
 	"time"
 
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
-	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema"
+	"istio.io/istio/pkg/config/schemas"
+	"istio.io/pkg/ledger"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -35,11 +37,12 @@ func main() {
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
-	configDescriptor := model.ConfigDescriptor{
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-		model.ClusterRbacConfig,
-	}
+	// configDescriptor := model.ConfigDescriptor{
+	// 	model.ServiceRole,
+	// 	model.ServiceRoleBinding,
+	// 	model.ClusterRbacConfig,
+	// }
+	configDescriptor := schema.Set{schemas.ServiceRole, schemas.ServiceRoleBinding, schemas.ClusterRbacConfig, schemas.AuthorizationPolicy}
 
 	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
 	if *kubeconfig == "" {
@@ -49,7 +52,9 @@ func main() {
 		}
 	}
 
-	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix)
+	// Ledger for tracking config distribution, specify how long it can retain its previous state
+	configLedger := ledger.Make(time.Hour)
+	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger)
 	if err != nil {
 		log.Panicf("Error creating istio crd client: %s", err.Error())
 	}

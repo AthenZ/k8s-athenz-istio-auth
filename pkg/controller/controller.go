@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 
+	"istio.io/istio/pkg/config/schemas"
 	v1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
@@ -43,6 +45,7 @@ type Controller struct {
 	serviceIndexInformer cache.SharedIndexInformer
 	adIndexInformer      cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
+	apController         *authzpolicy.Controller
 	queue                workqueue.RateLimitingInterface
 	adResyncInterval     time.Duration
 }
@@ -213,6 +216,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer)
 
 	c := &Controller{
 		serviceIndexInformer: serviceIndexInformer,
@@ -220,14 +224,15 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		configStoreCache:     configStoreCache,
 		crcController:        crcController,
 		processor:            processor,
+		apController:         apController,
 		rbacProvider:         rbacv1.NewProvider(enableOriginJwtSubject),
 		queue:                queue,
 		adResyncInterval:     adResyncInterval,
 	}
 
-	configStoreCache.RegisterEventHandler(model.ServiceRole.Type, c.processConfigEvent)
-	configStoreCache.RegisterEventHandler(model.ServiceRoleBinding.Type, c.processConfigEvent)
-	configStoreCache.RegisterEventHandler(model.ClusterRbacConfig.Type, crcController.EventHandler)
+	configStoreCache.RegisterEventHandler(schemas.ServiceRole.Type, c.processConfigEvent)
+	configStoreCache.RegisterEventHandler(schemas.ServiceRoleBinding.Type, c.processConfigEvent)
+	configStoreCache.RegisterEventHandler(schemas.ClusterRbacConfig.Type, crcController.EventHandler)
 
 	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -278,6 +283,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	// crc controller must wait for service informer to sync before starting
 	go c.processor.Run(stopCh)
 	go c.crcController.Run(stopCh)
+	go c.apController.Run(stopCh)
 	go c.resync(stopCh)
 
 	defer c.queue.ShutDown()

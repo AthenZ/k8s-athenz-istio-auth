@@ -10,6 +10,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schemas"
 	"istio.io/istio/pkg/config/validation"
 )
 
@@ -63,7 +64,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		}
 
 		k8sRoleName := common.ConvertAthenzRoleNameToK8sName(roleName)
-		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, k8sRoleName, srSpec)
+		sr := common.NewConfig(schemas.ServiceRole, m.Namespace, k8sRoleName, srSpec)
 		out = append(out, sr)
 
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
@@ -86,7 +87,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, k8sRoleName, srbSpec)
+		srb := common.NewConfig(schemas.ServiceRoleBinding, m.Namespace, k8sRoleName, srbSpec)
 		out = append(out, srb)
 	}
 
@@ -96,12 +97,12 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 // GetCurrentIstioRbac returns the ServiceRole and ServiceRoleBinding resources for the specified model's namespace
 func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []model.Config {
 
-	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
+	sr, err := csc.List(schemas.ServiceRole.Type, m.Namespace)
 	if err != nil {
 		log.Errorf("Error listing the ServiceRole resources in the namespace: %s", m.Namespace)
 	}
 
-	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
+	srb, err := csc.List(schemas.ServiceRoleBinding.Type, m.Namespace)
 	if err != nil {
 		log.Errorf("Error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
 	}
