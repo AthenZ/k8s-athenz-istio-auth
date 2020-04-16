@@ -66,11 +66,7 @@ type OnCompleteFunc func(err error, item *Item) error
 
 type Item struct {
 	Operation model.Event
-	Resource  model.Config
-
-	// Handler function that should be invoked with the status of the current sync operation on the item
-	// If the handler returns an error, the operation is retried up to `queueNumRetries`
-	CallbackHandler OnCompleteFunc
+	Resource  interface{}
 }
 
 func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer) *Controller {
@@ -85,22 +81,50 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			c.ProcessConfigChange(obj)
+			item := Item{
+				Operation: model.EventAdd,
+				Resource:  obj,
+			}
+			c.ProcessConfigChange(item)
 		},
-		// UpdateFunc: func(oldObj, newObj interface{}) {
-
-		// },
-		// DeleteFunc: func(obj interface{}) {
-
-		// },
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			item := Item{
+				Operation: model.EventUpdate,
+				Resource:  newObj,
+			}
+			c.ProcessConfigChange(item)
+		},
+		DeleteFunc: func(obj interface{}) {
+			item := Item{
+				Operation: model.EventDelete,
+				Resource:  obj,
+			}
+			c.ProcessConfigChange(item)
+		},
 	})
 
+	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			item := Item{
+				Operation: model.EventAdd,
+				Resource:  obj,
+			}
+			c.ProcessConfigChange(item)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			item := Item{
+				Operation: model.EventUpdate,
+				Resource:  newObj,
+			}
+			c.ProcessConfigChange(item)
+		},
+	})
 	return c
 }
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
-func (c *Controller) ProcessConfigChange(obj interface{}) {
-	c.queue.Add(obj)
+func (c *Controller) ProcessConfigChange(item Item) {
+	c.queue.Add(item)
 }
 
 // Run starts the main controller loop running sync at every poll interval.
@@ -131,46 +155,166 @@ func (c *Controller) processNextItem() bool {
 
 // sync is responsible for invoking the appropriate API operation on the model.Config resource
 func (c *Controller) sync(item interface{}) error {
-	obj, ok := item.(*corev1.Service)
+	var err error
+	castItem, ok := item.(Item)
 	if !ok {
 		return fmt.Errorf("Unable to cast interface to service object")
 	}
+	// dealing with service resource
 
-	// authz policy creation logic
-	// check if current service has istio authz annotation set
-	if _, ok = obj.Annotations[authzEnabledAnnotation]; ok {
-		fmt.Println("find the istio authz annotation in service: ", obj.Name)
-		if obj.Annotations[authzEnabledAnnotation] == authzEnabled {
-			fmt.Println("istio authz annotation is set to true")
-			// form the authorization policy config and send create sign to the queue
-			athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(obj.Namespace))
+	if obj, ok := (castItem.Resource).(*corev1.Service); ok {
+
+		var convertedCR model.Config
+
+		if castItem.Operation == model.EventAdd {
+			// creation of service will check if istio annotation is set to true, will result in creation of authz policy
+			// authz policy creation logic
+			// check if current service has istio authz annotation set
+			if _, ok = obj.Annotations[authzEnabledAnnotation]; ok {
+				if obj.Annotations[authzEnabledAnnotation] == authzEnabled {
+					// here should check if authz policy is existing in the cluster
+					fmt.Printf("istio authz annotation for service %s is set to true\n", obj.Name)
+					// form the authorization policy config and send create sign to the queue
+					athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(obj.Namespace))
+					if err != nil {
+						return err
+					}
+
+					if !exists {
+						// TODO, add the non existing athenz domain to the istio custom resource
+						// processing controller to delete them
+						return fmt.Errorf("athenz domain %s does not exist in cache", obj.Namespace)
+					}
+
+					athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
+					if !ok {
+						return errors.New("athenz domain cast failed")
+					}
+
+					signedDomain := athenzDomain.Spec.SignedDomain
+					labels := obj.GetLabels()
+					domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+					convertedCR = c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
+					fmt.Println("Creating Authz Policy ... ")
+					revision, err := c.configStoreCache.Create(convertedCR)
+					if err != nil {
+						fmt.Println("error creating authz policy: ", err.Error())
+						return err
+					}
+					fmt.Println("Revision number is: ", revision)
+				} else {
+					// case when service has authz flag switch from true to false, authz policy with the same name present
+					if res := c.configStoreCache.Get(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace); res != nil {
+						fmt.Println("Deleting Authz Policy ... ")
+						c.configStoreCache.Delete(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace)
+					}
+				}
+			} else {
+				// case when service has authzEnabledAnnotation removed, and authz policy with the same name present
+				if res := c.configStoreCache.Get(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace); res != nil {
+					fmt.Println("Deleting Authz Policy ... ")
+					c.configStoreCache.Delete(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace)
+				}
+			}
+		} else if castItem.Operation == model.EventUpdate {
+			if _, ok = obj.Annotations[authzEnabledAnnotation]; ok {
+				if obj.Annotations[authzEnabledAnnotation] == authzEnabled {
+					if res := c.configStoreCache.Get(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace); res == nil {
+						fmt.Printf("istio authz annotation for service %s is updated to true\n", obj.Name)
+						// form the authorization policy config
+						athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(obj.Namespace))
+						if err != nil {
+							return err
+						}
+
+						if !exists {
+							// TODO, add the non existing athenz domain to the istio custom resource
+							// processing controller to delete them
+							return fmt.Errorf("athenz domain %s does not exist in cache", obj.Namespace)
+						}
+
+						athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
+						if !ok {
+							return errors.New("athenz domain cast failed")
+						}
+
+						signedDomain := athenzDomain.Spec.SignedDomain
+						labels := obj.GetLabels()
+						domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+						convertedCR = c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
+						fmt.Println("Creating Authz Policy ... ")
+						revision, err := c.configStoreCache.Create(convertedCR)
+						if err != nil {
+							fmt.Println("error creating authz policy: ", err.Error())
+							return err
+						}
+						fmt.Println("Revision number is: ", revision)
+					}
+				} else {
+					// case when service has authz flag switch from true to false, authz policy with the same name present
+					if res := c.configStoreCache.Get(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace); res != nil {
+						fmt.Println("Deleting Authz Policy ... ")
+						c.configStoreCache.Delete(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace)
+					}
+				}
+			} else {
+				// case when service has authzEnabledAnnotation removed, and authz policy with the same name present
+				if res := c.configStoreCache.Get(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace); res != nil {
+					fmt.Println("Deleting Authz Policy ... ")
+					c.configStoreCache.Delete(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace)
+				}
+			}
+		} else if castItem.Operation == model.EventDelete {
+			fmt.Println("Deleting Authz Policy ... ")
+			err = c.configStoreCache.Delete(schemas.AuthorizationPolicy.Type, obj.Name, obj.Namespace)
 			if err != nil {
 				return err
 			}
-
-			if !exists {
-				// TODO, add the non existing athenz domain to the istio custom resource
-				// processing controller to delete them
-				return fmt.Errorf("athenz domain %s does not exist in cache", obj.Namespace)
-			}
-
-			athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
-			if !ok {
-				return errors.New("athenz domain cast failed")
-			}
-
-			signedDomain := athenzDomain.Spec.SignedDomain
-			labels := obj.GetLabels()
-			domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-			convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
-			revision, err := c.configStoreCache.Create(convertedCR)
-			if err != nil {
-				fmt.Println(err.Error())
-			} else {
-				fmt.Println("revision is: ", revision)
-			}
-
 		}
+	} else if obj, ok := (castItem.Resource).(*adv1.AthenzDomain); ok {
+		// athenz domain update will result in update in the authz policies in the corresponding namespace
+		if castItem.Operation == model.EventUpdate {
+			// authz policies exist in the namespace
+			res, err := c.configStoreCache.List(schemas.AuthorizationPolicy.Type, m.DomainToNamespace(obj.Name))
+			if err != nil {
+				return fmt.Errorf("Unable to list authz policies in namespace: %s", obj.Namespace)
+			}
+			for _, authzPolicy := range res {
+				signedDomain := obj.Spec.SignedDomain
+				domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+				authzSpec, ok := (authzPolicy.Spec).(*v1beta1.AuthorizationPolicy)
+				if !ok {
+					return fmt.Errorf("unable to cast interface to authorizationpolicies object")
+				}
+				convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, authzPolicy.Namespace, authzPolicy.Name, authzSpec.Selector.MatchLabels["svc"])
+				fmt.Printf("Athenz Domain %s updated, updating Authz Policy in namespace %s ... ", obj.Name, m.DomainToNamespace(obj.Name))
+				// assign current revision, update function requires a defined resource version
+				convertedCR.ResourceVersion = authzPolicy.ResourceVersion
+				revision, err := c.configStoreCache.Update(convertedCR)
+				if err != nil {
+					fmt.Println("error updating authz policy: ", err.Error())
+					return err
+				}
+				fmt.Println("Revision number is: ", revision)
+			}
+		}
+		// } else if castItem.Operation == model.EventDelete {
+		// 	// deletion of athenz domain will trigger deletion of all authz policies
+		// 	res, err := c.configStoreCache.List(schemas.AuthorizationPolicy.Type, obj.Namespace)
+		// 	if err != nil {
+		// 		return fmt.Errorf("Unable to list authz policies in namespace: %s", obj.Namespace)
+		// 	}
+		// 	for _, authzPolicy := range res {
+		// 		err := c.configStoreCache.Delete(authzPolicy.Type, authzPolicy.Name, authzPolicy.Namespace)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 	}
+		// } else if castItem.Operation == model.EventAdd {
+
+		// }
+	} else {
+		return fmt.Errorf("unable to cast interface to service or athenzDomain object")
 	}
 	return nil
 }
@@ -215,15 +359,22 @@ func (c *Controller) convertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.M
 				continue
 			}
 			// if svc match with current svc, process it and add it to the rules
-			if svc == serviceName {
+			// note that svc defined on athenz can be a regex, need to match the pattern
+			res, e := regexp.MatchString(svc, svcLabel)
+			if e != nil {
+				fmt.Println("error matching string: ", e.Error())
+			}
+			if res {
 				rule := &v1beta1.Rule{}
 				_, err = parseAssertionEffect(assert)
 				if err != nil {
+					fmt.Printf(err.Error())
 					log.Debugf(err.Error())
 					continue
 				}
 				method, err := parseAssertionAction(assert)
 				if err != nil {
+					fmt.Printf(err.Error())
 					log.Debugf(err.Error())
 					continue
 				}
@@ -245,7 +396,7 @@ func (c *Controller) convertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.M
 				for _, roleName := range athenzModel.Roles {
 					if roleName == role {
 						// TODO: condition if user is *, rule.From should be entirely empty
-						// add function to enableOriginJwtSubject, following code turned this one by default
+						// add function to enableOriginJwtSubject, following code assume enableOriginJwtSubject is true by default
 						for _, roleMember := range athenzModel.Members[roleName] {
 							spiffeName, err := PrincipalToSpiffe(string(roleMember.MemberName))
 							if err != nil {
