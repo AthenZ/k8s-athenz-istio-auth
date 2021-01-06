@@ -5,6 +5,8 @@ package onboarding
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/config/schema"
+	"istio.io/istio/pkg/config/schemas"
 	"sync"
 	"testing"
 	"time"
@@ -59,9 +61,9 @@ type fakeConfigStore struct {
 	m sync.Mutex
 }
 
-func (cs *fakeConfigStore) ConfigDescriptor() model.ConfigDescriptor {
-	return model.ConfigDescriptor{
-		model.ClusterRbacConfig,
+func (cs *fakeConfigStore) ConfigDescriptor() schema.Set {
+	return schema.Set{
+		schemas.ClusterRbacConfig,
 	}
 }
 
@@ -96,7 +98,7 @@ func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
 }
 
 func getClusterRbacConfig(c *Controller) (*v1alpha1.RbacConfig, error) {
-	config := c.configStoreCache.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(schemas.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
 	if config == nil {
 		return nil, fmt.Errorf("config store returned nil for ClusterRbacConfig resource")
 	}
@@ -110,8 +112,8 @@ func getClusterRbacConfig(c *Controller) (*v1alpha1.RbacConfig, error) {
 
 func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
 	c := &Controller{}
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
+	configDescriptor := schema.Set{
+		schemas.ClusterRbacConfig,
 	}
 
 	configStore := memory.Make(configDescriptor)
@@ -142,8 +144,8 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 }
 
 func TestNewController(t *testing.T) {
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
+	configDescriptor := schema.Set{
+		schemas.ClusterRbacConfig,
 	}
 
 	source := fcache.NewFakeControllerSource()
@@ -253,10 +255,10 @@ func TestCreateClusterRbacConfig(t *testing.T) {
 	if !ok {
 		log.Panicln("cannot cast to rbac config")
 	}
-	assert.Equal(t, model.ClusterRbacConfig.Type, config.Type, "ClusterRbacConfig type should be equal")
+	assert.Equal(t, schemas.ClusterRbacConfig.Type, config.Type, "ClusterRbacConfig type should be equal")
 	assert.Equal(t, constants.DefaultRbacConfigName, config.Name, "ClusterRbacConfig name should be equal")
-	assert.Equal(t, model.ClusterRbacConfig.Group+constants.IstioAPIGroupDomain, config.Group, "ClusterRbacConfig group should be equal")
-	assert.Equal(t, model.ClusterRbacConfig.Version, config.Version, "ClusterRbacConfig version should be equal")
+	assert.Equal(t, schemas.ClusterRbacConfig.Group+constants.IstioAPIGroupDomain, config.Group, "ClusterRbacConfig group should be equal")
+	assert.Equal(t, schemas.ClusterRbacConfig.Version, config.Version, "ClusterRbacConfig version should be equal")
 	assert.Equal(t, []string{onboardedServiceName, existingServiceName}, clusterRbacConfig.Inclusion.Services, "ClusterRbacConfig service list should be equal to expected")
 }
 
@@ -295,10 +297,10 @@ func TestGetServiceList(t *testing.T) {
 func createClusterRbacExclusionConfig(services []string) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:    model.ClusterRbacConfig.Type,
+			Type:    schemas.ClusterRbacConfig.Type,
 			Name:    constants.DefaultRbacConfigName,
-			Group:   model.ClusterRbacConfig.Group + constants.IstioAPIGroupDomain,
-			Version: model.ClusterRbacConfig.Version,
+			Group:   schemas.ClusterRbacConfig.Group + constants.IstioAPIGroupDomain,
+			Version: schemas.ClusterRbacConfig.Version,
 		},
 		Spec: &v1alpha1.RbacConfig{
 			Mode: v1alpha1.RbacConfig_ON_WITH_EXCLUSION,

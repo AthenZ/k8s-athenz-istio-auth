@@ -8,18 +8,16 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
-	github.com/yahoo/athenz v1.8.23
-	github.com/yahoo/k8s-athenz-syncer v0.1.1
+	github.com/yahoo/athenz v1.8.40
+	github.com/yahoo/k8s-athenz-syncer v0.1.6
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	istio.io/api v0.0.0-20200107183329-ed4b507c54e1
 	istio.io/istio v0.0.0-20200220235129-f288658b710d
 	istio.io/pkg v0.0.0-20191030005435-10d06b6b315e
 	k8s.io/api v0.18.0
 	k8s.io/apimachinery v0.18.0
-	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
+	k8s.io/client-go v15.0.0+incompatible
 )
-
-replace github.com/yahoo/k8s-athenz-syncer => /Users/rguo/github/k8s-athenz-syncer
 
 // Kubernetes makes it challenging to depend on their libraries. To get around this, we need to force
 // the sha to use. All of these are pinned to the tag "kubernetes-1.16"

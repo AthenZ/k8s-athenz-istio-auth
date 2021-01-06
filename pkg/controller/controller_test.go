@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/config/schemas"
 	"testing"
 	"time"
 
@@ -83,7 +84,7 @@ func newSr(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(model.ServiceRole.Type, ns, role, srSpec)
+	return common.NewConfig(schemas.ServiceRole.Type, ns, role, srSpec)
 }
 
 func newSrb(ns, role string) model.Config {
@@ -98,7 +99,7 @@ func newSrb(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(model.ServiceRoleBinding.Type, ns, role, srbSpec)
+	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, srbSpec)
 }
 
 func updatedSr(ns, role string) model.Config {
@@ -126,7 +127,7 @@ func updatedSr(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(model.ServiceRole.Type, ns, role, srSpec)
+	return common.NewConfig(schemas.ServiceRole.Type, ns, role, srSpec)
 }
 
 func updatedSrb(ns, role string) model.Config {
@@ -144,7 +145,7 @@ func updatedSrb(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(model.ServiceRoleBinding.Type, ns, role, srbSpec)
+	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, srbSpec)
 }
 
 func TestConvertSliceToKeyedMap(t *testing.T) {

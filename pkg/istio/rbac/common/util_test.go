@@ -5,6 +5,8 @@ package common
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/config/schema"
+	"istio.io/istio/pkg/config/schemas"
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
@@ -99,6 +101,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 func TestNewConfig(t *testing.T) {
 
 	type input struct {
+		instance   schema.Instance
 		configType string
 		namespace  string
 		name       string
@@ -122,7 +125,7 @@ func TestNewConfig(t *testing.T) {
 		{
 			test: "valid servicerole",
 			input: input{
-				configType: model.ServiceRole.Type,
+				configType: schemas.ServiceRole.Type,
 				namespace:  "athenz-ns",
 				name:       "my-reader-role",
 				spec: &v1alpha1.ServiceRole{
@@ -142,9 +145,9 @@ func TestNewConfig(t *testing.T) {
 			},
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
-					Type:      model.ServiceRole.Type,
-					Group:     model.ServiceRole.Group + constants.IstioAPIGroupDomain,
-					Version:   model.ServiceRole.Version,
+					Type:      schemas.ServiceRole.Type,
+					Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
+					Version:   schemas.ServiceRole.Version,
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
 				},
@@ -167,13 +170,13 @@ func TestNewConfig(t *testing.T) {
 		{
 			test: "valid servicerolebinding",
 			input: input{
-				configType: model.ServiceRoleBinding.Type,
+				configType: schemas.ServiceRoleBinding.Type,
 				namespace:  "athenz-ns",
 				name:       "my-reader-role",
 				spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: model.ServiceRole.Type,
+						Kind: schemas.ServiceRole.Type,
 					},
 					Subjects: []*v1alpha1.Subject{
 						{
@@ -187,16 +190,16 @@ func TestNewConfig(t *testing.T) {
 			},
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
-					Type:      model.ServiceRoleBinding.Type,
-					Group:     model.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-					Version:   model.ServiceRoleBinding.Version,
+					Type:      schemas.ServiceRoleBinding.Type,
+					Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
+					Version:   schemas.ServiceRoleBinding.Version,
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
 				},
 				Spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: model.ServiceRole.Type,
+						Kind: schemas.ServiceRole.Type,
 					},
 					Subjects: []*v1alpha1.Subject{
 						{
@@ -218,7 +221,7 @@ func TestNewConfig(t *testing.T) {
 				spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: model.ServiceRole.Type,
+						Kind: schemas.ServiceRole.Type,
 					},
 					Subjects: []*v1alpha1.Subject{
 						{

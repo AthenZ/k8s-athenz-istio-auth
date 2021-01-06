@@ -2,6 +2,8 @@ package processor
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/config/schema"
+	"istio.io/istio/pkg/config/schemas"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +39,7 @@ func newSrSpec() *v1alpha1.ServiceRole {
 }
 
 func newSr(ns, role string) model.Config {
-	return common.NewConfig(model.ServiceRole.Type, ns, role, newSrSpec())
+	return common.NewConfig(schemas.ServiceRole.Type, ns, role, newSrSpec())
 }
 
 func newSrbSpec(role string) *v1alpha1.ServiceRoleBinding {
@@ -55,14 +57,14 @@ func newSrbSpec(role string) *v1alpha1.ServiceRoleBinding {
 }
 
 func newSrb(ns, role string) model.Config {
-	return common.NewConfig(model.ServiceRoleBinding.Type, ns, role, newSrbSpec(role))
+	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, newSrbSpec(role))
 }
 
 func cacheWithItems() (model.ConfigStoreCache, error) {
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
-		model.ServiceRole,
-		model.ServiceRoleBinding,
+	configDescriptor := schema.Set{
+		schemas.ClusterRbacConfig,
+		schemas.ServiceRole,
+		schemas.ServiceRoleBinding,
 	}
 
 	c := memory.NewController(memory.Make(configDescriptor))
@@ -79,10 +81,10 @@ func cacheWithItems() (model.ConfigStoreCache, error) {
 
 func TestSync(t *testing.T) {
 
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
-		model.ServiceRole,
-		model.ServiceRoleBinding,
+	configDescriptor := schema.Set{
+		schemas.ClusterRbacConfig,
+		schemas.ServiceRole,
+		schemas.ServiceRoleBinding,
 	}
 
 	cbHandler := func(err error, i *Item) error {
@@ -128,7 +130,7 @@ func TestSync(t *testing.T) {
 			input: &Item{
 				Operation: model.EventUpdate,
 				Resource: func() model.Config {
-					obj := updateTestCache.Get(model.ServiceRole.Type, "test-svc", "test-ns")
+					obj := updateTestCache.Get(schemas.ServiceRole.Type, "test-svc", "test-ns")
 					assert.NotNil(t, obj, "cache should return the ServiceRole resource")
 					srSpec, ok := (obj.Spec).(*v1alpha1.ServiceRole)
 					assert.True(t, ok, "cache should return a ServiceRole resource")
@@ -160,7 +162,7 @@ func TestSync(t *testing.T) {
 						},
 					},
 				})
-				_, err := c.Create(common.NewConfig(model.ServiceRole.Type, "test-ns", "test-svc", srSpec))
+				_, err := c.Create(common.NewConfig(schemas.ServiceRole.Type, "test-ns", "test-svc", srSpec))
 				assert.Nil(t, err, fmt.Sprintf("unexpected error while setting up expectedCache: %s", err))
 				_, err = c.Create(newSrb("test-ns", "test-svc"))
 				assert.Nil(t, err, fmt.Sprintf("unexpected error while setting up expectedCache: %s", err))
