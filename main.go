@@ -78,64 +78,7 @@ func main() {
 	if err != nil {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
-
-	//store := memory.Make(collections.Pilot)
-	//configMeta := model.ConfigMeta{
-	//	Type:    collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Kind(),
-	//	Name:    "example",
-	//	Group:   collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Group(),
-	//	Version: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Version(),
-	//	Namespace: "home-rguo-frontend",
-	//}
-	//ExampleAuthorizationPolicy := &authz.AuthorizationPolicy{
-	//	Selector: &api.WorkloadSelector{
-	//		MatchLabels: map[string]string{"svc": "productpage"},
-	//	},
-	//	Rules: []*v1beta1.Rule{
-	//		{
-	//			To: []*v1beta1.Rule_To{
-	//				{
-	//					Operation: &v1beta1.Operation{
-	//						Methods: []string{
-	//							"GET",
-	//						},
-	//					},
-	//				},
-	//			},
-	//		},
-	//		{
-	//			From: []*v1beta1.Rule_From{
-	//				{
-	//					Source: &v1beta1.Source{
-	//						Principals: []string{
-	//							"*",
-	//							"test.namespace/ra/test.namespace:role.productpage-reader",
-	//						},
-	//					},
-	//				},
-	//				{
-	//					Source: &v1beta1.Source{
-	//						RequestPrincipals: []string{
-	//							"*",
-	//						},
-	//					},
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
-	//
-	//var spec proto.Message
-	//spec = ExampleAuthorizationPolicy
-	//rev, err := store.Create(model.Config{
-	//	ConfigMeta: configMeta,
-	//	Spec:       spec,
-	//})
-	//if err != nil {
-	//	fmt.Errorf("cannot create authz policy in rguo namespaces: %s", err)
-	//}
-	//
-	//fmt.Println("finished creation, revision: ", rev)
+	
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
 
 	stopCh := make(chan struct{})
