@@ -6,15 +6,15 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 
+	"istio.io/client-go/pkg/apis/security/v1beta1"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
-
-	"istio.io/istio/pkg/config/schemas"
 	v1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -44,6 +44,7 @@ type Controller struct {
 	processor            *processor.Controller
 	serviceIndexInformer cache.SharedIndexInformer
 	adIndexInformer      cache.SharedIndexInformer
+	authzpolicyIndexInformer cache.SharedIndexInformer
 	rbacProvider         rbac.Provider
 	apController         *authzpolicy.Controller
 	queue                workqueue.RateLimitingInterface
@@ -207,7 +208,7 @@ func (c *Controller) sync(key string) error {
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
-	adResyncInterval, crcResyncInterval time.Duration, enableOriginJwtSubject bool) *Controller {
+	adResyncInterval, crcResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -216,11 +217,14 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, enableOriginJwtSubject)
+	authzpolicyListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "authorizationpolicies", v1.NamespaceAll, fields.Everything())
+	authzpolicyIndexInformer := cache.NewSharedIndexInformer(authzpolicyListWatch, &v1beta1.AuthorizationPolicy{}, 0, nil)
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, authzpolicyIndexInformer, enableOriginJwtSubject, apDryRun)
 
 	c := &Controller{
 		serviceIndexInformer: serviceIndexInformer,
 		adIndexInformer:      adIndexInformer,
+		authzpolicyIndexInformer: authzpolicyIndexInformer,
 		configStoreCache:     configStoreCache,
 		crcController:        crcController,
 		processor:            processor,
@@ -230,9 +234,10 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		adResyncInterval:     adResyncInterval,
 	}
 
-	configStoreCache.RegisterEventHandler(schemas.ServiceRole.Type, c.processConfigEvent)
-	configStoreCache.RegisterEventHandler(schemas.ServiceRoleBinding.Type, c.processConfigEvent)
-	configStoreCache.RegisterEventHandler(schemas.ClusterRbacConfig.Type, crcController.EventHandler)
+	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), c.processConfigEvent)
+	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(), c.processConfigEvent)
+	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), crcController.EventHandler)
+	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), c.processConfigEvent)
 
 	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -261,7 +266,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 }
 
 // processConfigEvent is responsible for adding the key of the item to the queue
-func (c *Controller) processConfigEvent(config model.Config, e model.Event) {
+func (c *Controller) processConfigEvent(config model.Config, _ model.Config, e model.Event) {
 	domain := athenz.NamespaceToDomain(config.Namespace)
 	c.queue.Add(domain)
 }

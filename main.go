@@ -5,24 +5,24 @@ package main
 
 import (
 	"flag"
+	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
+
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/pkg/ledger"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
 
-	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
-	"istio.io/istio/pkg/config/schema"
-	"istio.io/istio/pkg/config/schemas"
-	"istio.io/pkg/ledger"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
-	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 )
 
 func main() {
@@ -31,19 +31,14 @@ func main() {
 	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
+	apDryRun := flag.Bool("authz-policy-dry-run-mode", true, "enable dry run mode for authz policy resource")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
 
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
-	// configDescriptor := model.ConfigDescriptor{
-	// 	model.ServiceRole,
-	// 	model.ServiceRoleBinding,
-	// 	model.ClusterRbacConfig,
-	// }
-	configDescriptor := schema.Set{schemas.ServiceRole, schemas.ServiceRoleBinding, schemas.ClusterRbacConfig, schemas.AuthorizationPolicy}
-
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
 	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
 	if *kubeconfig == "" {
 		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
@@ -52,9 +47,9 @@ func main() {
 		}
 	}
 
-	// Ledger for tracking config distribution, specify how long it can retain its previous state
+	//Ledger for tracking config distribution, specify how long it can retain its previous state
 	configLedger := ledger.Make(time.Hour)
-	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger)
+	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger, "")
 	if err != nil {
 		log.Panicf("Error creating istio crd client: %s", err.Error())
 	}
@@ -84,7 +79,64 @@ func main() {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject)
+	//store := memory.Make(collections.Pilot)
+	//configMeta := model.ConfigMeta{
+	//	Type:    collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Kind(),
+	//	Name:    "example",
+	//	Group:   collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Group(),
+	//	Version: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Version(),
+	//	Namespace: "home-rguo-frontend",
+	//}
+	//ExampleAuthorizationPolicy := &authz.AuthorizationPolicy{
+	//	Selector: &api.WorkloadSelector{
+	//		MatchLabels: map[string]string{"svc": "productpage"},
+	//	},
+	//	Rules: []*v1beta1.Rule{
+	//		{
+	//			To: []*v1beta1.Rule_To{
+	//				{
+	//					Operation: &v1beta1.Operation{
+	//						Methods: []string{
+	//							"GET",
+	//						},
+	//					},
+	//				},
+	//			},
+	//		},
+	//		{
+	//			From: []*v1beta1.Rule_From{
+	//				{
+	//					Source: &v1beta1.Source{
+	//						Principals: []string{
+	//							"*",
+	//							"test.namespace/ra/test.namespace:role.productpage-reader",
+	//						},
+	//					},
+	//				},
+	//				{
+	//					Source: &v1beta1.Source{
+	//						RequestPrincipals: []string{
+	//							"*",
+	//						},
+	//					},
+	//				},
+	//			},
+	//		},
+	//	},
+	//}
+	//
+	//var spec proto.Message
+	//spec = ExampleAuthorizationPolicy
+	//rev, err := store.Create(model.Config{
+	//	ConfigMeta: configMeta,
+	//	Spec:       spec,
+	//})
+	//if err != nil {
+	//	fmt.Errorf("cannot create authz policy in rguo namespaces: %s", err)
+	//}
+	//
+	//fmt.Println("finished creation, revision: ", rev)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)

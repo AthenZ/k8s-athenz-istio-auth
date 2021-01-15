@@ -5,7 +5,6 @@ package processor
 
 import (
 	"istio.io/istio/pilot/pkg/model"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 
@@ -104,7 +103,6 @@ func (c *Controller) processNextItem() bool {
 
 // sync is responsible for invoking the appropriate API operation on the model.Config resource
 func (c *Controller) sync(item *Item) error {
-
 	if item == nil {
 		return nil
 	}
@@ -117,7 +115,7 @@ func (c *Controller) sync(item *Item) error {
 		_, err = c.configStoreCache.Update(item.Resource)
 	case model.EventDelete:
 		res := item.Resource
-		err = c.configStoreCache.Delete(res.Type, res.Name, res.Namespace)
+		err = c.configStoreCache.Delete(res.GroupVersionKind(), res.Name, res.Namespace)
 	}
 
 	return err

@@ -5,14 +5,13 @@ package common
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/config/schemas"
+	"istio.io/istio/pkg/config/schema/collection"
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/yahoo/athenz/clients/go/zms"
 
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/constants"
 )
 
 // ParseRoleFQDN parses the Athenz role full name in the format <domainName>:role.<roleName> to roleName
@@ -52,16 +51,11 @@ func PrincipalToSpiffe(principal string) (string, error) {
 }
 
 // NewConfig returns a new model.Config resource for the passed-in type with the given namespace/name and spec
-func NewConfig(configType string, namespace string, name string, spec proto.Message) model.Config {
-
-	schema, exists := schemas.Istio.GetByType(configType)
-	if !exists {
-		return model.Config{}
-	}
+func NewConfig(schema collection.Schema, namespace string, name string, spec proto.Message) model.Config {
 	meta := model.ConfigMeta{
-		Type:      schema.Type,
-		Group:     schema.Group + constants.IstioAPIGroupDomain,
-		Version:   schema.Version,
+		Type:      schema.Resource().Kind(),
+		Group:     schema.Resource().Group(),
+		Version:   schema.Resource().Version(),
 		Namespace: namespace,
 		Name:      name,
 	}

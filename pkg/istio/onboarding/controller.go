@@ -5,6 +5,7 @@ package onboarding
 
 import (
 	"errors"
+	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -16,7 +17,6 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/constants"
-	"istio.io/istio/pkg/config/schemas"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -150,10 +150,10 @@ func newClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
 func newClusterRbacConfig(services []string) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:    schemas.ClusterRbacConfig.Type,
+			Type:    collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Kind(),
 			Name:    constants.DefaultRbacConfigName,
-			Group:   schemas.ClusterRbacConfig.Group + constants.IstioAPIGroupDomain,
-			Version: schemas.ClusterRbacConfig.Version,
+			Group:   collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Group(),
+			Version: collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Version(),
 		},
 		Spec: newClusterRbacSpec(services),
 	}
@@ -213,7 +213,7 @@ func (c *Controller) callbackHandler(err error, item *processor.Item) error {
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
-	config := c.configStoreCache.Get(schemas.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(collections.IstioRbacV1Alpha1Rbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Infoln("Service list is empty and cluster rbac config does not exist, skipping sync...")
 		c.queue.Forget(queueKey)
@@ -292,7 +292,7 @@ func (c *Controller) sync() error {
 	return nil
 }
 
-func (c *Controller) EventHandler(config model.Config, e model.Event) {
+func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.Event) {
 	c.queue.Add(queueKey)
 }
 
