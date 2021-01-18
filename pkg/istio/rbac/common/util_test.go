@@ -5,8 +5,8 @@ package common
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/config/schema"
-	"istio.io/istio/pkg/config/schemas"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
@@ -15,7 +15,6 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/constants"
 )
 
 func TestParseRoleFQDN(t *testing.T) {
@@ -101,8 +100,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 func TestNewConfig(t *testing.T) {
 
 	type input struct {
-		instance   schema.Instance
-		configType string
+		configType collection.Schema
 		namespace  string
 		name       string
 		spec       proto.Message
@@ -112,20 +110,12 @@ func TestNewConfig(t *testing.T) {
 		input          input
 		expectedConfig model.Config
 	}{
-		{
-			test: "empty args",
-			input: input{
-				configType: "",
-				namespace:  "",
-				name:       "",
-				spec:       &v1alpha1.ServiceRoleBinding{},
-			},
-			expectedConfig: model.Config{},
-		},
+		// deleted empty config test because collections library doesn't have empty schema
+		// build empty schema from scratch results in invalid type error
 		{
 			test: "valid servicerole",
 			input: input{
-				configType: schemas.ServiceRole.Type,
+				configType: collections.IstioRbacV1Alpha1Serviceroles,
 				namespace:  "athenz-ns",
 				name:       "my-reader-role",
 				spec: &v1alpha1.ServiceRole{
@@ -145,9 +135,9 @@ func TestNewConfig(t *testing.T) {
 			},
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
-					Type:      schemas.ServiceRole.Type,
-					Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-					Version:   schemas.ServiceRole.Version,
+					Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+					Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+					Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
 				},
@@ -170,13 +160,13 @@ func TestNewConfig(t *testing.T) {
 		{
 			test: "valid servicerolebinding",
 			input: input{
-				configType: schemas.ServiceRoleBinding.Type,
+				configType: collections.IstioRbacV1Alpha1Servicerolebindings,
 				namespace:  "athenz-ns",
 				name:       "my-reader-role",
 				spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: schemas.ServiceRole.Type,
+						Kind: collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
 					},
 					Subjects: []*v1alpha1.Subject{
 						{
@@ -190,16 +180,16 @@ func TestNewConfig(t *testing.T) {
 			},
 			expectedConfig: model.Config{
 				ConfigMeta: model.ConfigMeta{
-					Type:      schemas.ServiceRoleBinding.Type,
-					Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-					Version:   schemas.ServiceRoleBinding.Version,
+					Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+					Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+					Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 					Namespace: "athenz-ns",
 					Name:      "my-reader-role",
 				},
 				Spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: schemas.ServiceRole.Type,
+						Kind: collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
 					},
 					Subjects: []*v1alpha1.Subject{
 						{
@@ -213,15 +203,16 @@ func TestNewConfig(t *testing.T) {
 			},
 		},
 		{
-			test: "invalid config type",
+			// istio 1.5.8 library removes support for initializing invalid config type, switch to mock type
+			test: "mock config type",
 			input: input{
-				configType: "InvalidCustomResource",
+				configType: collections.Mock,
 				namespace:  "athenz-ns",
 				name:       "my-reader-role",
 				spec: &v1alpha1.ServiceRoleBinding{
 					RoleRef: &v1alpha1.RoleRef{
 						Name: "client-reader-role",
-						Kind: schemas.ServiceRole.Type,
+						Kind: collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
 					},
 					Subjects: []*v1alpha1.Subject{
 						{
@@ -233,7 +224,29 @@ func TestNewConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedConfig: model.Config{},
+			expectedConfig: model.Config{
+				ConfigMeta: model.ConfigMeta{
+					Type:      collections.Mock.Resource().Kind(),
+					Group:     collections.Mock.Resource().Group(),
+					Version:   collections.Mock.Resource().Version(),
+					Namespace: "athenz-ns",
+					Name:      "my-reader-role",
+				},
+				Spec: &v1alpha1.ServiceRoleBinding{
+					RoleRef: &v1alpha1.RoleRef{
+						Name: "client-reader-role",
+						Kind: collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+					},
+					Subjects: []*v1alpha1.Subject{
+						{
+							User: "athenz.domain/sa/client-serviceA",
+						},
+						{
+							User: "user/sa/athenzuser",
+						},
+					},
+				},
+			},
 		},
 	}
 

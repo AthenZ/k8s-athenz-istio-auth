@@ -78,7 +78,7 @@ func main() {
 	if err != nil {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
-	
+
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
 
 	stopCh := make(chan struct{})

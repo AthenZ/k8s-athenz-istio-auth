@@ -4,8 +4,8 @@
 package v1
 
 import (
-	"istio.io/istio/pkg/config/schema"
-	"istio.io/istio/pkg/config/schemas"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +18,6 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/constants"
 )
 
 func init() {
@@ -149,9 +148,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
 					},
@@ -193,9 +192,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRoleBinding.Type,
-						Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRoleBinding.Version,
+						Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
 					},
@@ -229,9 +228,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-writer-role",
 					},
@@ -276,9 +275,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRoleBinding.Type,
-						Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRoleBinding.Version,
+						Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-writer-role",
 					},
@@ -351,9 +350,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
 					},
@@ -395,9 +394,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRoleBinding.Type,
-						Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRoleBinding.Version,
+						Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
 					},
@@ -470,9 +469,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
 					},
@@ -514,9 +513,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRoleBinding.Type,
-						Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRoleBinding.Version,
+						Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client--reader--role",
 					},
@@ -577,9 +576,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
 					},
@@ -621,9 +620,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 				},
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRoleBinding.Type,
-						Group:     schemas.ServiceRoleBinding.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRoleBinding.Version,
+						Type:      collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Servicerolebindings.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
 					},
@@ -671,9 +670,9 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			expectedConfigs: []model.Config{
 				{
 					ConfigMeta: model.ConfigMeta{
-						Type:      schemas.ServiceRole.Type,
-						Group:     schemas.ServiceRole.Group + constants.IstioAPIGroupDomain,
-						Version:   schemas.ServiceRole.Version,
+						Type:      collections.IstioRbacV1Alpha1Serviceroles.Resource().Kind(),
+						Group:     collections.IstioRbacV1Alpha1Serviceroles.Resource().Group(),
+						Version:   collections.IstioRbacV1Alpha1Serviceroles.Resource().Version(),
 						Namespace: "athenz-domain",
 						Name:      "client-reader-role",
 					},
@@ -766,11 +765,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 }
 
 func newCache() model.ConfigStoreCache {
-	configDescriptor := schema.Set{
-		schemas.ClusterRbacConfig,
-		schemas.ServiceRole,
-		schemas.ServiceRoleBinding,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
 
 	return memory.NewController(memory.Make(configDescriptor))
 }
@@ -790,7 +785,7 @@ func newSr(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRole.Type, ns, role, srSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, role, srSpec)
 }
 
 func newSrb(ns, role string) model.Config {
@@ -810,7 +805,7 @@ func newSrb(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, srbSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, srbSpec)
 }
 
 func updatedCache() (model.ConfigStoreCache, error) {
@@ -856,8 +851,8 @@ func TestGetCurrentIstioRbac(t *testing.T) {
 				csc: cacheWithItems,
 			},
 			expected: []model.Config{
-				*cacheWithItems.Get(schemas.ServiceRole.Type, "svc-role", "test-ns"),
-				*cacheWithItems.Get(schemas.ServiceRoleBinding.Type, "svc-role", "test-ns"),
+				*cacheWithItems.Get(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), "svc-role", "test-ns"),
+				*cacheWithItems.Get(collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(), "svc-role", "test-ns"),
 			},
 		},
 	}

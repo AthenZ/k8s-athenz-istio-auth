@@ -150,10 +150,10 @@ func newClusterRbacSpec(services []string) *v1alpha1.RbacConfig {
 func newClusterRbacConfig(services []string) model.Config {
 	return model.Config{
 		ConfigMeta: model.ConfigMeta{
-			Type:    collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Kind(),
+			Type:    collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Kind(),
 			Name:    constants.DefaultRbacConfigName,
-			Group:   collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Group(),
-			Version: collections.IstioRbacV1Alpha1Rbacconfigs.Resource().Version(),
+			Group:   collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Group(),
+			Version: collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().Version(),
 		},
 		Spec: newClusterRbacSpec(services),
 	}

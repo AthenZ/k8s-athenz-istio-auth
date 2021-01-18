@@ -2,7 +2,7 @@ package controller
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/config/schemas"
+	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 	"time"
 
@@ -60,7 +60,7 @@ func TestProcessConfigEvent(t *testing.T) {
 		},
 	}
 
-	c.processConfigEvent(config, model.EventAdd)
+	c.processConfigEvent(config, config, model.EventAdd)
 
 	assert.Equal(t, 1, c.queue.Len(), "queue length should be 1")
 	item, shutdown := c.queue.Get()
@@ -84,7 +84,7 @@ func newSr(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRole.Type, ns, role, srSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, role, srSpec)
 }
 
 func newSrb(ns, role string) model.Config {
@@ -99,7 +99,7 @@ func newSrb(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, srbSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, srbSpec)
 }
 
 func updatedSr(ns, role string) model.Config {
@@ -127,7 +127,7 @@ func updatedSr(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRole.Type, ns, role, srSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, role, srSpec)
 }
 
 func updatedSrb(ns, role string) model.Config {
@@ -145,7 +145,7 @@ func updatedSrb(ns, role string) model.Config {
 			},
 		},
 	}
-	return common.NewConfig(schemas.ServiceRoleBinding.Type, ns, role, srbSpec)
+	return common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, srbSpec)
 }
 
 func TestConvertSliceToKeyedMap(t *testing.T) {
@@ -166,8 +166,8 @@ func TestConvertSliceToKeyedMap(t *testing.T) {
 				newSrb("my-ns", "this-role"),
 			},
 			expected: map[string]model.Config{
-				"service-role/my-ns/this-role":         newSr("my-ns", "this-role"),
-				"service-role-binding/my-ns/this-role": newSrb("my-ns", "this-role"),
+				"ServiceRole/my-ns/this-role":         newSr("my-ns", "this-role"),
+				"ServiceRoleBinding/my-ns/this-role": newSrb("my-ns", "this-role"),
 			},
 		},
 	}

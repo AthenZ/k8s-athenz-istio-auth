@@ -11,12 +11,14 @@ import (
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"istio.io/api/security/v1beta1"
+	authz "istio.io/client-go/pkg/apis/security/v1beta1"
 	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/constants"
-	"istio.io/istio/pkg/config/schema"
-	"istio.io/istio/pkg/config/schemas"
+
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/istio/pkg/config/schema/resource"
 	v1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,12 +82,12 @@ type fakeConfigStore struct {
 	m sync.Mutex
 }
 
-func (cs *fakeConfigStore) Get(typ, name, namespace string) *model.Config {
+func (cs *fakeConfigStore) Get(typ resource.GroupVersionKind, name, namespace string) *model.Config {
 	cs.m.Lock()
 	defer cs.m.Unlock()
 	return cs.ConfigStore.Get(typ, name, namespace)
 }
-func (cs *fakeConfigStore) List(typ, namespace string) ([]model.Config, error) {
+func (cs *fakeConfigStore) List(typ resource.GroupVersionKind, namespace string) ([]model.Config, error) {
 	cs.m.Lock()
 	defer cs.m.Unlock()
 	return cs.ConfigStore.List(typ, namespace)
@@ -103,7 +105,7 @@ func (cs *fakeConfigStore) Update(cfg model.Config) (string, error) {
 	return cs.ConfigStore.Update(cfg)
 }
 
-func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
+func (cs *fakeConfigStore) Delete(typ resource.GroupVersionKind, name, namespace string) error {
 	cs.m.Lock()
 	defer cs.m.Unlock()
 	return cs.ConfigStore.Delete(typ, name, namespace)
@@ -111,9 +113,7 @@ func (cs *fakeConfigStore) Delete(typ, name, namespace string) error {
 
 func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
 	c := &Controller{}
-	configDescriptor := schema.Set{
-		schemas.AuthorizationPolicy,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 
 	configStore := memory.Make(configDescriptor)
 	if fake {
@@ -150,16 +150,15 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 }
 
 func TestNewController(t *testing.T) {
-	configDescriptor := schema.Set{
-		schemas.AuthorizationPolicy,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	source := fcache.NewFakeControllerSource()
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, true)
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, true)
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
@@ -167,16 +166,15 @@ func TestNewController(t *testing.T) {
 }
 
 func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
-	configDescriptor := schema.Set{
-		schemas.AuthorizationPolicy,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	source := fcache.NewFakeControllerSource()
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, true)
+	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, false)
 
 	signedDomain := getFakeDomain()
 	labels := onboardedService.GetLabels()
@@ -190,12 +188,12 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 
 func getExpectedCR() model.Config{
 	var out model.Config
-	schema := schemas.AuthorizationPolicy
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
 	out.ConfigMeta = model.ConfigMeta{
-		Type:      schema.Type,
-		Group:     schema.Group + constants.IstioAPIGroupDomain,
-		Version:   schema.Version,
+		Type:      schema.Resource().Kind(),
+		Group:     schema.Resource().Group(),
+		Version:   schema.Resource().Version(),
 		Namespace: "test-namespace",
 		Name:      "onboarded-service",
 		CreationTimestamp: createTimestamp,
