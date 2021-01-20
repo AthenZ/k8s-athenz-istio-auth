@@ -335,7 +335,7 @@ func TestSyncService(t *testing.T) {
 			name:                   "Update: update ClusterRbacConfig when it exists with multiple services",
 			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
 			inputClusterRbacConfig: newClusterRbacConfig([]string{onboardedServiceCopyName}),
-			expectedServiceList:    []string{onboardedServiceCopyName},
+			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
 		},
 		{
 			name:                   "Update: update ClusterRbacConfig when it exists without an inclusion field",
@@ -347,14 +347,14 @@ func TestSyncService(t *testing.T) {
 			name:                   "Update: update ClusterRbacConfig when not onboarded service exists",
 			inputServiceList:       []*v1.Service{onboardedService, notOnboardedService},
 			inputClusterRbacConfig: newClusterRbacConfig([]string{onboardedServiceName, notOnboardedServiceName}),
-			expectedServiceList:    []string{onboardedServiceName, notOnboardedServiceName},
+			expectedServiceList:    []string{onboardedServiceName},
 		},
-		//{
-		//	name:                   "Delete: delete cluster rbacconfig if service is no longer onboarded",
-		//	inputServiceList:       []*v1.Service{notOnboardedService},
-		//	inputClusterRbacConfig: newClusterRbacConfig([]string{notOnboardedServiceName}),
-		//	expectedServiceList:    []string{notOnboardedServiceName},
-		//},
+		{
+			name:                   "Delete: delete cluster rbacconfig if service is no longer onboarded",
+			inputServiceList:       []*v1.Service{notOnboardedService},
+			inputClusterRbacConfig: newClusterRbacConfig([]string{notOnboardedServiceName}),
+			expectedServiceList:    []string{},
+		},
 	}
 
 	for _, tt := range tests {

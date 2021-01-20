@@ -213,7 +213,7 @@ func (c *Controller) callbackHandler(err error, item *processor.Item) error {
 // object based on the current onboarded services in the cluster
 func (c *Controller) sync() error {
 	serviceList := c.getOnboardedServiceList()
-	config := c.configStoreCache.Get(collections.IstioRbacV1Alpha1Rbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
+	config := c.configStoreCache.Get(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 	if config == nil && len(serviceList) == 0 {
 		log.Infoln("Service list is empty and cluster rbac config does not exist, skipping sync...")
 		c.queue.Forget(queueKey)
