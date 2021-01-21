@@ -6,12 +6,12 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 
-	"istio.io/client-go/pkg/apis/security/v1beta1"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
@@ -208,7 +209,7 @@ func (c *Controller) sync(key string) error {
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
-	adResyncInterval, crcResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
+	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -217,8 +218,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
-	authzpolicyListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "authorizationpolicies", v1.NamespaceAll, fields.Everything())
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(authzpolicyListWatch, &v1beta1.AuthorizationPolicy{}, 0, nil)
+	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
 	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, authzpolicyIndexInformer, enableOriginJwtSubject, apDryRun)
 
 	c := &Controller{
@@ -280,6 +280,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.serviceIndexInformer.Run(stopCh)
 	go c.configStoreCache.Run(stopCh)
 	go c.adIndexInformer.Run(stopCh)
+	go c.authzpolicyIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")

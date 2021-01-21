@@ -1,4 +1,4 @@
-// Copyright 2019, Verizon Media Inc.
+// Copyright 2021, Verizon Media Inc.
 // Licensed under the terms of the 3-Clause BSD license. See LICENSE file in
 // github.com/yahoo/k8s-athenz-istio-auth for terms.
 package authzpolicy
@@ -21,6 +21,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	workloadv1beta1 "istio.io/api/type/v1beta1"
+	securityv1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pilot/pkg/model"
 	corev1 "k8s.io/api/core/v1"
@@ -134,10 +135,24 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 	})
 
 	authzpolicyIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			item := Item{
+				Operation: model.EventAdd,
+				Resource:  obj,
+			}
+			c.ProcessConfigChange(item)
+		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			item := Item{
 				Operation: model.EventUpdate,
 				Resource:  newObj,
+			}
+			c.ProcessConfigChange(item)
+		},
+		DeleteFunc: func(obj interface{}) {
+			item := Item{
+				Operation: model.EventDelete,
+				Resource:  obj,
 			}
 			c.ProcessConfigChange(item)
 		},
@@ -384,18 +399,15 @@ func (c *Controller) sync(item interface{}) error {
 				}
 			}
 		}
-	} else if _, ok := (castItem.Resource).(*v1beta1.AuthorizationPolicy); ok{
+	} else if obj, ok := (castItem.Resource).(*securityv1beta1.AuthorizationPolicy); ok{
 		// to prevent user manually edit authorization policy files
 		if _, ok = obj.Annotations["overrideAuthzPolicy"]; !ok {
-			// form the authorization policy config and send create sign to the queue
 			athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(obj.Namespace))
 			if err != nil {
 				return err
 			}
 
 			if !exists {
-				// TODO, add the non existing athenz domain to the istio custom resource
-				// processing controller to delete them
 				return fmt.Errorf("athenz domain %v does not exist in cache", obj.Namespace)
 			}
 
@@ -403,18 +415,31 @@ func (c *Controller) sync(item interface{}) error {
 			if !ok {
 				return errors.New("athenz domain cast failed")
 			}
-
 			signedDomain := athenzDomain.Spec.SignedDomain
-			labels := obj.GetLabels()
+			// regenerate authz policy spec, since for authz policy's name match with service's label 'app' value
+			// it can just pass in authz policy name as arg to func convertAthenzModelIntoIstioAuthzPolicy
+			label := obj.Name
 			domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-			convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
-			if (!c.dryrun) {
-				revision, err := c.configStoreCache.Update(convertedCR)
-				if err != nil {
-					log.Errorln("error updating authz policy: ", err.Error())
-					return err
+			convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, label)
+			if !c.dryrun {
+				// prevent manual editing the file
+				if castItem.Operation == model.EventUpdate {
+					// assign current revision, update function requires a defined resource version
+					convertedCR.ResourceVersion = obj.ResourceVersion
+					_, err := c.configStoreCache.Update(convertedCR)
+					if err != nil {
+						log.Errorln("error updating authz policy: ", err.Error())
+						return err
+					}
 				}
-				log.Infoln("Revision number is: ", revision)
+				// prevent
+				if castItem.Operation == model.EventDelete {
+					_, err := c.configStoreCache.Create(convertedCR)
+					if err != nil {
+						log.Errorln("error updating authz policy: ", err.Error())
+						return err
+					}
+				}
 			} else {
 				err := createDryrunResource(convertedCR, obj.Name, obj.Namespace)
 				if err != nil {

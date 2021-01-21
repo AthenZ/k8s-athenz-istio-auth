@@ -7,6 +7,7 @@ import (
 	"flag"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
+	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
@@ -69,6 +70,8 @@ func main() {
 		log.Panicf("Error creating athenz domain client: %s", err.Error())
 	}
 
+	istioClientSet, err := versionedclient.NewForConfig(config)
+
 	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
 	if err != nil {
 		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
@@ -79,7 +82,7 @@ func main() {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)
