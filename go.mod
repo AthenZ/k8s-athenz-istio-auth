@@ -49,13 +49,11 @@ require (
 )
 
 // Kubernetes makes it challenging to depend on their libraries. To get around this, we need to force
-// the sha to use. All of these are pinned to the tag "kubernetes-1.16"
+// the sha to use. All of these are pinned to the tag "kubernetes-1.17.14"
 replace k8s.io/api => k8s.io/api v0.17.14
 
 replace k8s.io/apimachinery => k8s.io/apimachinery v0.17.14
 
-// Pinned to Kubernetes 1.15 for now, due to some issues with 1.16
-// TODO(https://github.com/istio/istio/issues/17831) upgrade to 1.16
 replace k8s.io/client-go => k8s.io/client-go v0.17.14
 
 replace k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.17.14
