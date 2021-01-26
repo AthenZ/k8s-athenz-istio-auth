@@ -4,8 +4,8 @@
 package authzpolicy
 
 import (
+	"fmt"
 	"github.com/ardielle/ardielle-go/rdl"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
@@ -14,11 +14,10 @@ import (
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"istio.io/api/security/v1beta1"
-	authz "istio.io/client-go/pkg/apis/security/v1beta1"
 	workloadv1beta1 "istio.io/api/type/v1beta1"
+	authz "istio.io/client-go/pkg/apis/security/v1beta1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
-
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
@@ -35,6 +34,7 @@ import (
 
 const (
 	DomainName = "test.namespace"
+	DomainName1 = "test1.namespace"
 	username   = "user.name"
 	username1  = "user.*"
 )
@@ -48,14 +48,14 @@ var (
 				authzEnabledAnnotation: "true",
 			},
 			Labels: map[string]string{
-				"app": "productpage",
+				"svc": "productpage",
 			},
 		},
 	}
 	notOnboardedService = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "not-onboarded-service",
-			Namespace: "test-namespace",
+			Namespace: "test1-namespace",
 		},
 	}
 
@@ -64,13 +64,22 @@ var (
 	notOnboardedServiceName = "not-onboarded-service.test-namespace.svc.cluster.local"
 	dnsSuffix               = "svc.cluster.local"
 
-	ad1 = &adv1.AthenzDomain{
+	onboardedAthenzDomain = &adv1.AthenzDomain{
 		ObjectMeta: k8sv1.ObjectMeta{
 			Name:      DomainName,
 			Namespace: "",
 		},
 		Spec: adv1.AthenzDomainSpec{
-			SignedDomain: getFakeDomain(),
+			SignedDomain: getFakeOnboardedDomain(),
+		},
+	}
+	notOnboardedAthenzDomain = &adv1.AthenzDomain{
+		ObjectMeta: k8sv1.ObjectMeta{
+			Name:      DomainName1,
+			Namespace: "",
+		},
+		Spec: adv1.AthenzDomainSpec{
+			SignedDomain: getFakeNotOnboardedDomain(),
 		},
 	}
 )
@@ -114,44 +123,6 @@ func (cs *fakeConfigStore) Delete(typ resource.GroupVersionKind, name, namespace
 	return cs.ConfigStore.Delete(typ, name, namespace)
 }
 
-func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
-	c := &Controller{}
-	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-
-	configStore := memory.Make(configDescriptor)
-	if fake {
-		configStore = &fakeConfigStore{
-			configStore,
-			sync.Mutex{},
-		}
-	}
-	c.configStoreCache = memory.NewController(configStore)
-
-	source := fcache.NewFakeControllerSource()
-	for _, service := range services {
-		source.Add(service)
-	}
-	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
-	go fakeIndexInformer.Run(stopCh)
-
-	if !cache.WaitForCacheSync(stopCh, fakeIndexInformer.HasSynced) {
-		log.Panicln("timed out waiting for cache to sync")
-	}
-	c.serviceIndexInformer = fakeIndexInformer
-
-	fakeClientset := fakev1.NewSimpleClientset()
-	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
-	adIndexInformer.GetStore().Add(ad1.DeepCopy())
-	c.adIndexInformer = adIndexInformer
-
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-	c.queue = queue
-
-	c.enableOriginJwtSubject=true
-
-	return c
-}
-
 func TestNewController(t *testing.T) {
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	source := fcache.NewFakeControllerSource()
@@ -168,25 +139,140 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 }
 
-func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
+func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
+	c := &Controller{}
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	source := fcache.NewFakeControllerSource()
-	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
-	athenzclientset := fakev1.NewSimpleClientset()
-	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	configStore := memory.Make(configDescriptor)
-	configStoreCache := memory.NewController(configStore)
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, false)
 
-	signedDomain := getFakeDomain()
-	labels := onboardedService.GetLabels()
-	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	spew.Println("labels looks like: ", labels)
-	convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, onboardedService.Namespace, onboardedService.Name, labels["app"])
-	//fmt.Println("convertCR looks like: ", convertedCR.ConfigMeta.CreationTimestamp)
-	expectedCR := getExpectedCR();
-	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
+	configStore := memory.Make(configDescriptor)
+	if fake {
+		configStore = &fakeConfigStore{
+			configStore,
+			sync.Mutex{},
+		}
+	}
+	c.configStoreCache = memory.NewController(configStore)
+
+	source := fcache.NewFakeControllerSource()
+	go c.configStoreCache.Run(stopCh)
+
+	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
+	go fakeIndexInformer.Run(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, fakeIndexInformer.HasSynced) {
+		log.Panicln("timed out waiting for cache to sync")
+	}
+	c.serviceIndexInformer = fakeIndexInformer
+
+	fakeClientset := fakev1.NewSimpleClientset()
+	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
+	adIndexInformer.GetStore().Add(onboardedAthenzDomain.DeepCopy())
+	go adIndexInformer.Run(stopCh)
+	c.adIndexInformer = adIndexInformer
+
+	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
+	go authzpolicyIndexInformer.Run(stopCh)
+	c.authzpolicyIndexInformer = authzpolicyIndexInformer
+
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	c.queue = queue
+
+	c.enableOriginJwtSubject=true
+
+	return c
+}
+
+func TestSyncService(t *testing.T) {
+	tests := []struct {
+		name                       string
+		inputServiceList           []*v1.Service
+		fake                       bool
+		expectedAuthzPolicy        model.Config
+	}{
+		{
+			name:                "generate Authorization Policy spec for service with annotation set",
+			inputServiceList:    []*v1.Service{onboardedService},
+			fake:                true,
+			expectedAuthzPolicy: getExpectedCR(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := Item{
+				Operation: model.EventAdd,
+				Resource:  onboardedService,
+			}
+
+			c := newFakeController(tt.inputServiceList, tt.fake, make(chan struct{}))
+
+			// Add a sleep for processing controller to work on the queue
+			time.Sleep(100 * time.Millisecond)
+			err := c.sync(item)
+			if err != nil {
+				fmt.Println("got sync err: ", err)
+			}
+			//signedDomain := onboardedAthenzDomain.Spec.Domain
+			//labels := onboardedService.GetLabels()
+			//domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain, &c.adIndexInformer)
+			//convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, onboardedService.Namespace, onboardedService.Name, labels["app"])
+			//c.configStoreCache.Create(convertedCR)
+			genAuthzPolicy := c.configStoreCache.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), "onboarded-service", "test-namespace")
+			assert.Equal(t, tt.expectedAuthzPolicy.Spec, genAuthzPolicy.Spec, "created authz policy spec should be equal")
+			// except creation timestamp and revision, configMeta field should be same
+			assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Namespace, genAuthzPolicy.ConfigMeta.Namespace, "namespace should be equal")
+			assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Type, genAuthzPolicy.ConfigMeta.Type, "resource type should be equal")
+			assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Name, genAuthzPolicy.ConfigMeta.Name, "resource name should be equal")
+			assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Group, genAuthzPolicy.ConfigMeta.Group, "apiGroup should be equal")
+			assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Version, genAuthzPolicy.ConfigMeta.Version, "apiVersion should be equal")
+		})
+	}
+}
+
+func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
+	tests := []struct {
+		name                       string
+		inputService               *v1.Service
+		fake                       bool
+		athenzDomain               *adv1.AthenzDomain
+		expectedCR                 model.Config
+	}{
+		{
+			name:                  "generate Authorization Policy spec for service with annotation set",
+			inputService:          onboardedService,
+			fake:                  true,
+			athenzDomain:          onboardedAthenzDomain,
+			expectedCR:            getExpectedCR(),
+		},
+	}
+
+	for _, tt := range tests {
+		configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
+		source := fcache.NewFakeControllerSource()
+		source.Add(tt.inputService)
+
+		fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
+		athenzclientset := fakev1.NewSimpleClientset()
+		fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+		fakeAthenzInformer.GetStore().Add(tt.athenzDomain.DeepCopy())
+
+		configStore := memory.Make(configDescriptor)
+		if tt.fake {
+			configStore = &fakeConfigStore{
+				configStore,
+				sync.Mutex{},
+			}
+		}
+		configStoreCache := memory.NewController(configStore)
+		authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
+		c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, false)
+
+		signedDomain := tt.athenzDomain.Spec.Domain
+		labels := tt.inputService.GetLabels()
+		domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain, &c.adIndexInformer)
+		convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, tt.inputService.Namespace, tt.inputService.Name, labels["svc"])
+
+		assert.Equal(t, tt.expectedCR, convertedCR, "converted authz policy should be equal")
+	}
 }
 
 func getExpectedCR() model.Config{
@@ -241,7 +327,7 @@ func getExpectedCR() model.Config{
 	return out
 }
 
-func getFakeDomain() zms.SignedDomain {
+func getFakeOnboardedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2019-07-22T20:29:10.305Z")
 	if err != nil {
@@ -294,6 +380,74 @@ func getFakeDomain() zms.SignedDomain {
 					Members:  []zms.MemberName{"productpage-reader"},
 					Modified: &timestamp,
 					Name:     DomainName + ":role.productpage-reader",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: username1,
+						},
+					},
+				},
+			},
+			Services: []*zms.ServiceIdentity{},
+			Entities: []*zms.Entity{},
+		},
+		KeyId:     "colo-env-1.1",
+		Signature: "signature",
+	}
+}
+
+func getFakeNotOnboardedDomain() zms.SignedDomain {
+	allow := zms.ALLOW
+	timestamp, err := rdl.TimestampParse("2001-01-25T03:32:15.245Z")
+	if err != nil {
+		panic(err)
+	}
+
+	return zms.SignedDomain{
+		Domain: &zms.DomainData{
+			Modified: timestamp,
+			Name:     DomainName1,
+			Policies: &zms.SignedPolicies{
+				Contents: &zms.DomainPolicies{
+					Domain: DomainName1,
+					Policies: []*zms.Policy{
+						{
+							Assertions: []*zms.Assertion{
+								{
+									Role:     DomainName1 + ":role.admin",
+									Resource: DomainName1 + ":*",
+									Action:   "*",
+									Effect:   &allow,
+								},
+								{
+									Role:     DomainName1 + ":role.details",
+									Resource: DomainName1 + ":svc.details",
+									Action:   "get",
+									Effect:   &allow,
+								},
+							},
+							Modified: &timestamp,
+							Name:     DomainName1 + ":policy.admin",
+						},
+					},
+				},
+				KeyId:     "col-env-1.1",
+				Signature: "signature-policy",
+			},
+			Roles: []*zms.Role{
+				{
+					Members:  []zms.MemberName{username},
+					Modified: &timestamp,
+					Name:     DomainName1 + ":role.admin",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: username1,
+						},
+					},
+				},
+				{
+					Members:  []zms.MemberName{"details"},
+					Modified: &timestamp,
+					Name:     DomainName1 + ":role.details",
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: username1,

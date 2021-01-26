@@ -214,7 +214,6 @@ func (c *Controller) sync(item interface{}) error {
 					if err != nil {
 						return err
 					}
-
 					if !exists {
 						// TODO, add the non existing athenz domain to the istio custom resource
 						// processing controller to delete them
@@ -225,10 +224,12 @@ func (c *Controller) sync(item interface{}) error {
 					if !ok {
 						return errors.New("athenz domain cast failed")
 					}
-
 					signedDomain := athenzDomain.Spec.SignedDomain
 					labels := obj.GetLabels()
 					domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+					if _, ok := labels["svc"]; !ok {
+						return fmt.Errorf("svc object does not contain label 'svc', unable to auto create authz policy")
+					}
 					convertedCR = c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
 					log.Infoln("Creating Authz Policy ... ")
 					if !c.dryrun {
@@ -306,6 +307,9 @@ func (c *Controller) sync(item interface{}) error {
 
 						signedDomain := athenzDomain.Spec.SignedDomain
 						labels := obj.GetLabels()
+						if _, ok := labels["svc"]; !ok {
+							return fmt.Errorf("svc object does not contain label 'svc', unable to auto create authz policy")
+						}
 						domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
 						convertedCR = c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
 						log.Infoln("Creating Authz Policy ... ")
