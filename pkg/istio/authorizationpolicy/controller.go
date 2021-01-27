@@ -422,7 +422,7 @@ func (c *Controller) sync(item interface{}) error {
 			signedDomain := athenzDomain.Spec.SignedDomain
 			// regenerate authz policy spec, since for authz policy's name match with service's label 'app' value
 			// it can just pass in authz policy name as arg to func convertAthenzModelIntoIstioAuthzPolicy
-			label := obj.Name
+			label := obj.Spec.Selector.MatchLabels["svc"]
 			domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
 			convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, label)
 			if !c.dryrun {
@@ -452,7 +452,7 @@ func (c *Controller) sync(item interface{}) error {
 			}
 		}
 	} else {
-		return fmt.Errorf("unable to cast interface to service or athenzDomain object")
+		return fmt.Errorf("unable to cast interface to service or athenzDomain or authz policy object")
 	}
 	return nil
 }
