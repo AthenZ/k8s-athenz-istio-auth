@@ -12,6 +12,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 
+	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
@@ -21,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"

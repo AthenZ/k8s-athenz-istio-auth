@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -67,7 +68,7 @@ func TestMemberToSpiffe(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotMember, gotErr := memberToSpiffe(c.member)
+		gotMember, gotErr := common.MemberToSpiffe(c.member)
 		assert.Equal(t, c.expectedMember, gotMember, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
@@ -114,7 +115,7 @@ func TestMemberToOriginJwtSubject(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotOriginJwtName, gotErr := memberToOriginJwtSubject(c.member)
+		gotOriginJwtName, gotErr := common.MemberToOriginJwtSubject(c.member)
 		assert.Equal(t, c.expectedOriginJwtName, gotOriginJwtName, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}

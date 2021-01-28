@@ -5,17 +5,13 @@ package authzpolicy
 
 import (
 	"github.com/ardielle/ardielle-go/rdl"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
-	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
-	"istio.io/api/security/v1beta1"
 	authz "istio.io/client-go/pkg/apis/security/v1beta1"
-	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
 
@@ -30,7 +26,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sync"
 	"testing"
-	"time"
 )
 
 const (
@@ -125,7 +120,7 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 			sync.Mutex{},
 		}
 	}
-	c.configStoreCache = memory.NewController(configStore)
+	c.ConfigStoreCache = memory.NewController(configStore)
 
 	source := fcache.NewFakeControllerSource()
 	for _, service := range services {
@@ -137,17 +132,17 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 	if !cache.WaitForCacheSync(stopCh, fakeIndexInformer.HasSynced) {
 		log.Panicln("timed out waiting for cache to sync")
 	}
-	c.serviceIndexInformer = fakeIndexInformer
+	c.ServiceIndexInformer = fakeIndexInformer
 
 	fakeClientset := fakev1.NewSimpleClientset()
 	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
 	adIndexInformer.GetStore().Add(ad1.DeepCopy())
-	c.adIndexInformer = adIndexInformer
+	c.AdIndexInformer = adIndexInformer
 
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-	c.queue = queue
+	c.Queue = queue
 
-	c.enableOriginJwtSubject=true
+	c.EnableOriginJwtSubject=true
 
 	return c
 }
@@ -162,83 +157,10 @@ func TestNewController(t *testing.T) {
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
 	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, true)
-	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
-	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
-	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
-	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
-}
-
-func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
-	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	source := fcache.NewFakeControllerSource()
-	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
-	athenzclientset := fakev1.NewSimpleClientset()
-	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	configStore := memory.Make(configDescriptor)
-	configStoreCache := memory.NewController(configStore)
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, false)
-
-	signedDomain := getFakeDomain()
-	labels := onboardedService.GetLabels()
-	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	spew.Println("labels looks like: ", labels)
-	convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, onboardedService.Namespace, onboardedService.Name, labels["app"])
-	//fmt.Println("convertCR looks like: ", convertedCR.ConfigMeta.CreationTimestamp)
-	expectedCR := getExpectedCR();
-	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
-}
-
-func getExpectedCR() model.Config{
-	var out model.Config
-	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
-	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
-	out.ConfigMeta = model.ConfigMeta{
-		Type:      schema.Resource().Kind(),
-		Group:     schema.Resource().Group(),
-		Version:   schema.Resource().Version(),
-		Namespace: "test-namespace",
-		Name:      "onboarded-service",
-		CreationTimestamp: createTimestamp,
-	}
-	out.Spec = &v1beta1.AuthorizationPolicy{
-		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
-		},
-		Rules: []*v1beta1.Rule{
-			{
-				To: []*v1beta1.Rule_To{
-					{
-						Operation: &v1beta1.Operation{
-							Methods: []string{
-								"GET",
-							},
-						},
-					},
-				},
-			},
-			{
-				From: []*v1beta1.Rule_From{
-					{
-						Source: &v1beta1.Source{
-							Principals: []string{
-								"*",
-								"test.namespace/ra/test.namespace:role.productpage-reader",
-							},
-						},
-					},
-					{
-						Source: &v1beta1.Source{
-							RequestPrincipals: []string{
-								"*",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return out
+	assert.Equal(t, fakeIndexInformer, c.ServiceIndexInformer, "service index informer pointer should be equal")
+	assert.Equal(t, configStoreCache, c.ConfigStoreCache, "config configStoreCache cache pointer should be equal")
+	assert.Equal(t, fakeAthenzInformer, c.AdIndexInformer, "athenz index informer cache should be equal")
+	assert.Equal(t, true, c.EnableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 }
 
 func getFakeDomain() zms.SignedDomain {

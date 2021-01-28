@@ -9,6 +9,7 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -59,7 +60,7 @@ func TestParseAssertionEffect(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotAssertion, gotErr := parseAssertionEffect(c.assertion)
+		gotAssertion, gotErr := common.ParseAssertionEffect(c.assertion)
 		assert.Equal(t, c.expectedEffect, gotAssertion, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
@@ -114,7 +115,7 @@ func TestParseAssertionAction(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotAssertion, gotErr := parseAssertionAction(c.assertion)
+		gotAssertion, gotErr := common.ParseAssertionAction(c.assertion)
 		assert.Equal(t, c.expectedAction, gotAssertion, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
@@ -183,7 +184,7 @@ func TestParseAssertionResource(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSvc, gotPath, gotErr := parseAssertionResource(c.domainName, c.assertion)
+		gotSvc, gotPath, gotErr := common.ParseAssertionResource(c.domainName, c.assertion)
 		assert.Equal(t, c.expectedSvc, gotSvc, c.test)
 		assert.Equal(t, c.expectedPath, gotPath, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
