@@ -1,21 +1,330 @@
-// Copyright 2019, Verizon Media Inc.
-// Licensed under the terms of the 3-Clause BSD license. See LICENSE file in
-// github.com/yahoo/k8s-athenz-istio-auth for terms.
 package common
 
 import (
 	"fmt"
-	"istio.io/istio/pkg/config/schema/collection"
-	"istio.io/istio/pkg/config/schema/collections"
-	"testing"
-
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
-
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
+	"testing"
 )
+
+func TestPrincipalToSPIFFE(t *testing.T) {
+	cases := []struct {
+		test           string
+		principal      string
+		expectedSpiffe string
+		expectedErr    error
+	}{
+		{
+			test:           "empty principal",
+			principal:      "",
+			expectedSpiffe: "",
+			expectedErr:    fmt.Errorf("principal is empty"),
+		},
+		{
+			test:           "valid service principal",
+			principal:      "client.some-domain.dep-svcA",
+			expectedSpiffe: "client.some-domain/sa/dep-svcA",
+			expectedErr:    nil,
+		},
+		{
+			test:           "valid user principal",
+			principal:      "user.myname",
+			expectedSpiffe: "user/sa/myname",
+			expectedErr:    nil,
+		},
+		{
+			test:           "invalid principal",
+			principal:      "someuser",
+			expectedSpiffe: "",
+			expectedErr:    fmt.Errorf("principal:someuser is not of the format <Athenz-domain>.<Athenz-service>"),
+		},
+	}
+
+	for _, c := range cases {
+		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
+		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestMemberToSpiffe(t *testing.T) {
+
+	cases := []struct {
+		test           string
+		member         *zms.RoleMember
+		expectedMember string
+		expectedErr    error
+	}{
+		{
+			test:           "nil member",
+			member:         nil,
+			expectedMember: "",
+			expectedErr:    fmt.Errorf("member is nil"),
+		},
+		{
+			test: "valid service member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
+			},
+			expectedMember: "client.some-domain/sa/dep-svcA",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid user member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("user.somename"),
+			},
+			expectedMember: "user/sa/somename",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid wildcard member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("user.*"),
+			},
+			expectedMember: "*",
+			expectedErr:    nil,
+		},
+		{
+			test: "invalid member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("not-a-valid-principal"),
+			},
+			expectedMember: "",
+			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
+		},
+	}
+
+	for _, c := range cases {
+		gotMember, gotErr := MemberToSpiffe(c.member)
+		assert.Equal(t, c.expectedMember, gotMember, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestMemberToOriginJwtSubject(t *testing.T) {
+
+	cases := []struct {
+		test                  string
+		member                *zms.RoleMember
+		expectedOriginJwtName string
+		expectedErr           error
+	}{
+		{
+			test:                  "nil member",
+			member:                nil,
+			expectedOriginJwtName: "",
+			expectedErr:           fmt.Errorf("member is nil"),
+		},
+		{
+			test: "valid service member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
+			},
+			expectedOriginJwtName: AthenzJwtPrefix + "client.some-domain.dep-svcA",
+			expectedErr:           nil,
+		},
+		{
+			test: "valid user member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("user.somename"),
+			},
+			expectedOriginJwtName: AthenzJwtPrefix + "user.somename",
+			expectedErr:           nil,
+		},
+		{
+			test: "valid wildcard member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("user.*"),
+			},
+			expectedOriginJwtName: "*",
+			expectedErr:           nil,
+		},
+	}
+
+	for _, c := range cases {
+		gotOriginJwtName, gotErr := MemberToOriginJwtSubject(c.member)
+		assert.Equal(t, c.expectedOriginJwtName, gotOriginJwtName, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestParseAssertionEffect(t *testing.T) {
+
+	allow := zms.ALLOW
+	deny := zms.DENY
+	cases := []struct {
+		test           string
+		assertion      *zms.Assertion
+		expectedEffect string
+		expectedErr    error
+	}{
+		{
+			test:           "empty assertion",
+			assertion:      nil,
+			expectedEffect: "",
+			expectedErr:    fmt.Errorf("assertion is nil"),
+		},
+		{
+			test:           "empty assertion effect",
+			assertion:      &zms.Assertion{},
+			expectedEffect: "",
+			expectedErr:    fmt.Errorf("assertion effect is nil"),
+		},
+		{
+			test: "valid effect",
+			assertion: &zms.Assertion{
+				Effect: &allow,
+			},
+			expectedEffect: "ALLOW",
+			expectedErr:    nil,
+		},
+		{
+			test: "invalid(unsupported) effect",
+			assertion: &zms.Assertion{
+				Effect: &deny,
+			},
+			expectedEffect: "",
+			expectedErr:    fmt.Errorf("effect: DENY is not a supported assertion effect"),
+		},
+	}
+
+	for _, c := range cases {
+		gotAssertion, gotErr := ParseAssertionEffect(c.assertion)
+		assert.Equal(t, c.expectedEffect, gotAssertion, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestParseAssertionAction(t *testing.T) {
+
+	cases := []struct {
+		test           string
+		assertion      *zms.Assertion
+		expectedAction string
+		expectedErr    error
+	}{
+		{
+			test:           "empty assertion",
+			assertion:      nil,
+			expectedAction: "",
+			expectedErr:    fmt.Errorf("assertion is nil"),
+		},
+		{
+			test: "valid action",
+			assertion: &zms.Assertion{
+				Action: "get",
+			},
+			expectedAction: "GET",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid action POST",
+			assertion: &zms.Assertion{
+				Action: "POST",
+			},
+			expectedAction: "POST",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid action wildcard *",
+			assertion: &zms.Assertion{
+				Action: "*",
+			},
+			expectedAction: "*",
+			expectedErr:    nil,
+		},
+		{
+			test: "invalid action",
+			assertion: &zms.Assertion{
+				Action: "launch",
+			},
+			expectedAction: "",
+			expectedErr:    fmt.Errorf("method: launch is not a supported HTTP method"),
+		},
+	}
+
+	for _, c := range cases {
+		gotAssertion, gotErr := ParseAssertionAction(c.assertion)
+		assert.Equal(t, c.expectedAction, gotAssertion, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestParseAssertionResource(t *testing.T) {
+
+	cases := []struct {
+		test         string
+		domainName   zms.DomainName
+		assertion    *zms.Assertion
+		expectedSvc  string
+		expectedPath string
+		expectedErr  error
+	}{
+		{
+			test:         "empty assertion",
+			domainName:   "athenz.domain",
+			assertion:    nil,
+			expectedSvc:  "",
+			expectedPath: "",
+			expectedErr:  fmt.Errorf("assertion is nil"),
+		},
+		{
+			test:       "valid resource spec",
+			domainName: "athenz.domain",
+			assertion: &zms.Assertion{
+				Resource: "athenz.domain:svc.my-backend-service:/protected/endpoint",
+			},
+			expectedSvc:  "my-backend-service",
+			expectedPath: "/protected/endpoint",
+			expectedErr:  nil,
+		},
+		{
+			test:       "resource specifying valid service without endpoint",
+			domainName: "athenz.domain",
+			assertion: &zms.Assertion{
+				Resource: "athenz.domain:svc.my-backend-service",
+			},
+			expectedSvc:  "my-backend-service",
+			expectedPath: "",
+			expectedErr:  nil,
+		},
+		{
+			test:       "resource specifying service of another domain",
+			domainName: "athenz.domain",
+			assertion: &zms.Assertion{
+				Resource: "some.other.athenz.domain:svc.my-backend-service:/protected/endpoint",
+			},
+			expectedSvc:  "",
+			expectedPath: "",
+			expectedErr: fmt.Errorf("resource: some.other.athenz.domain:svc.my-backend-service:/protected/endpoint" +
+				" does not belong to the Athenz domain: athenz.domain"),
+		},
+		{
+			test:       "resource not specifying a service in required format",
+			domainName: "athenz.domain",
+			assertion: &zms.Assertion{
+				Resource: "athenz.domain:service.my-backend-service:/protected/endpoint",
+			},
+			expectedSvc:  "",
+			expectedPath: "",
+			expectedErr: fmt.Errorf("resource: athenz.domain:service.my-backend-service:/protected/endpoint does " +
+				"not specify the service using svc.<service-name> format"),
+		},
+	}
+
+	for _, c := range cases {
+		gotSvc, gotPath, gotErr := ParseAssertionResource(c.domainName, c.assertion)
+		assert.Equal(t, c.expectedSvc, gotSvc, c.test)
+		assert.Equal(t, c.expectedPath, gotPath, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
 
 func TestParseRoleFQDN(t *testing.T) {
 

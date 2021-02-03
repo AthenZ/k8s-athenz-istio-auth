@@ -5,18 +5,9 @@ package common
 
 import (
 	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
-)
-
-const (
-	allUsers                     = "user.*"
-	WildCardAll                  = "*"
-	ServiceRoleKind              = "ServiceRole"
-	AthenzJwtPrefix              = "athenz/"
-	RequestAuthPrincipalProperty = "request.auth.principal"
 )
 
 // GetServiceRoleBindingSpec returns the ServiceRoleBindingSpec for a given Athenz role and its members
@@ -27,7 +18,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 
 		//TODO: handle member.Expiration for expired members, for now ignore expiration
 
-		spiffeName, err := common.MemberToSpiffe(member)
+		spiffeName, err := MemberToSpiffe(member)
 		if err != nil {
 			log.Warningln(err.Error())
 			continue
@@ -39,7 +30,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 		subjects = append(subjects, spiffeSubject)
 
 		if enableOriginJwtSubject {
-			originJwtName, err := common.MemberToOriginJwtSubject(member)
+			originJwtName, err := MemberToOriginJwtSubject(member)
 			if err != nil {
 				log.Warningln(err.Error())
 				continue
@@ -65,7 +56,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 	}
 
 	//add role spiffee for role certificate
-	roleSpiffeName, err := common.RoleToSpiffe(athenzDomainName, roleName)
+	roleSpiffeName, err := RoleToSpiffe(athenzDomainName, roleName)
 	if err != nil {
 		return nil, err
 	}

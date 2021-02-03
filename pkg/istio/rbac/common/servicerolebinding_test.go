@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -17,108 +16,6 @@ import (
 
 func init() {
 	log.InitLogger("", "debug")
-}
-
-func TestMemberToSpiffe(t *testing.T) {
-
-	cases := []struct {
-		test           string
-		member         *zms.RoleMember
-		expectedMember string
-		expectedErr    error
-	}{
-		{
-			test:           "nil member",
-			member:         nil,
-			expectedMember: "",
-			expectedErr:    fmt.Errorf("member is nil"),
-		},
-		{
-			test: "valid service member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
-			},
-			expectedMember: "client.some-domain/sa/dep-svcA",
-			expectedErr:    nil,
-		},
-		{
-			test: "valid user member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("user.somename"),
-			},
-			expectedMember: "user/sa/somename",
-			expectedErr:    nil,
-		},
-		{
-			test: "valid wildcard member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("user.*"),
-			},
-			expectedMember: "*",
-			expectedErr:    nil,
-		},
-		{
-			test: "invalid member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("not-a-valid-principal"),
-			},
-			expectedMember: "",
-			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
-		},
-	}
-
-	for _, c := range cases {
-		gotMember, gotErr := common.MemberToSpiffe(c.member)
-		assert.Equal(t, c.expectedMember, gotMember, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
-	}
-}
-
-func TestMemberToOriginJwtSubject(t *testing.T) {
-
-	cases := []struct {
-		test                  string
-		member                *zms.RoleMember
-		expectedOriginJwtName string
-		expectedErr           error
-	}{
-		{
-			test:                  "nil member",
-			member:                nil,
-			expectedOriginJwtName: "",
-			expectedErr:           fmt.Errorf("member is nil"),
-		},
-		{
-			test: "valid service member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
-			},
-			expectedOriginJwtName: AthenzJwtPrefix + "client.some-domain.dep-svcA",
-			expectedErr:           nil,
-		},
-		{
-			test: "valid user member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("user.somename"),
-			},
-			expectedOriginJwtName: AthenzJwtPrefix + "user.somename",
-			expectedErr:           nil,
-		},
-		{
-			test: "valid wildcard member",
-			member: &zms.RoleMember{
-				MemberName: zms.MemberName("user.*"),
-			},
-			expectedOriginJwtName: "*",
-			expectedErr:           nil,
-		},
-	}
-
-	for _, c := range cases {
-		gotOriginJwtName, gotErr := common.MemberToOriginJwtSubject(c.member)
-		assert.Equal(t, c.expectedOriginJwtName, gotOriginJwtName, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
-	}
 }
 
 func TestGetServiceRoleBindingSpec(t *testing.T) {

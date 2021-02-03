@@ -11,9 +11,10 @@ import (
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
-	authz "istio.io/client-go/pkg/apis/security/v1beta1"
+	fakeversionedclient "istio.io/client-go/pkg/clientset/versioned/fake"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
+	"time"
 
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
@@ -120,7 +121,7 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 			sync.Mutex{},
 		}
 	}
-	c.ConfigStoreCache = memory.NewController(configStore)
+	c.configStoreCache = memory.NewController(configStore)
 
 	source := fcache.NewFakeControllerSource()
 	for _, service := range services {
@@ -132,17 +133,17 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 	if !cache.WaitForCacheSync(stopCh, fakeIndexInformer.HasSynced) {
 		log.Panicln("timed out waiting for cache to sync")
 	}
-	c.ServiceIndexInformer = fakeIndexInformer
+	c.serviceIndexInformer = fakeIndexInformer
 
 	fakeClientset := fakev1.NewSimpleClientset()
 	adIndexInformer := adInformer.NewAthenzDomainInformer(fakeClientset, 0, cache.Indexers{})
 	adIndexInformer.GetStore().Add(ad1.DeepCopy())
-	c.AdIndexInformer = adIndexInformer
+	c.adIndexInformer = adIndexInformer
 
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-	c.Queue = queue
+	c.queue = queue
 
-	c.EnableOriginJwtSubject=true
+	c.enableOriginJwtSubject=true
 
 	return c
 }
@@ -153,14 +154,15 @@ func TestNewController(t *testing.T) {
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
+	istioClientSet := fakeversionedclient.NewSimpleClientset()
+	apResyncInterval,_ := time.ParseDuration("1h")
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, true)
-	assert.Equal(t, fakeIndexInformer, c.ServiceIndexInformer, "service index informer pointer should be equal")
-	assert.Equal(t, configStoreCache, c.ConfigStoreCache, "config configStoreCache cache pointer should be equal")
-	assert.Equal(t, fakeAthenzInformer, c.AdIndexInformer, "athenz index informer cache should be equal")
-	assert.Equal(t, true, c.EnableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, true)
+	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
+	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
+	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
+	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 }
 
 func getFakeDomain() zms.SignedDomain {

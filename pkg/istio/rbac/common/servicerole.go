@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
@@ -39,19 +38,19 @@ func GetServiceRoleSpec(domainName zms.DomainName, roleName string, assertions [
 			continue
 		}
 
-		svc, path, err := common.ParseAssertionResource(domainName, assertion)
+		svc, path, err := ParseAssertionResource(domainName, assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue
 		}
 
-		_, err = common.ParseAssertionEffect(assertion)
+		_, err = ParseAssertionEffect(assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue
 		}
 
-		method, err := common.ParseAssertionAction(assertion)
+		method, err := ParseAssertionAction(assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue

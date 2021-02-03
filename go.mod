@@ -8,9 +8,9 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.4.0
-	github.com/yahoo/athenz v1.8.40
-	github.com/yahoo/k8s-athenz-syncer v0.1.6
+	github.com/stretchr/testify v1.5.1
+	github.com/yahoo/athenz v1.9.30
+	github.com/yahoo/k8s-athenz-syncer v0.1.7
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	istio.io/api v0.0.0-20200513175333-ae3da0d240e3
 	istio.io/client-go v0.0.0-20200513180646-f8d9d8ff84e6
