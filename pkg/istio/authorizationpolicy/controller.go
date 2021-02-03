@@ -4,7 +4,6 @@
 package authzpolicy
 
 import (
-	"errors"
 	"fmt"
 	"github.com/ghodss/yaml"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
@@ -185,13 +184,19 @@ func (c *Controller) sync(item interface{}) error {
 	switch true {
 	case svcCast:
 		err := c.processSvcResource(castItem.Operation, svcObj)
-		return fmt.Errorf("error processing service resource, resource name: %v, error: %v", svcObj.Name, err.Error())
+		if err != nil {
+			return fmt.Errorf("error processing service resource, resource name: %v, error: %v", svcObj.Name, err.Error())
+		}
 	case adCast:
 		err := c.processAthenzDomainResource(castItem.Operation, adObj)
-		return fmt.Errorf("error processing athenz domain resource, resource name: %v, error: %v", adObj.Name, err.Error())
+		if err != nil {
+			return fmt.Errorf("error processing athenz domain resource, resource name: %v, error: %v", adObj.Name, err.Error())
+		}
 	case apCast:
 		err := c.processAuthorizationPolicyResource(castItem.Operation, apObj)
-		return fmt.Errorf("error processing authorization policy resource, resource name: %v, error: %v", apObj.Name, err.Error())
+		if err != nil {
+			return fmt.Errorf("error processing authorization policy resource, resource name: %v, error: %v", apObj.Name, err.Error())
+		}
 	}
 	return nil
 }
@@ -249,7 +254,7 @@ func (c *Controller) findDeleteDryrunResource(authzPolicyName string, namespace 
 	return os.Remove(DryRunStoredFilesDirectory + yamlFileName)
 }
 
-func (c *Controller) createAuthzPolicyResource(convertedCR model.Config, obj *corev1.Service) error {
+func (c *Controller) createAuthzPolicyResource(obj *corev1.Service) error {
 	// form the authorization policy config and send create sign to the queue
 	athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(obj.Namespace))
 	if err != nil {
@@ -262,7 +267,7 @@ func (c *Controller) createAuthzPolicyResource(convertedCR model.Config, obj *co
 
 	athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
 	if !ok {
-		return errors.New("athenz domain cast failed")
+		return fmt.Errorf("athenz domain cast failed, domain: %v", athenz.NamespaceToDomain(obj.Namespace))
 	}
 	signedDomain := athenzDomain.Spec.SignedDomain
 	labels := obj.GetLabels()
@@ -270,7 +275,7 @@ func (c *Controller) createAuthzPolicyResource(convertedCR model.Config, obj *co
 	if _, ok := labels["svc"]; !ok {
 		return fmt.Errorf("svc object does not contain label 'svc', unable to auto create authz policy")
 	}
-	convertedCR = c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
+	convertedCR := c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
 	log.Infoln("Creating Authz Policy ... ")
 	if !c.dryrun {
 		revision, err := c.configStoreCache.Create(convertedCR)
@@ -310,12 +315,11 @@ func (c *Controller) deleteAuthzPolicyResource(obj *corev1.Service) error {
 }
 
 func (c *Controller) processSvcResource(operation model.Event, svcObj *corev1.Service) error {
-	var convertedCR model.Config
 	if operation == model.EventAdd || operation == model.EventUpdate {
 		// service creation event: check if istio annotation is set to true, if so, create authz policy
 		if c.checkAuthzEnabledAnnotation(svcObj) {
 			log.Infof("istio authz annotation for service %s is set to true", svcObj.Name)
-			err := c.createAuthzPolicyResource(convertedCR, svcObj)
+			err := c.createAuthzPolicyResource(svcObj)
 			if err != nil {
 				log.Errorln("error creating authz policy:", err.Error())
 				return err
@@ -393,7 +397,7 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 	}
 	// to prevent user manually edit authorization policy files
 	// check if svc has annotation not set
-	getSvc, exists, err := c.serviceIndexInformer.GetIndexer().GetByKey(apObj.Name)
+	getSvc, exists, err := c.serviceIndexInformer.GetIndexer().GetByKey(apObj.Namespace+"/"+apObj.Name)
 	if err != nil {
 		return err
 	}
@@ -407,10 +411,11 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 		log.Infoln("service related to authz policy does not have annotation set, skip syncing...")
 		return nil
 	}
+	//spew.Println("service list keys: ", c.serviceIndexInformer.GetStore().ListKeys())
 
 	athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenz.NamespaceToDomain(apObj.Namespace))
 	if err != nil {
-		return fmt.Errorf("error when getting athenz domain from athenz informer cache: %v", err)
+		return fmt.Errorf("error when getting athenz domain from athenz informer cache: %v. domain: %v", err, athenz.NamespaceToDomain(apObj.Namespace))
 	}
 
 	if !exists {
@@ -419,7 +424,7 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 
 	athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
 	if !ok {
-		return errors.New("athenz domain cast failed, domain: " + athenz.NamespaceToDomain(svcObj.Namespace))
+		return fmt.Errorf("athenz domain cast failed, domain: " + athenz.NamespaceToDomain(svcObj.Namespace))
 	}
 	signedDomain := athenzDomain.Spec.SignedDomain
 	// regenerate authz policy spec, since for authz policy's name match with service's label 'app' value
