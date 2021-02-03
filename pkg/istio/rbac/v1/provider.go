@@ -253,7 +253,7 @@ func (p *v1) GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCac
 
 	ap, err := csc.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), m.Namespace)
 	if err != nil {
-		log.Errorf("Error listing the ServiceRole resources in the namespace: %s", m.Namespace)
+		log.Errorf("Error listing the Authorization Policy resources in the namespace: %s", m.Namespace)
 	}
 
 	return ap

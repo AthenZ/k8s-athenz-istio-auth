@@ -6,6 +6,7 @@ package authzpolicy
 import (
 	"fmt"
 	"github.com/ghodss/yaml"
+	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
@@ -269,13 +270,12 @@ func (c *Controller) createAuthzPolicyResource(obj *corev1.Service) error {
 	if !ok {
 		return fmt.Errorf("athenz domain cast failed, domain: %v", athenz.NamespaceToDomain(obj.Namespace))
 	}
-	signedDomain := athenzDomain.Spec.SignedDomain
 	labels := obj.GetLabels()
-	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
 	if _, ok := labels["svc"]; !ok {
 		return fmt.Errorf("svc object does not contain label 'svc', unable to auto create authz policy")
 	}
-	convertedCR := c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, obj.Namespace, obj.Name, labels["svc"])
+
+	convertedCR := c.genAuthzPolicyConfig(athenzDomain.Spec.SignedDomain, obj.Namespace, obj.Name, labels["svc"])
 	log.Infoln("Creating Authz Policy ... ")
 	if !c.dryrun {
 		revision, err := c.configStoreCache.Create(convertedCR)
@@ -362,10 +362,8 @@ func (c *Controller) processAthenzDomainResource(operation model.Event, adObj *a
 				continue
 			}
 
-			signedDomain := adObj.Spec.SignedDomain
-			domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-			convertedCR := c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, authzPolicy.Namespace, authzPolicy.Name, authzSpec.Selector.MatchLabels["svc"])
 			log.Infof("Athenz Domain %s updated, updating Authz Policy %s in namespace %s ... ", adObj.Name, authzPolicy.Name, athenz.DomainToNamespace(adObj.Name))
+			convertedCR := c.genAuthzPolicyConfig(adObj.Spec.SignedDomain, authzPolicy.Namespace, authzPolicy.Name, authzSpec.Selector.MatchLabels["svc"])
 			// assign current revision, update function requires a defined resource version
 			convertedCR.ResourceVersion = authzPolicy.ResourceVersion
 			if !c.dryrun {
@@ -426,12 +424,9 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 	if !ok {
 		return fmt.Errorf("athenz domain cast failed, domain: " + athenz.NamespaceToDomain(svcObj.Namespace))
 	}
-	signedDomain := athenzDomain.Spec.SignedDomain
 	// regenerate authz policy spec, since for authz policy's name match with service's label 'app' value
 	// it can just pass in authz policy name as arg to func convertAthenzModelIntoIstioAuthzPolicy
-	label := apObj.Spec.Selector.MatchLabels["svc"]
-	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	convertedCR := c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, apObj.Namespace, apObj.Name, label)
+	convertedCR := c.genAuthzPolicyConfig(athenzDomain.Spec.SignedDomain, apObj.Namespace, apObj.Name, apObj.Spec.Selector.MatchLabels["svc"])
 	if !c.dryrun {
 		// prevent manual editing the file
 		if operation == model.EventUpdate {
@@ -458,4 +453,11 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 		}
 	}
 	return nil
+}
+
+// genAuthzPolicyConfig is a common function uses by multiple events handler, it reads in athenz domain, given authz
+// policy name, namespace and matching service label, derives authz policy config and return it
+func (c* Controller) genAuthzPolicyConfig(signedDomain zms.SignedDomain, apNamespace, apName, svcLabel string) model.Config {
+	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+	return c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, apNamespace, apName, svcLabel)
 }
