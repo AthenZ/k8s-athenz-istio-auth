@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
@@ -16,8 +17,11 @@ import (
 	"istio.io/api/security/v1beta1"
 	workloadv1beta1 "istio.io/api/type/v1beta1"
 	authz "istio.io/client-go/pkg/apis/security/v1beta1"
+	fakeversionedclient "istio.io/client-go/pkg/clientset/versioned/fake"
 	"istio.io/istio/pilot/pkg/config/memory"
 	"istio.io/istio/pilot/pkg/model"
+	"time"
+
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
@@ -29,7 +33,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sync"
 	"testing"
-	"time"
 )
 
 const (
@@ -124,10 +127,11 @@ func TestNewController(t *testing.T) {
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
+	istioClientSet := fakeversionedclient.NewSimpleClientset()
+	apResyncInterval, _ := time.ParseDuration("1h")
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, true)
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, true)
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
@@ -148,6 +152,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, fake bool, stopCh <-chan
 	c.configStoreCache = memory.NewController(configStore)
 
 	source := fcache.NewFakeControllerSource()
+	source.Add(onboardedService)
 	go c.configStoreCache.Run(stopCh)
 
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
@@ -171,8 +176,8 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, fake bool, stopCh <-chan
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.queue = queue
 
-	c.enableOriginJwtSubject=true
-
+	c.enableOriginJwtSubject = true
+	c.rbacProvider = rbacv1.NewProvider(c.enableOriginJwtSubject)
 	return c
 }
 
@@ -421,14 +426,15 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 				sync.Mutex{},
 			}
 		}
+		istioClientSet := fakeversionedclient.NewSimpleClientset()
+		apResyncInterval, _ := time.ParseDuration("1h")
 		configStoreCache := memory.NewController(configStore)
-		authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
-		c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, authzpolicyIndexInformer, true, false)
+		c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval,true, false)
 
 		signedDomain := tt.athenzDomain.Spec.Domain
 		labels := tt.inputService.GetLabels()
 		domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain, &c.adIndexInformer)
-		convertedCR := c.convertAthenzModelIntoIstioAuthzPolicy(domainRBAC, tt.inputService.Namespace, tt.inputService.Name, labels["svc"])
+		convertedCR := c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, tt.inputService.Namespace, tt.inputService.Name, labels["svc"])
 
 		assert.Equal(t, tt.expectedCR, convertedCR, "converted authz policy should be equal")
 	}

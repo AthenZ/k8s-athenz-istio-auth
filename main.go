@@ -6,8 +6,8 @@ package main
 import (
 	"flag"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
-	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
@@ -31,6 +31,7 @@ func main() {
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
+	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	apDryRun := flag.Bool("authz-policy-dry-run-mode", true, "enable dry run mode for authz policy resource")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
@@ -82,7 +83,12 @@ func main() {
 		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, *enableOriginJwtSubject, *apDryRun)
+	apResyncInterval, err := time.ParseDuration(*apResyncIntervalRaw)
+	if err != nil {
+		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
+	}
+
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *apDryRun)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)

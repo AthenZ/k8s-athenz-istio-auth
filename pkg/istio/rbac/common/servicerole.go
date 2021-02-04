@@ -5,8 +5,6 @@ package common
 
 import (
 	"fmt"
-	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -16,84 +14,6 @@ import (
 )
 
 const ConstraintSvcKey = "destination.labels[svc]"
-
-var supportedMethods = map[string]bool{
-	http.MethodGet:     true,
-	http.MethodHead:    true,
-	http.MethodPost:    true,
-	http.MethodPut:     true,
-	http.MethodPatch:   true,
-	http.MethodDelete:  true,
-	http.MethodConnect: true,
-	http.MethodOptions: true,
-	http.MethodTrace:   true,
-	"*":                true,
-}
-
-var resourceRegex = regexp.MustCompile(`\A(?P<domain>.*):svc.(?P<svc>[^:]*)[:]?(?P<path>.*)\z`)
-
-// parseAssertionEffect parses the effect of an assertion into a supported Istio RBAC action
-func parseAssertionEffect(assertion *zms.Assertion) (string, error) {
-	if assertion == nil {
-		return "", fmt.Errorf("assertion is nil")
-	}
-	effect := assertion.Effect
-	if effect == nil {
-		return "", fmt.Errorf("assertion effect is nil")
-	}
-	if strings.ToUpper(effect.String()) != zms.ALLOW.String() {
-		return "", fmt.Errorf("effect: %s is not a supported assertion effect", effect)
-	}
-	return zms.ALLOW.String(), nil
-}
-
-// parseAssertionAction parses the action of an assertion into a supported Istio RBAC HTTP method
-func parseAssertionAction(assertion *zms.Assertion) (string, error) {
-	if assertion == nil {
-		return "", fmt.Errorf("assertion is nil")
-	}
-	method := strings.ToUpper(assertion.Action)
-	if !supportedMethods[method] {
-		return "", fmt.Errorf("method: %s is not a supported HTTP method", assertion.Action)
-	}
-	return method, nil
-}
-
-// parseAssertionResource parses the resource of an action into the service name (AccessRule constraint) and the
-// HTTP paths if specified (suffix :<path>)
-func parseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion) (string, string, error) {
-
-	if assertion == nil {
-		return "", "", fmt.Errorf("assertion is nil")
-	}
-	var svc string
-	var path string
-	resource := assertion.Resource
-	parts := resourceRegex.FindStringSubmatch(resource)
-	names := resourceRegex.SubexpNames()
-	results := map[string]string{}
-	for i, part := range parts {
-		results[names[i]] = part
-	}
-
-	for name, match := range results {
-		switch name {
-		case "domain":
-			if match != string(domainName) {
-				return "", "", fmt.Errorf("resource: %s does not belong to the Athenz domain: %s", resource, domainName)
-			}
-		case "svc":
-			svc = match
-		case "path":
-			path = match
-		}
-	}
-
-	if svc == "" {
-		return "", "", fmt.Errorf("resource: %s does not specify the service using svc.<service-name> format", resource)
-	}
-	return svc, path, nil
-}
 
 // ConvertAthenzRoleNameToK8sName replaces the '_' in the Athenz role name to a '--' as Kubernetes resource name
 // needs to follow a DNS-1123 subdomain format which must consist of lower case alphanumeric characters, '-' or '.',
@@ -118,19 +38,19 @@ func GetServiceRoleSpec(domainName zms.DomainName, roleName string, assertions [
 			continue
 		}
 
-		svc, path, err := parseAssertionResource(domainName, assertion)
+		svc, path, err := ParseAssertionResource(domainName, assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue
 		}
 
-		_, err = parseAssertionEffect(assertion)
+		_, err = ParseAssertionEffect(assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue
 		}
 
-		method, err := parseAssertionAction(assertion)
+		method, err := ParseAssertionAction(assertion)
 		if err != nil {
 			log.Debugf(err.Error())
 			continue

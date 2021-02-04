@@ -166,7 +166,7 @@ func TestConvertSliceToKeyedMap(t *testing.T) {
 				newSrb("my-ns", "this-role"),
 			},
 			expected: map[string]model.Config{
-				"ServiceRole/my-ns/this-role":         newSr("my-ns", "this-role"),
+				"ServiceRole/my-ns/this-role":        newSr("my-ns", "this-role"),
 				"ServiceRoleBinding/my-ns/this-role": newSrb("my-ns", "this-role"),
 			},
 		},
