@@ -143,7 +143,7 @@ func newFakeController(services []*v1.Service, fake bool, stopCh <-chan struct{}
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.queue = queue
 
-	c.enableOriginJwtSubject=true
+	c.enableOriginJwtSubject = true
 
 	return c
 }
@@ -155,7 +155,7 @@ func TestNewController(t *testing.T) {
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
 	istioClientSet := fakeversionedclient.NewSimpleClientset()
-	apResyncInterval,_ := time.ParseDuration("1h")
+	apResyncInterval, _ := time.ParseDuration("1h")
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
 	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, true)

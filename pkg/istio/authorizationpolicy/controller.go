@@ -30,10 +30,10 @@ import (
 )
 
 const (
-	queueNumRetries        = 3
-	authzEnabled           = "true"
-	authzEnabledAnnotation = "authz.istio.io/enabled"
-	DryRunStoredFilesDirectory   = "/root/authzpolicy/"
+	queueNumRetries            = 3
+	authzEnabled               = "true"
+	authzEnabledAnnotation     = "authz.istio.io/enabled"
+	DryRunStoredFilesDirectory = "/root/authzpolicy/"
 )
 
 type Controller struct {
@@ -115,7 +115,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.Event) {
 	item := Item{
 		Operation: e,
-		Resource: &config,
+		Resource:  &config,
 	}
 	c.queue.Add(item)
 }
@@ -124,7 +124,7 @@ func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.E
 func (c *Controller) ProcessConfigChange(operation model.Event, obj interface{}) {
 	item := Item{
 		Operation: operation,
-		Resource: obj,
+		Resource:  obj,
 	}
 	c.queue.Add(item)
 }
@@ -242,16 +242,16 @@ func (c *Controller) createDryrunResource(convertedCR model.Config, authzPolicyN
 		return fmt.Errorf("could not marshal %v: %v", convertedCR.Name, err)
 	}
 	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
-	return ioutil.WriteFile(DryRunStoredFilesDirectory + yamlFileName, configInBytes, 0644)
+	return ioutil.WriteFile(DryRunStoredFilesDirectory+yamlFileName, configInBytes, 0644)
 }
 
 func (c *Controller) findDeleteDryrunResource(authzPolicyName string, namespace string) error {
 	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
 	if _, err := os.Stat(DryRunStoredFilesDirectory + yamlFileName); os.IsNotExist(err) {
-		log.Infof("file %s does not exist in local directory\n", DryRunStoredFilesDirectory + yamlFileName)
+		log.Infof("file %s does not exist in local directory\n", DryRunStoredFilesDirectory+yamlFileName)
 		return nil
 	}
-	log.Infof("deleting file under path: %s\n", DryRunStoredFilesDirectory + yamlFileName)
+	log.Infof("deleting file under path: %s\n", DryRunStoredFilesDirectory+yamlFileName)
 	return os.Remove(DryRunStoredFilesDirectory + yamlFileName)
 }
 
@@ -395,7 +395,7 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 	}
 	// to prevent user manually edit authorization policy files
 	// check if svc has annotation not set
-	getSvc, exists, err := c.serviceIndexInformer.GetIndexer().GetByKey(apObj.Namespace+"/"+apObj.Name)
+	getSvc, exists, err := c.serviceIndexInformer.GetIndexer().GetByKey(apObj.Namespace + "/" + apObj.Name)
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 
 // genAuthzPolicyConfig is a common function uses by multiple events handler, it reads in athenz domain, given authz
 // policy name, namespace and matching service label, derives authz policy config and return it
-func (c* Controller) genAuthzPolicyConfig(signedDomain zms.SignedDomain, apNamespace, apName, svcLabel string) model.Config {
+func (c *Controller) genAuthzPolicyConfig(signedDomain zms.SignedDomain, apNamespace, apName, svcLabel string) model.Config {
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
 	return c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, apNamespace, apName, svcLabel)
 }

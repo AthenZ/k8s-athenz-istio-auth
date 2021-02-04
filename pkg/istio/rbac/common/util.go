@@ -167,18 +167,26 @@ func ParseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 
 // CheckAthenzSystemDisabled checks if athenz domain is systematically disabled, if so, controller skips processing current
 // role member
-func CheckAthenzSystemDisabled(roleMember *zms.RoleMember) (bool, error){
-	if roleMember == nil {return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)}
-	if roleMember.SystemDisabled != nil && *roleMember.SystemDisabled != 0  {return false, fmt.Errorf("member %s is system disabled", roleMember.MemberName)}
+func CheckAthenzSystemDisabled(roleMember *zms.RoleMember) (bool, error) {
+	if roleMember == nil {
+		return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)
+	}
+	if roleMember.SystemDisabled != nil && *roleMember.SystemDisabled != 0 {
+		return false, fmt.Errorf("member %s is system disabled", roleMember.MemberName)
+	}
 	return true, nil
 }
 
 // CheckAthenzMemberExpiry checks if Expiration field (timezone UTC) is set in the roleMember object, and then
 // checks if expiration date surpasses current time
 func CheckAthenzMemberExpiry(roleMember *zms.RoleMember) (bool, error) {
-	if roleMember == nil {return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)}
+	if roleMember == nil {
+		return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)
+	}
 	// check if roleMember has expiration field set
-	if roleMember.Expiration != nil && roleMember.Expiration.Before(time.Now()) {return false, fmt.Errorf("member %s is expired",  roleMember.MemberName)}
+	if roleMember.Expiration != nil && roleMember.Expiration.Before(time.Now()) {
+		return false, fmt.Errorf("member %s is expired", roleMember.MemberName)
+	}
 	return true, nil
 }
 

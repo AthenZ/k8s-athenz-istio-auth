@@ -6,8 +6,8 @@ package main
 import (
 	"flag"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
-	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"

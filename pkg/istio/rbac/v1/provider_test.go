@@ -11,8 +11,8 @@ import (
 	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"testing"
 	"time"
@@ -907,20 +907,20 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 
 	convertedCR := p.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, onboardedService.Namespace, onboardedService.Name, labels["app"])
 	//fmt.Println("convertCR looks like: ", convertedCR.ConfigMeta.CreationTimestamp)
-	expectedCR := getExpectedCR();
+	expectedCR := getExpectedCR()
 	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
 }
 
-func getExpectedCR() model.Config{
+func getExpectedCR() model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
 	out.ConfigMeta = model.ConfigMeta{
-		Type:      schema.Resource().Kind(),
-		Group:     schema.Resource().Group(),
-		Version:   schema.Resource().Version(),
-		Namespace: "test-namespace",
-		Name:      "onboarded-service",
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
 		CreationTimestamp: createTimestamp,
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{

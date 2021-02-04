@@ -155,7 +155,7 @@ func (p *v1) ConvertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.Model, na
 				log.Errorln("error matching string: ", e.Error())
 				continue
 			}
-			if !res{
+			if !res {
 				log.Errorf("athenz svc %s does not match with current svc %s", svc, svcLabel)
 				continue
 			}
