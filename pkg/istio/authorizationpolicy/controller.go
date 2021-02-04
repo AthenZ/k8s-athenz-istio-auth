@@ -459,5 +459,5 @@ func (c *Controller) processAuthorizationPolicyResource(operation model.Event, a
 // policy name, namespace and matching service label, derives authz policy config and return it
 func (c *Controller) genAuthzPolicyConfig(signedDomain zms.SignedDomain, apNamespace, apName, svcLabel string) model.Config {
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-    return c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, apNamespace, apName, svcLabel)
+	return c.rbacProvider.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, apNamespace, apName, svcLabel)
 }
