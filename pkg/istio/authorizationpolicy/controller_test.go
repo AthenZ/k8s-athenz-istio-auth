@@ -80,6 +80,8 @@ var (
 			SignedDomain: getFakeNotOnboardedDomain(),
 		},
 	}
+
+	isNotSystemDisabled, isSystemDisabled int32 = 0, 1
 )
 
 func init() {
@@ -138,7 +140,7 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 }
 
-func newFakeController(athenzDomain *adv1.AthenzDomain, fake bool, stopCh <-chan struct{}) *Controller {
+func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
 	c := &Controller{}
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 
@@ -152,7 +154,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, fake bool, stopCh <-chan
 	c.configStoreCache = memory.NewController(configStore)
 
 	source := fcache.NewFakeControllerSource()
-	source.Add(onboardedService)
+	source.Add(service)
 	go c.configStoreCache.Run(stopCh)
 
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
@@ -222,7 +224,7 @@ func TestSyncService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputAthenzDomain, tt.fake, make(chan struct{}))
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, tt.fake, make(chan struct{}))
 			switch action := tt.item.Operation; action {
 			case model.EventAdd:
 				// Add a sleep for processing controller to work on the queue
@@ -304,7 +306,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(&adv1.AthenzDomain{}, tt.fake, make(chan struct{}))
+			c := newFakeController(&adv1.AthenzDomain{}, &v1.Service{}, tt.fake, make(chan struct{}))
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				_, err := c.configStoreCache.Create(getOldCR())
@@ -335,6 +337,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 func TestSyncAuthzPolicy(t *testing.T) {
 	tests := []struct {
 		name                       string
+		inputService               *v1.Service
 		fake                       bool
 		inputAthenzDomain          *adv1.AthenzDomain
 		item                       Item
@@ -342,6 +345,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 	}{
 		{
 			name:                  "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
+			inputService:          onboardedService,
 			fake:                  true,
 			inputAthenzDomain:     onboardedAthenzDomain,
 			item:                  Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
@@ -349,6 +353,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		},
 		{
 			name:                  "when there is deletion of authz policy resource, controller will recreate the authz policy",
+			inputService:          &v1.Service{},
 			fake:                  true,
 			inputAthenzDomain:     onboardedAthenzDomain,
 			item:                  Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
@@ -358,7 +363,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputAthenzDomain, tt.fake, make(chan struct{}))
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, tt.fake, make(chan struct{}))
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				resourceVersion, err := c.configStoreCache.Create(getOldCR())
@@ -548,6 +553,26 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: username1,
+						},
+					},
+				},
+				{
+					Name: DomainName + "role.invalid",
+					Modified: &timestamp,
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: "user.expired",
+							Expiration: &rdl.Timestamp{
+								Time: time.Now().Add(-time.Hour),
+							},
+							SystemDisabled: &isNotSystemDisabled,
+						},
+						{
+							MemberName: "user.expired",
+							Expiration: &rdl.Timestamp{
+								Time: time.Now().Add(time.Hour),
+							},
+							SystemDisabled: &isSystemDisabled,
 						},
 					},
 				},
