@@ -36,10 +36,10 @@ import (
 )
 
 const (
-	DomainName = "test.namespace"
+	DomainName  = "test.namespace"
 	DomainName1 = "test1.namespace"
-	username   = "user.name"
-	username1  = "user.*"
+	username    = "user.name"
+	username1   = "user.*"
 )
 
 var (
@@ -185,13 +185,13 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 
 func TestSyncService(t *testing.T) {
 	tests := []struct {
-		name                       string
-		inputService               *v1.Service
-		inputAthenzDomain          *adv1.AthenzDomain
-		fake                       bool
-		existingAuthzPolicy        model.Config
-		expectedAuthzPolicy        model.Config
-		item                       Item
+		name                string
+		inputService        *v1.Service
+		inputAthenzDomain   *adv1.AthenzDomain
+		fake                bool
+		existingAuthzPolicy model.Config
+		expectedAuthzPolicy model.Config
+		item                Item
 	}{
 		{
 			name:                "generate Authorization Policy spec for service with annotation set",
@@ -291,16 +291,16 @@ func TestSyncService(t *testing.T) {
 
 func TestSyncAthenzDomain(t *testing.T) {
 	tests := []struct {
-		name                       string
-		expectedAuthzPolicy        model.Config
-		fake                       bool
-		item                       Item
+		name                string
+		expectedAuthzPolicy model.Config
+		fake                bool
+		item                Item
 	}{
 		{
-			name:                  "update existing authz policy spec when there is athenz domain crd update",
-			expectedAuthzPolicy:   getExpectedCR(),
-			fake:                  true,
-			item:                  Item{Operation: model.EventUpdate, Resource: onboardedAthenzDomain},
+			name:                "update existing authz policy spec when there is athenz domain crd update",
+			expectedAuthzPolicy: getExpectedCR(),
+			fake:                true,
+			item:                Item{Operation: model.EventUpdate, Resource: onboardedAthenzDomain},
 		},
 	}
 
@@ -336,28 +336,28 @@ func TestSyncAthenzDomain(t *testing.T) {
 
 func TestSyncAuthzPolicy(t *testing.T) {
 	tests := []struct {
-		name                       string
-		inputService               *v1.Service
-		fake                       bool
-		inputAthenzDomain          *adv1.AthenzDomain
-		item                       Item
-		expectedAuthzPolicy        model.Config
+		name                string
+		inputService        *v1.Service
+		fake                bool
+		inputAthenzDomain   *adv1.AthenzDomain
+		item                Item
+		expectedAuthzPolicy model.Config
 	}{
 		{
-			name:                  "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
-			inputService:          onboardedService,
-			fake:                  true,
-			inputAthenzDomain:     onboardedAthenzDomain,
-			item:                  Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
-			expectedAuthzPolicy:   getExpectedCR(),
+			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
+			inputService:        onboardedService,
+			fake:                true,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
+			expectedAuthzPolicy: getExpectedCR(),
 		},
 		{
-			name:                  "when there is deletion of authz policy resource, controller will recreate the authz policy",
-			inputService:          &v1.Service{},
-			fake:                  true,
-			inputAthenzDomain:     onboardedAthenzDomain,
-			item:                  Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
-			expectedAuthzPolicy:   getExpectedCR(),
+			name:                "when there is deletion of authz policy resource, controller will recreate the authz policy",
+			inputService:        &v1.Service{},
+			fake:                true,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			item:                Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
+			expectedAuthzPolicy: getExpectedCR(),
 		},
 	}
 
@@ -399,18 +399,18 @@ func TestSyncAuthzPolicy(t *testing.T) {
 
 func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 	tests := []struct {
-		name                       string
-		inputService               *v1.Service
-		fake                       bool
-		athenzDomain               *adv1.AthenzDomain
-		expectedCR                 model.Config
+		name         string
+		inputService *v1.Service
+		fake         bool
+		athenzDomain *adv1.AthenzDomain
+		expectedCR   model.Config
 	}{
 		{
-			name:                  "generate Authorization Policy spec for service with annotation set",
-			inputService:          onboardedService,
-			fake:                  true,
-			athenzDomain:          onboardedAthenzDomain,
-			expectedCR:            getExpectedCR(),
+			name:         "generate Authorization Policy spec for service with annotation set",
+			inputService: onboardedService,
+			fake:         true,
+			athenzDomain: onboardedAthenzDomain,
+			expectedCR:   getExpectedCR(),
 		},
 	}
 
@@ -434,7 +434,7 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 		istioClientSet := fakeversionedclient.NewSimpleClientset()
 		apResyncInterval, _ := time.ParseDuration("1h")
 		configStoreCache := memory.NewController(configStore)
-		c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval,true, false)
+		c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, false)
 
 		signedDomain := tt.athenzDomain.Spec.Domain
 		labels := tt.inputService.GetLabels()
@@ -445,16 +445,16 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 	}
 }
 
-func getExpectedCR() model.Config{
+func getExpectedCR() model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
 	out.ConfigMeta = model.ConfigMeta{
-		Type:      schema.Resource().Kind(),
-		Group:     schema.Resource().Group(),
-		Version:   schema.Resource().Version(),
-		Namespace: "test-namespace",
-		Name:      "onboarded-service",
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
 		CreationTimestamp: createTimestamp,
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
@@ -557,7 +557,7 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 					},
 				},
 				{
-					Name: DomainName + "role.invalid",
+					Name:     DomainName + "role.invalid",
 					Modified: &timestamp,
 					RoleMembers: []*zms.RoleMember{
 						{
@@ -653,16 +653,16 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 	}
 }
 
-func getOldCR() model.Config{
+func getOldCR() model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "05/1/2017 12:00:00")
 	out.ConfigMeta = model.ConfigMeta{
-		Type:      schema.Resource().Kind(),
-		Group:     schema.Resource().Group(),
-		Version:   schema.Resource().Version(),
-		Namespace: "test-namespace",
-		Name:      "onboarded-service",
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
 		CreationTimestamp: createTimestamp,
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
@@ -705,10 +705,10 @@ func getOldCR() model.Config{
 	return out
 }
 
-func getModifiedAuthzPolicy() *authz.AuthorizationPolicy{
+func getModifiedAuthzPolicy() *authz.AuthorizationPolicy {
 	return &authz.AuthorizationPolicy{
 		TypeMeta: k8sv1.TypeMeta{
-			Kind: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Kind(),
+			Kind:       collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Kind(),
 			APIVersion: collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().Version(),
 		},
 		ObjectMeta: k8sv1.ObjectMeta{
@@ -761,4 +761,3 @@ func getModifiedAuthzPolicy() *authz.AuthorizationPolicy{
 		},
 	}
 }
-
