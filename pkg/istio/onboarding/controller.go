@@ -283,6 +283,7 @@ func (c *Controller) sync() error {
 			Resource:        config,
 			CallbackHandler: c.callbackHandler,
 		}
+		// TODO: investigate: when dns-suffix is changed and results in full service list update, this update is likely to fail and controller will be stuck in fail and retry cycles.
 		c.processor.ProcessConfigChange(&item)
 		return nil
 	}

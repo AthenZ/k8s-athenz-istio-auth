@@ -17,5 +17,11 @@ type Provider interface {
 
 	// GetCurrentIstioRbac returns the Istio RBAC custom resources associated with the given model
 	GetCurrentIstioRbac(model athenz.Model, csc model.ConfigStoreCache) []model.Config
+
+	// ConvertAthenzModelIntoIstioAuthzPolicy converts the Athenz RBAC model into Istio Authorization V1Beta1 specific
+	// RBAC custom resource (AuthorizationPolicy)
 	ConvertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.Model, namespace string, serviceName string, svcLabel string) model.Config
+
+	// GetCurrentIstioRbac returns the authorization policies resources for the specified model's namespace
+	GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCache) []model.Config
 }
