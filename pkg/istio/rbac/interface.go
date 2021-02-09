@@ -23,5 +23,5 @@ type Provider interface {
 	ConvertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.Model, namespace string, serviceName string, svcLabel string) model.Config
 
 	// GetCurrentIstioRbac returns the authorization policies resources for the specified model's namespace
-	GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCache) []model.Config
+	GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config
 }

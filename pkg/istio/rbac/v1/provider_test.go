@@ -906,7 +906,6 @@ func TestConvertAthenzModelIntoIstioAuthzPolicy(t *testing.T) {
 	p := NewProvider(true)
 
 	convertedCR := p.ConvertAthenzModelIntoIstioAuthzPolicy(domainRBAC, onboardedService.Namespace, onboardedService.Name, labels["app"])
-	//fmt.Println("convertCR looks like: ", convertedCR.ConfigMeta.CreationTimestamp)
 	expectedCR := getExpectedCR()
 	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
 }

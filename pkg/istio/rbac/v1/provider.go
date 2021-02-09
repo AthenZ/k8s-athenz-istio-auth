@@ -249,12 +249,19 @@ func (p *v1) ConvertAthenzModelIntoIstioAuthzPolicy(athenzModel athenz.Model, na
 }
 
 // GetCurrentIstioRbac returns the authorization policies resources for the specified model's namespace
-func (p *v1) GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCache) []model.Config {
-
-	ap, err := csc.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), m.Namespace)
-	if err != nil {
-		log.Errorf("Error listing the Authorization Policy resources in the namespace: %s", m.Namespace)
+// if serviceName is "", return the all the authorization policies in the given namespace,
+// if serviceName is specific, return single authorization policy matching with serviceName.
+func (p *v1) GetCurrentIstioAuthzPolicy(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
+	if serviceName == "" {
+		apList, err := csc.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), m.Namespace)
+		if err != nil {
+			log.Errorf("Error listing the Authorization Policy resources in the namespace: %s", m.Namespace)
+		}
+		return apList
 	}
-
-	return ap
+	ap := csc.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), serviceName, m.Namespace)
+	if ap != nil {
+		return []model.Config{*ap}
+	}
+	return []model.Config{}
 }

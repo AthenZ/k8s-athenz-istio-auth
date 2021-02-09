@@ -214,3 +214,18 @@ func NewConfig(schema collection.Schema, namespace string, name string, spec pro
 		Spec:       spec,
 	}
 }
+
+// ConvertSliceToKeyedMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
+func ConvertSliceToKeyedMap(in []model.Config) map[string]model.Config {
+	out := make(map[string]model.Config, len(in))
+	for _, c := range in {
+		key := c.Key()
+		out[key] = c
+	}
+	return out
+}
+
+// Equal compares the Spec of two model.Config items
+func Equal(c1, c2 model.Config) bool {
+	return c1.Key() == c2.Key() && proto.Equal(c1.Spec, c2.Spec)
+}
