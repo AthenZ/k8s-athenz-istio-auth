@@ -336,8 +336,6 @@ func (c *Controller) checkOverrideAnnotation(existingConfig model.Config) bool {
 	} else {
 		return exists
 	}
-
-	return true
 }
 
 // ProcessConfigChange receives resource and event action, and perform update on resource
@@ -424,42 +422,6 @@ func (c *Controller) getCallbackHandler(key string) OnCompleteFunc {
 		return nil
 	}
 }
-
-// sync is responsible for invoking the appropriate API operation on the model.Config resource
-//func (c *Controller) sync(item interface{}) error {
-//	castItem, ok := item.(Item)
-//	if !ok {
-//		return fmt.Errorf("unable to cast interface to Item object, item: %v", item)
-//	}
-//
-//	// check if resource can be cast to service, athenzdomain, or authorizationpolicy object
-//	svcObj, svcCast := (castItem.Resource).(*corev1.Service)
-//	adObj, adCast := (castItem.Resource).(*adv1.AthenzDomain)
-//	apObj, apCast := (castItem.Resource).(*securityv1beta1.AuthorizationPolicy)
-//	if !(svcCast || adCast || apCast) {
-//		return fmt.Errorf("unable to cast interface to service or athenzDomain or authz policy object")
-//	}
-//
-//	// dealing with service resource
-//	switch true {
-//	case svcCast:
-//		err := c.processSvcResource(castItem.Operation, svcObj)
-//		if err != nil {
-//			return fmt.Errorf("error processing service resource, resource name: %v, error: %v", svcObj.Name, err.Error())
-//		}
-//	case adCast:
-//		err := c.processAthenzDomainResource(castItem.Operation, adObj)
-//		if err != nil {
-//			return fmt.Errorf("error processing athenz domain resource, resource name: %v, error: %v", adObj.Name, err.Error())
-//		}
-//	case apCast:
-//		err := c.processAuthorizationPolicyResource(castItem.Operation, apObj)
-//		if err != nil {
-//			return fmt.Errorf("error processing authorization policy resource, resource name: %v, error: %v", apObj.Name, err.Error())
-//		}
-//	}
-//	return nil
-//}
 
 // resync will run as a periodic resync at a given interval, it will take all
 // the current athenz domains in the cache and put them onto the queue
