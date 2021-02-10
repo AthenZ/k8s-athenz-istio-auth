@@ -11,8 +11,6 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
@@ -49,77 +47,6 @@ type Controller struct {
 	apController         *authzpolicy.Controller
 	queue                workqueue.RateLimitingInterface
 	adResyncInterval     time.Duration
-}
-
-// convertSliceToKeyedMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
-func convertSliceToKeyedMap(in []model.Config) map[string]model.Config {
-	out := make(map[string]model.Config, len(in))
-	for _, c := range in {
-		key := c.Key()
-		out[key] = c
-	}
-	return out
-}
-
-// equal compares the Spec of two model.Config items
-func equal(c1, c2 model.Config) bool {
-	return c1.Key() == c2.Key() && proto.Equal(c1.Spec, c2.Spec)
-}
-
-// computeChangeList determines a list of change operations to convert the current state of model.Config items into the
-// desired state of model.Config items in the following manner:
-// 1. Converts the current and desired slices into a map for quick lookup
-// 2. Loops through the desired slice of items and identifies items that need to be created/updated
-// 3. Loops through the current slice of items and identifies items that need to be deleted
-func computeChangeList(current []model.Config, desired []model.Config, cbHandler common.OnCompleteFunc) []*common.Item {
-
-	currMap := convertSliceToKeyedMap(current)
-	desiredMap := convertSliceToKeyedMap(desired)
-
-	changeList := make([]*common.Item, 0)
-
-	// loop through the desired slice of model.Config and add the items that need to be created or updated
-	for _, desiredConfig := range desired {
-		key := desiredConfig.Key()
-		existingConfig, exists := currMap[key]
-		if !exists {
-			item := common.Item{
-				Operation:       model.EventAdd,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-
-		if !equal(existingConfig, desiredConfig) {
-			// copy metadata(for resource version) from current config to desired config
-			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
-			item := common.Item{
-				Operation:       model.EventUpdate,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-	}
-
-	// loop through the current slice of model.Config and add the items that need to be deleted
-	for _, currConfig := range current {
-		key := currConfig.Key()
-		_, exists := desiredMap[key]
-		if !exists {
-			item := common.Item{
-				Operation:       model.EventDelete,
-				Resource:        currConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-		}
-	}
-
-	return changeList
 }
 
 // getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
