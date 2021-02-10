@@ -36,6 +36,17 @@ var supportedMethods = map[string]bool{
 	"*":                true,
 }
 
+type Item struct {
+	Operation model.Event
+	Resource  model.Config
+	// Handler function that should be invoked with the status of the current sync operation on the item
+	// If the handler returns an error, the operation is retried up to `queueNumRetries`
+	CallbackHandler OnCompleteFunc
+}
+
+type OnCompleteFunc func(err error, item *Item) error
+type checkAnnotaion func(model.Config) bool
+
 var resourceRegex = regexp.MustCompile(`\A(?P<domain>.*):svc.(?P<svc>[^:]*)[:]?(?P<path>.*)\z`)
 
 // MemberToSpiffe parses the Athenz role member into a SPIFFE compliant name.
@@ -228,4 +239,67 @@ func ConvertSliceToKeyedMap(in []model.Config) map[string]model.Config {
 // Equal compares the Spec of two model.Config items
 func Equal(c1, c2 model.Config) bool {
 	return c1.Key() == c2.Key() && proto.Equal(c1.Spec, c2.Spec)
+}
+
+// ComputeChangeList checks if two set of config models have any differences, and return its changeList
+// Controller which calls this function is required to pass its own callback handler
+// checkFn is optional, can be set to nil if nothing needs to be checked
+func ComputeChangeList(currentCRs []model.Config, desiredCRs []model.Config, cbHandler OnCompleteFunc, checkFn checkAnnotaion) []*Item {
+	currMap := ConvertSliceToKeyedMap(currentCRs)
+	desiredMap := ConvertSliceToKeyedMap(desiredCRs)
+
+	changeList := make([]*Item, 0)
+
+	// loop through the desired slice of model.Config and add the items that need to be created or updated
+	for _, desiredConfig := range desiredCRs {
+		key := desiredConfig.Key()
+		existingConfig, exists := currMap[key]
+		// case 1: current CR is empty, desired CR is not empty, results in resource creation
+		if !exists {
+			item := Item{
+				Operation:       model.EventAdd,
+				Resource:        desiredConfig,
+				CallbackHandler: cbHandler,
+			}
+			changeList = append(changeList, &item)
+			continue
+		}
+
+		if !Equal(existingConfig, desiredConfig) {
+			// case 2: current CR is not empty, desired CR is not empty, current CR != desired CR, no overrideAnnotation set in current CR, results in resource update
+			if checkFn != nil && checkFn(existingConfig) {
+				continue
+			}
+			// copy metadata(for resource version) from current config to desired config
+			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
+			item := Item{
+				Operation:       model.EventUpdate,
+				Resource:        desiredConfig,
+				CallbackHandler: cbHandler,
+			}
+			changeList = append(changeList, &item)
+			continue
+		}
+		// case 3: current CR is not empty, desired CR is not empty, current CR == desired CR, results in no action
+	}
+
+	// loop through the current slice of model.Config and add the items that needs to be deleted
+	for _, currConfig := range currentCRs {
+		key := currConfig.Key()
+		_, exists := desiredMap[key]
+		if checkFn != nil && checkFn(currConfig) {
+			continue
+		}
+		// case 4: current CR is not empty, desired CR is empty, results in resource deletion
+		if !exists {
+			item := Item{
+				Operation:       model.EventDelete,
+				Resource:        currConfig,
+				CallbackHandler: cbHandler,
+			}
+			changeList = append(changeList, &item)
+		}
+	}
+
+	return changeList
 }

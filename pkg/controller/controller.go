@@ -6,6 +6,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
@@ -70,19 +71,19 @@ func equal(c1, c2 model.Config) bool {
 // 1. Converts the current and desired slices into a map for quick lookup
 // 2. Loops through the desired slice of items and identifies items that need to be created/updated
 // 3. Loops through the current slice of items and identifies items that need to be deleted
-func computeChangeList(current []model.Config, desired []model.Config, cbHandler processor.OnCompleteFunc) []*processor.Item {
+func computeChangeList(current []model.Config, desired []model.Config, cbHandler common.OnCompleteFunc) []*common.Item {
 
 	currMap := convertSliceToKeyedMap(current)
 	desiredMap := convertSliceToKeyedMap(desired)
 
-	changeList := make([]*processor.Item, 0)
+	changeList := make([]*common.Item, 0)
 
 	// loop through the desired slice of model.Config and add the items that need to be created or updated
 	for _, desiredConfig := range desired {
 		key := desiredConfig.Key()
 		existingConfig, exists := currMap[key]
 		if !exists {
-			item := processor.Item{
+			item := common.Item{
 				Operation:       model.EventAdd,
 				Resource:        desiredConfig,
 				CallbackHandler: cbHandler,
@@ -94,7 +95,7 @@ func computeChangeList(current []model.Config, desired []model.Config, cbHandler
 		if !equal(existingConfig, desiredConfig) {
 			// copy metadata(for resource version) from current config to desired config
 			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
-			item := processor.Item{
+			item := common.Item{
 				Operation:       model.EventUpdate,
 				Resource:        desiredConfig,
 				CallbackHandler: cbHandler,
@@ -109,7 +110,7 @@ func computeChangeList(current []model.Config, desired []model.Config, cbHandler
 		key := currConfig.Key()
 		_, exists := desiredMap[key]
 		if !exists {
-			item := processor.Item{
+			item := common.Item{
 				Operation:       model.EventDelete,
 				Resource:        currConfig,
 				CallbackHandler: cbHandler,
@@ -123,8 +124,8 @@ func computeChangeList(current []model.Config, desired []model.Config, cbHandler
 
 // getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
 // this explicit func definition takes in the key to avoid data race while accessing key
-func (c *Controller) getCallbackHandler(key string) processor.OnCompleteFunc {
-	return func(err error, item *processor.Item) error {
+func (c *Controller) getCallbackHandler(key string) common.OnCompleteFunc {
+	return func(err error, item *common.Item) error {
 
 		if err == nil {
 			return nil
@@ -180,7 +181,7 @@ func (c *Controller) sync(key string) error {
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
 	cbHandler := c.getCallbackHandler(key)
 
-	changeList := computeChangeList(currentCRs, desiredCRs, cbHandler)
+	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, nil)
 
 	// If change list is empty, nothing to do
 	if len(changeList) == 0 {

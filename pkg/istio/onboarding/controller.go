@@ -5,6 +5,7 @@ package onboarding
 
 import (
 	"errors"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
@@ -183,7 +184,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 }
 
 // callbackHandler re-adds the key for a failed processor.sync operation
-func (c *Controller) callbackHandler(err error, item *processor.Item) error {
+func (c *Controller) callbackHandler(err error, item *common.Item) error {
 	if err == nil {
 		return nil
 	}
@@ -222,7 +223,7 @@ func (c *Controller) sync() error {
 
 	if config == nil {
 		log.Infoln("Creating cluster rbac config...")
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventAdd,
 			Resource:        newClusterRbacConfig(serviceList),
 			CallbackHandler: c.callbackHandler,
@@ -233,7 +234,7 @@ func (c *Controller) sync() error {
 
 	if len(serviceList) == 0 {
 		log.Infoln("Deleting cluster rbac config...")
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventDelete,
 			Resource:        newClusterRbacConfig(serviceList),
 			CallbackHandler: c.callbackHandler,
@@ -253,7 +254,7 @@ func (c *Controller) sync() error {
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
 		}
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventUpdate,
 			Resource:        config,
 			CallbackHandler: c.callbackHandler,
@@ -278,7 +279,7 @@ func (c *Controller) sync() error {
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
 		}
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventUpdate,
 			Resource:        config,
 			CallbackHandler: c.callbackHandler,

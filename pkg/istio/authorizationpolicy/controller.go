@@ -50,14 +50,6 @@ type Controller struct {
 	dryrun                   bool
 }
 
-type Item struct {
-	Operation model.Event
-	Resource  model.Config
-	// Handler function that should be invoked with the status of the current sync operation on the item
-	// If the handler returns an error, the operation is retried up to `queueNumRetries`
-	CallbackHandler OnCompleteFunc
-}
-
 func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, DryRun bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
@@ -121,12 +113,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 }
 
 func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.Event) {
-	item := Item{
-		Operation:       e,
-		Resource:        config,
-		CallbackHandler: c.getCallbackHandler(config.Key()),
-	}
-	c.queue.Add(item)
+	c.queue.Add(config.Key())
 }
 
 // processEvent is responsible for calling the key function and adding the
@@ -174,7 +161,7 @@ func (c *Controller) processNextItem() bool {
 	log.Infof("Processing key: %s", key)
 	err := c.sync(key)
 	if err != nil {
-		log.Errorf("Error syncing athenz state for key %s: %s", keyRaw, err)
+		log.Errorf("Error syncing authz policy state for key %s: %s", keyRaw, err)
 		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
 			log.Infof("Retrying key %s due to sync error", keyRaw)
 			c.queue.AddRateLimited(keyRaw)
@@ -185,19 +172,22 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
-// draft: remodeled sync function. sync function receives a key string function:
-// Case 1: if key string is in format: <athenz domain name>, perform a service list scan.
+// draft: remodeled sync function. sync function receives a key string function, key can have three format:
+// Case 1: for athenzdomain crd, key string is in format: <athenz domain name>, perform a service list scan.
 //         Compute, compare and update authz policy specs based on current state in cluster
-// Case 2: if key string is in format: <namespace name>/<service name>, look up svc in
+// Case 2: for service resource, key string is in format: <namespace name>/<service name>, look up svc in
 //         cache and generate corresponding authz policy, update based on current state in cluster
+// Case 3: for authorization policy, key string is in format: AuthorizationPolicy/<namespace name>/<service name>,
+//         look up svc in cache and generate corresponding authz policy, update based on current state in cluster
 func (c *Controller) sync(key string) error {
 	var serviceName, athenzDomainName string
 
-	if len(strings.Split(key, "/")) > 1 {
-		athenzDomainName = athenz.NamespaceToDomain(strings.Split(key, "/")[0])
-		serviceName = strings.Split(key, "/")[1]
+	parseKeyList := strings.Split(key, "/")
+	if len(parseKeyList) > 1 {
+		athenzDomainName = athenz.NamespaceToDomain(parseKeyList[len(parseKeyList)-2])
+		serviceName = parseKeyList[len(parseKeyList)-1]
 	} else {
-		athenzDomainName = strings.Split(key, "/")[0]
+		athenzDomainName = key
 	}
 
 	athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(athenzDomainName)
@@ -206,7 +196,7 @@ func (c *Controller) sync(key string) error {
 	}
 
 	if !exists {
-		return fmt.Errorf("athenz domain %s does not exist in cache", key)
+		return fmt.Errorf("athenz domain %s does not exist in cache", athenzDomainName)
 	}
 
 	athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
@@ -255,7 +245,7 @@ func (c *Controller) sync(key string) error {
 	// get current APs from cache
 	currentCRs := c.rbacProvider.GetCurrentIstioAuthzPolicy(domainRBAC, c.configStoreCache, serviceName)
 	cbHandler := c.getCallbackHandler(key)
-	changeList := c.computeChangeList(currentCRs, desiredCRs, cbHandler)
+	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, c.checkOverrideAnnotation)
 
 	// If change list is empty, nothing to do
 	if len(changeList) == 0 {
@@ -271,63 +261,6 @@ func (c *Controller) sync(key string) error {
 	return nil
 }
 
-func (c *Controller) computeChangeList(currentCRs []model.Config, desiredCRs []model.Config, cbHandler OnCompleteFunc) []*Item {
-	currMap := common.ConvertSliceToKeyedMap(currentCRs)
-	desiredMap := common.ConvertSliceToKeyedMap(desiredCRs)
-
-	changeList := make([]*Item, 0)
-
-	// loop through the desired slice of model.Config and add the items that need to be created or updated
-	for _, desiredConfig := range desiredCRs {
-		key := desiredConfig.Key()
-		existingConfig, exists := currMap[key]
-		// case 1: current CR is empty, desired CR is not empty, results in authz policy creation
-		if !exists {
-			item := Item{
-				Operation:       model.EventAdd,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-
-		if !common.Equal(existingConfig, desiredConfig) {
-			// case 2: current CR is not empty, desired CR is not empty, current CR != desired CR, no overrideAnnotation set in current CR, results in authz policy update
-			if c.checkOverrideAnnotation(existingConfig) {
-				continue
-			}
-			// copy metadata(for resource version) from current config to desired config
-			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
-			item := Item{
-				Operation:       model.EventUpdate,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-		// case 3: current CR is not empty, desired CR is not empty, current CR == desired CR, results in no action
-	}
-
-	// loop through the current slice of model.Config and add the items that need to be deleted
-	for _, currConfig := range currentCRs {
-		key := currConfig.Key()
-		_, exists := desiredMap[key]
-		// case 4: current CR is not empty, desired CR is empty, results in authz policy deletion
-		if !exists {
-			item := Item{
-				Operation:       model.EventDelete,
-				Resource:        currConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-		}
-	}
-
-	return changeList
-}
-
 // checkOverrideAnnotation checks if current config has override annotation, skips process if override annotation is set
 // to true
 func (c *Controller) checkOverrideAnnotation(existingConfig model.Config) bool {
@@ -339,7 +272,7 @@ func (c *Controller) checkOverrideAnnotation(existingConfig model.Config) bool {
 }
 
 // ProcessConfigChange receives resource and event action, and perform update on resource
-func (c *Controller) ProcessConfigChange(item *Item) error {
+func (c *Controller) ProcessConfigChange(item *common.Item) error {
 	if item == nil {
 		return nil
 	}
@@ -372,6 +305,7 @@ func (c *Controller) ProcessConfigChange(item *Item) error {
 	return err
 }
 
+// getSvcObj return single service resource in the cache
 func (c *Controller) getSvcObj(svcKey string) (*corev1.Service, error) {
 	serviceRaw, exists, err := c.serviceIndexInformer.GetIndexer().GetByKey(svcKey)
 	if err != nil {
@@ -387,12 +321,10 @@ func (c *Controller) getSvcObj(svcKey string) (*corev1.Service, error) {
 	return serviceObj, nil
 }
 
-type OnCompleteFunc func(err error, item *Item) error
-
 // getCallbackHandler returns an error handler func that re-adds the key "athenzdomain-service(optional)" back to queue
 // this explicit func definition takes in the key to avoid data race while accessing key
-func (c *Controller) getCallbackHandler(key string) OnCompleteFunc {
-	return func(err error, item *Item) error {
+func (c *Controller) getCallbackHandler(key string) common.OnCompleteFunc {
+	return func(err error, item *common.Item) error {
 
 		if err == nil {
 			return nil

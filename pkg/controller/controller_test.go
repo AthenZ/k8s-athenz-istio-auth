@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
@@ -235,24 +234,24 @@ func TestEqual(t *testing.T) {
 
 func TestComputeChangeList(t *testing.T) {
 
-	cbHandler := func(err error, item *processor.Item) error {
+	cbHandler := func(err error, item *common.Item) error {
 		return err
 	}
 
 	type input struct {
 		current   []model.Config
 		desired   []model.Config
-		cbHandler processor.OnCompleteFunc
+		cbHandler common.OnCompleteFunc
 	}
 	tests := []struct {
 		name           string
 		input          input
-		expectedOutput []*processor.Item
+		expectedOutput []*common.Item
 	}{
 		{
 			name:           "should return empty change list for empty current and desired list",
 			input:          input{},
-			expectedOutput: make([]*processor.Item, 0),
+			expectedOutput: make([]*common.Item, 0),
 		},
 		{
 			name: "should add create operations for new items on the desired list",
@@ -264,7 +263,7 @@ func TestComputeChangeList(t *testing.T) {
 				},
 				cbHandler: cbHandler,
 			},
-			expectedOutput: []*processor.Item{
+			expectedOutput: []*common.Item{
 				{
 					Operation:       model.EventAdd,
 					Resource:        newSr("test-ns", "svc-role"),
@@ -294,7 +293,7 @@ func TestComputeChangeList(t *testing.T) {
 				},
 				cbHandler: cbHandler,
 			},
-			expectedOutput: []*processor.Item{
+			expectedOutput: []*common.Item{
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSr("test-ns", "svc-role"),
@@ -317,7 +316,7 @@ func TestComputeChangeList(t *testing.T) {
 				desired:   []model.Config{},
 				cbHandler: cbHandler,
 			},
-			expectedOutput: []*processor.Item{
+			expectedOutput: []*common.Item{
 				{
 					Operation:       model.EventDelete,
 					Resource:        newSr("test-ns", "svc-role"),
@@ -347,7 +346,7 @@ func TestComputeChangeList(t *testing.T) {
 				},
 				cbHandler: cbHandler,
 			},
-			expectedOutput: []*processor.Item{
+			expectedOutput: []*common.Item{
 				{
 					Operation:       model.EventUpdate,
 					Resource:        updatedSr("test-ns", "svc-role"),

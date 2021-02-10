@@ -79,7 +79,7 @@ func TestSync(t *testing.T) {
 
 	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
 
-	cbHandler := func(err error, i *Item) error {
+	cbHandler := func(err error, i *common.Item) error {
 		assert.Fail(t, "CallbackHandler should not be called")
 		return nil
 	}
@@ -89,7 +89,7 @@ func TestSync(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		input         *Item
+		input         *common.Item
 		startingCache model.ConfigStoreCache
 		expectedCache model.ConfigStoreCache
 		expectedErr   error
@@ -103,7 +103,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perfom valid create operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventAdd,
 				Resource:        newSr("test-ns", "test-role"),
 				CallbackHandler: cbHandler,
@@ -119,7 +119,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perform valid update operation",
-			input: &Item{
+			input: &common.Item{
 				Operation: model.EventUpdate,
 				Resource: func() model.Config {
 					obj := updateTestCache.Get(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), "test-svc", "test-ns")
@@ -165,7 +165,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perfom valid delete operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventDelete,
 				Resource:        newSr("test-ns", "test-svc"),
 				CallbackHandler: cbHandler,
@@ -185,7 +185,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should return error if valid update operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventUpdate,
 				Resource:        newSr("test-ns", "test-svc"),
 				CallbackHandler: cbHandler,
