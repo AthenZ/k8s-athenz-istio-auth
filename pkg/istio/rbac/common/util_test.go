@@ -523,3 +523,68 @@ func TestNewConfig(t *testing.T) {
 		assert.Equal(t, c.expectedConfig, gotConfig, c.test)
 	}
 }
+
+func newSr(ns, role string) model.Config {
+	srSpec := &v1alpha1.ServiceRole{
+		Rules: []*v1alpha1.AccessRule{
+			{
+				Services: []string{WildCardAll},
+				Methods:  []string{"GET"},
+				Constraints: []*v1alpha1.AccessRule_Constraint{
+					{
+						Key:    ConstraintSvcKey,
+						Values: []string{"test-svc"},
+					},
+				},
+			},
+		},
+	}
+	return NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, role, srSpec)
+}
+
+func newSrb(ns, role string) model.Config {
+	srbSpec := &v1alpha1.ServiceRoleBinding{
+		RoleRef: &v1alpha1.RoleRef{
+			Kind: ServiceRoleKind,
+			Name: role,
+		},
+		Subjects: []*v1alpha1.Subject{
+			{
+				User: "test-user",
+			},
+		},
+	}
+	return NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, srbSpec)
+}
+
+func TestConvertSliceToKeyedMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       []model.Config
+		expected map[string]model.Config
+	}{
+		{
+			name:     "should return empty map for empty slice",
+			in:       []model.Config{},
+			expected: map[string]model.Config{},
+		},
+		{
+			name: "should return correctly keyed map",
+			in: []model.Config{
+				newSr("my-ns", "this-role"),
+				newSrb("my-ns", "this-role"),
+			},
+			expected: map[string]model.Config{
+				"ServiceRole/my-ns/this-role":        newSr("my-ns", "this-role"),
+				"ServiceRoleBinding/my-ns/this-role": newSrb("my-ns", "this-role"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := ConvertSliceToKeyedMap(tt.in)
+			assert.Equal(t, tt.expected, actual, "returned map should match the expected map")
+		})
+	}
+}

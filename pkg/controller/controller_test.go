@@ -147,38 +147,6 @@ func updatedSrb(ns, role string) model.Config {
 	return common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, srbSpec)
 }
 
-func TestConvertSliceToKeyedMap(t *testing.T) {
-	tests := []struct {
-		name     string
-		in       []model.Config
-		expected map[string]model.Config
-	}{
-		{
-			name:     "should return empty map for empty slice",
-			in:       []model.Config{},
-			expected: map[string]model.Config{},
-		},
-		{
-			name: "should return correctly keyed map",
-			in: []model.Config{
-				newSr("my-ns", "this-role"),
-				newSrb("my-ns", "this-role"),
-			},
-			expected: map[string]model.Config{
-				"ServiceRole/my-ns/this-role":        newSr("my-ns", "this-role"),
-				"ServiceRoleBinding/my-ns/this-role": newSrb("my-ns", "this-role"),
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := convertSliceToKeyedMap(tt.in)
-			assert.Equal(t, tt.expected, actual, "returned map should match the expected map")
-		})
-	}
-}
-
 func TestEqual(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -226,7 +194,7 @@ func TestEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := equal(tt.in1, tt.in2)
+			actual := common.Equal(tt.in1, tt.in2)
 			assert.Equal(t, tt.expected, actual, "comparison result should be equal to expected")
 		})
 	}
@@ -383,7 +351,7 @@ func TestComputeChangeList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualChangeList := computeChangeList(tt.input.current, tt.input.desired, tt.input.cbHandler)
+			actualChangeList := common.ComputeChangeList(tt.input.current, tt.input.desired, tt.input.cbHandler, nil)
 			assert.Equal(t, len(tt.expectedOutput), len(actualChangeList), "len(expectedChangeList) and len(actualChangeList) should match")
 			for i, expectedItem := range tt.expectedOutput {
 				assert.Equal(t, expectedItem.Operation, actualChangeList[i].Operation, fmt.Sprintf("operation on changelist[%d] does not match with expected", i))
