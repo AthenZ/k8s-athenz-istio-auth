@@ -19,8 +19,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
-	v1 "k8s.io/api/core/v1"
-	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	fcache "k8s.io/client-go/tools/cache/testing"
@@ -61,7 +60,7 @@ var (
 	dnsSuffix               = "svc.cluster.local"
 
 	ad1 = &adv1.AthenzDomain{
-		ObjectMeta: k8sv1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      DomainName,
 			Namespace: "",
 		},
@@ -155,7 +154,8 @@ func TestNewController(t *testing.T) {
 	athenzclientset := fakev1.NewSimpleClientset()
 	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
 	istioClientSet := fakeversionedclient.NewSimpleClientset()
-	apResyncInterval, _ := time.ParseDuration("1h")
+	apResyncInterval, err := time.ParseDuration("1h")
+	assert.Equal(t, nil, err, "time parseDuration call should not fail with error")
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
 	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, true)

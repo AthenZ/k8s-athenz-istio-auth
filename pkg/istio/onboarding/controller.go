@@ -9,7 +9,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -285,6 +285,15 @@ func (c *Controller) sync() error {
 			CallbackHandler: c.callbackHandler,
 		}
 		// TODO: investigate: when dns-suffix is changed and results in full service list update, this update is likely to fail and controller will be stuck in fail and retry cycles.
+		// How to reproduce: 1. do not mention dns-suffix as part of controller, use default setting
+		//                   2. start the controller, at the beginning, controller will perform a full serivce list update
+		//                   3. update will fail with message like
+		//						```
+		//						INFO[2021-02-04T20:00:45Z] [istio/processor/controller.go] [processNextItem] Processing update for resource: ClusterRbacConfig//default
+		//						INFO[2021-02-04T20:00:45Z] [istio/onboarding/controller.go] [sync] Sync state is current, no changes needed...
+		//						INFO[2021-02-04T20:00:45Z] [istio/onboarding/controller.go] [sync] Updating cluster rbac config...
+		//                      ```
+		//                      It will stuck in this loop and won't proceed.
 		c.processor.ProcessConfigChange(&item)
 		return nil
 	}

@@ -104,8 +104,8 @@ func (c *Controller) sync(key string) error {
 
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
+	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, "", "")
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, "", false)
 	cbHandler := c.getCallbackHandler(key)
 
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, nil)
@@ -134,6 +134,8 @@ func (c *Controller) sync(key string) error {
 //    cluster rbac config object based on a service label
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
+// 6. Authorization Policy controller responsible for creating / updating / deleting
+//    the authorization policy object based on service annotation and athenz domain spec
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
 	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())

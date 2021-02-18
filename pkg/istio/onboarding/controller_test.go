@@ -304,9 +304,7 @@ func createClusterRbacExclusionConfig(services []string) model.Config {
 			Exclusion: &v1alpha1.RbacConfig_Target{
 				Services: services,
 			},
-			Inclusion: &v1alpha1.RbacConfig_Target{
-				Services: services,
-			},
+			Inclusion: nil,
 		},
 	}
 }
@@ -340,7 +338,7 @@ func TestSyncService(t *testing.T) {
 		{
 			name:                   "Update: update ClusterRbacConfig when it exists without an inclusion field",
 			inputServiceList:       []*v1.Service{onboardedService, onboardedServiceCopy, notOnboardedService, notOnboardedServiceCopy},
-			inputClusterRbacConfig: createClusterRbacExclusionConfig([]string{onboardedServiceCopyName, onboardedServiceName}),
+			inputClusterRbacConfig: createClusterRbacExclusionConfig([]string{onboardedServiceCopyName}),
 			expectedServiceList:    []string{onboardedServiceCopyName, onboardedServiceName},
 		},
 		{
