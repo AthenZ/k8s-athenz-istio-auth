@@ -39,17 +39,16 @@ import (
 const queueNumRetries = 3
 
 type Controller struct {
-	configStoreCache             model.ConfigStoreCache
-	crcController                *onboarding.Controller
-	processor                    *processor.Controller
-	serviceIndexInformer         cache.SharedIndexInformer
-	adIndexInformer              cache.SharedIndexInformer
-	rbacProvider                 rbac.Provider
-	apController                 *authzpolicy.Controller
-	queue                        workqueue.RateLimitingInterface
-	adResyncInterval             time.Duration
-	enableAuthzPolicyController  bool
-	componentsEnabledAuthzPolicy *authzpolicy.ComponentEnabled
+	configStoreCache            model.ConfigStoreCache
+	crcController               *onboarding.Controller
+	processor                   *processor.Controller
+	serviceIndexInformer        cache.SharedIndexInformer
+	adIndexInformer             cache.SharedIndexInformer
+	rbacProvider                rbac.Provider
+	apController                *authzpolicy.Controller
+	queue                       workqueue.RateLimitingInterface
+	adResyncInterval            time.Duration
+	enableAuthzPolicyController bool
 }
 
 // getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
@@ -156,17 +155,16 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	}
 
 	c := &Controller{
-		serviceIndexInformer:         serviceIndexInformer,
-		adIndexInformer:              adIndexInformer,
-		configStoreCache:             configStoreCache,
-		crcController:                crcController,
-		processor:                    processor,
-		apController:                 apController,
-		rbacProvider:                 rbacv1.NewProvider(enableOriginJwtSubject),
-		queue:                        queue,
-		adResyncInterval:             adResyncInterval,
-		enableAuthzPolicyController:  enableAuthzPolicyController,
-		componentsEnabledAuthzPolicy: componentsEnabledAuthzPolicy,
+		serviceIndexInformer:        serviceIndexInformer,
+		adIndexInformer:             adIndexInformer,
+		configStoreCache:            configStoreCache,
+		crcController:               crcController,
+		processor:                   processor,
+		apController:                apController,
+		rbacProvider:                rbacv1.NewProvider(enableOriginJwtSubject),
+		queue:                       queue,
+		adResyncInterval:            adResyncInterval,
+		enableAuthzPolicyController: enableAuthzPolicyController,
 	}
 
 	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), c.processConfigEvent)

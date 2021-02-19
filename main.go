@@ -103,7 +103,7 @@ func main() {
 
 	componentsEnabledAuthzPolicy, err := authzpolicy.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
 	if err != nil {
-		log.Panicf("Error parsing list of services, namespace or cluster that enable authz policy")
+		log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments")
 	}
 
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)

@@ -2,9 +2,6 @@ package authzpolicy
 
 import (
 	"testing"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
@@ -115,8 +112,9 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 
 func TestIsEnabled(t *testing.T) {
 	type inputData struct {
-		obj ComponentEnabled
-		arg corev1.Service
+		obj       ComponentEnabled
+		service   string
+		namespace string
 	}
 	type testData struct {
 		input  inputData
@@ -139,12 +137,8 @@ func TestIsEnabled(t *testing.T) {
 					namespaceList: []string{},
 					cluster:       false,
 				},
-				arg: corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "service1",
-						Namespace: "namespace1",
-					},
-				},
+				service:   "service1",
+				namespace: "namespace1",
 			},
 			output: true,
 		},
@@ -155,12 +149,8 @@ func TestIsEnabled(t *testing.T) {
 					namespaceList: []string{"ns1", "ns2", "ns3"},
 					cluster:       false,
 				},
-				arg: corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "service1",
-						Namespace: "ns1",
-					},
-				},
+				service:   "service1",
+				namespace: "ns1",
 			},
 			output: true,
 		},
@@ -171,12 +161,8 @@ func TestIsEnabled(t *testing.T) {
 					namespaceList: []string{},
 					cluster:       true,
 				},
-				arg: corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test",
-						Namespace: "test",
-					},
-				},
+				service:   "test",
+				namespace: "test",
 			},
 			output: true,
 		},
@@ -187,18 +173,14 @@ func TestIsEnabled(t *testing.T) {
 					namespaceList: []string{},
 					cluster:       false,
 				},
-				arg: corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "service1",
-						Namespace: "namespace1",
-					},
-				},
+				service:   "service1",
+				namespace: "namespace1",
 			},
 			output: false,
 		},
 	}
 	for index, testcase := range tests {
-		if testcase.input.obj.IsEnabled(&testcase.input.arg) != testcase.output {
+		if testcase.input.obj.IsEnabled(testcase.input.service, testcase.input.namespace) != testcase.output {
 			t.Errorf("Test %d failed, does not match expected output", index)
 		}
 	}

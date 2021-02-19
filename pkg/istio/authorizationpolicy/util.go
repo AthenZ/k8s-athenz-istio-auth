@@ -55,8 +55,8 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 	return &componentEnabledObj, nil
 }
 
-func containsService(serviceList []ServiceEnabled, service string, ns string) bool {
-	for _, item := range serviceList {
+func (c *ComponentEnabled) containsService(service string, ns string) bool {
+	for _, item := range c.serviceList {
 		if item.service == service && item.namespace == ns {
 			return true
 		}
@@ -64,8 +64,8 @@ func containsService(serviceList []ServiceEnabled, service string, ns string) bo
 	return false
 }
 
-func containsNamespace(namespaceList []string, ns string) bool {
-	for _, item := range namespaceList {
+func (c *ComponentEnabled) containsNamespace(ns string) bool {
+	for _, item := range c.namespaceList {
 		if item == ns {
 			return true
 		}
@@ -77,10 +77,10 @@ func (c *ComponentEnabled) IsEnabled(serviceName string, serviceNamespace string
 	if c.cluster {
 		return true
 	}
-	if containsNamespace(c.namespaceList, serviceNamespace) {
+	if c.containsNamespace(serviceNamespace) {
 		return true
 	}
-	if containsService(c.serviceList, serviceName, serviceNamespace) {
+	if c.containsService(serviceName, serviceNamespace) {
 		return true
 	}
 	return false
