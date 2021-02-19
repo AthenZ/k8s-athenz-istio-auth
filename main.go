@@ -40,7 +40,7 @@ func main() {
 	logLevel := flag.String("log-level", "info", "logging level")
 	enableAuthzPolicyController := flag.Bool("enable-authzpolicy-controller", true, "enable authzpolicy controller to create authzpolicy resource")
 	authzPolicyEnabledList := flag.String("components-enabled-authzpolicy", "*", "List of namespace/service that enabled authz policy, "+
-		"please follow format 'example-ns1/example-service1,example-ns2/example-service2' ")
+		"please follow format 'example-ns1/example-service1,example-ns2/*, and use '*' to enable all services in the cluster' ")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
@@ -103,7 +103,7 @@ func main() {
 
 	componentsEnabledAuthzPolicy, err := authzpolicy.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
 	if err != nil {
-		log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments")
+		log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
 	}
 
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)
