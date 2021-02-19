@@ -87,7 +87,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 	return c
 }
 
-func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.Event) {
+func (c *Controller) EventHandler(_ model.Config, config model.Config, e model.Event) {
 	// authz policy event handler, Key() returns format <type>/<namespace>/<name>
 	// should drop the type and pass <namespace>/<name> only
 	c.queue.Add(strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
