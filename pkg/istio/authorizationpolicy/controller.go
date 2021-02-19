@@ -6,6 +6,9 @@ package authzpolicy
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
@@ -20,8 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"strings"
-	"time"
 )
 
 const (
@@ -32,32 +33,32 @@ const (
 )
 
 type Controller struct {
-	configStoreCache         model.ConfigStoreCache
-	serviceIndexInformer     cache.SharedIndexInformer
-	adIndexInformer          cache.SharedIndexInformer
-	authzpolicyIndexInformer cache.SharedIndexInformer
-	queue                    workqueue.RateLimitingInterface
-	rbacProvider             rbac.Provider
-	apResyncInterval         time.Duration
-	enableOriginJwtSubject   bool
-	dryRun                   bool
+	configStoreCache            model.ConfigStoreCache
+	serviceIndexInformer        cache.SharedIndexInformer
+	adIndexInformer             cache.SharedIndexInformer
+	authzpolicyIndexInformer    cache.SharedIndexInformer
+	queue                       workqueue.RateLimitingInterface
+	rbacProvider                rbac.Provider
+	apResyncInterval            time.Duration
+	enableOriginJwtSubject      bool
+	componentEnabledAuthzPolicy *ComponentEnabled
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, dryRun bool) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
 
 	c := &Controller{
-		configStoreCache:         configStoreCache,
-		serviceIndexInformer:     serviceIndexInformer,
-		adIndexInformer:          adIndexInformer,
-		authzpolicyIndexInformer: authzpolicyIndexInformer,
-		queue:                    queue,
-		rbacProvider:             rbacv2.NewProvider(enableOriginJwtSubject),
-		apResyncInterval:         apResyncInterval,
-		enableOriginJwtSubject:   enableOriginJwtSubject,
-		dryRun:                   dryRun,
+		configStoreCache:            configStoreCache,
+		serviceIndexInformer:        serviceIndexInformer,
+		adIndexInformer:             adIndexInformer,
+		authzpolicyIndexInformer:    authzpolicyIndexInformer,
+		queue:                       queue,
+		rbacProvider:                rbacv2.NewProvider(enableOriginJwtSubject),
+		apResyncInterval:            apResyncInterval,
+		enableOriginJwtSubject:      enableOriginJwtSubject,
+		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -90,6 +91,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.Event) {
 	// authz policy event handler, Key() returns format <type>/<namespace>/<name>
 	// should drop the type and pass <namespace>/<name> only
+	log.Printf("HIIIII: %v", strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
 	c.queue.Add(strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
 }
 
@@ -98,6 +100,7 @@ func (c *Controller) EventHandler(config model.Config, _ model.Config, e model.E
 func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 	key, err := fn(obj)
 	if err == nil {
+		log.Printf("HELLO!!!! %v", key)
 		c.queue.Add(key)
 		return
 	}
@@ -219,7 +222,8 @@ func (c *Controller) sync(key string) error {
 	}
 
 	// get current APs from cache
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName, c.dryRun)
+	dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName, dryRun)
 	cbHandler := c.getCallbackHandler(key)
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, c.checkOverrideAnnotation)
 
@@ -254,7 +258,9 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 	}
 	var err error
 	var eHandler common.EventHandler
-	if c.dryRun {
+	serviceName := item.Resource.ConfigMeta.Name
+	serviceNamespace := item.Resource.ConfigMeta.Namespace
+	if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
 		eHandler = &common.DryRunHandler{}
 	} else {
 		eHandler = &common.ApiHandler{
@@ -348,7 +354,16 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 func (c *Controller) checkAuthzEnabledAnnotation(serviceObj *corev1.Service) bool {
 	if _, ok := serviceObj.Annotations[authzEnabledAnnotation]; ok {
 		if serviceObj.Annotations[authzEnabledAnnotation] == authzEnabled {
+			serviceName := serviceObj.ObjectMeta.Name
+			serviceNamespace := serviceObj.ObjectMeta.Namespace
+			if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
+				log.Infof("Service %s did not enable authz policy, please check command line arguments", serviceName)
+				return false
+			}
+			log.Infof("Service %s enabled authz polcy", serviceName)
 			return true
+		} else {
+			return false
 		}
 	}
 	return false

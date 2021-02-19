@@ -4,6 +4,8 @@
 package v2
 
 import (
+	"regexp"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
@@ -12,7 +14,6 @@ import (
 	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
-	"regexp"
 )
 
 // implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface

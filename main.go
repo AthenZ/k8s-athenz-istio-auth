@@ -5,7 +5,14 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
@@ -16,11 +23,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
 )
 
 const (
@@ -34,14 +36,15 @@ func main() {
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
-	apDryRun := flag.Bool("authz-policy-dry-run-mode", true, "enable dry run mode for authz policy resource")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
-
+	enableAuthzPolicyController := flag.Bool("enable-authzpolicy-controller", true, "enable authzpolicy controller to create authzpolicy resource")
+	authzPolicyEnabledList := flag.String("components-enabled-authzpolicy", "home-czhuang/details,home-czhuang/reviews", "List of namespace/service that enabled authz policy, "+
+		"please follow format 'example-ns1/example-service1,example-ns2/example-service2' ")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
-	if *apDryRun {
+	if *enableAuthzPolicyController {
 		if _, err := os.Stat(dryRunStoredFilesDirectory); os.IsNotExist(err) {
 			err := os.MkdirAll(dryRunStoredFilesDirectory, 0644)
 			if err != nil {
@@ -98,7 +101,12 @@ func main() {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *apDryRun)
+	componentsEnabledAuthzPolicy, err := authzpolicy.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+	if err != nil {
+		log.Panicf("Error parsing list of services, namespace or cluster that enable authz policy")
+	}
+
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)
