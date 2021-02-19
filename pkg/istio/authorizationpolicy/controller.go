@@ -188,7 +188,9 @@ func (c *Controller) sync(key string) error {
 		if err != nil {
 			return fmt.Errorf("error getting service from cache: %s", err.Error())
 		}
-		serviceList = append(serviceList, serviceObj)
+		if serviceObj != nil {
+			serviceList = append(serviceList, serviceObj)
+		}
 	} else {
 		// handle case 2
 		// fetch all services in the namespace
@@ -202,7 +204,9 @@ func (c *Controller) sync(key string) error {
 				if err != nil {
 					return fmt.Errorf("error getting service from cache: %s", err.Error())
 				}
-				serviceList = append(serviceList, serviceObj)
+				if serviceObj != nil {
+					serviceList = append(serviceList, serviceObj)
+				}
 			}
 		}
 	}
@@ -285,7 +289,8 @@ func (c *Controller) getSvcObj(svcKey string) (*corev1.Service, error) {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("service %s does not exist in cache", svcKey)
+		log.Infof("service %s does not exist in cache", svcKey)
+		return nil, nil
 	}
 	serviceObj, ok := serviceRaw.(*corev1.Service)
 	if !ok {
