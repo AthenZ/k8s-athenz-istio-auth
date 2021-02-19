@@ -91,7 +91,6 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 func (c *Controller) EventHandler(_ model.Config, config model.Config, e model.Event) {
 	// authz policy event handler, Key() returns format <type>/<namespace>/<name>
 	// should drop the type and pass <namespace>/<name> only
-	log.Printf("HIIIII: %v", strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
 	c.queue.Add(strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
 }
 
@@ -100,7 +99,6 @@ func (c *Controller) EventHandler(_ model.Config, config model.Config, e model.E
 func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 	key, err := fn(obj)
 	if err == nil {
-		log.Printf("HELLO!!!! %v", key)
 		c.queue.Add(key)
 		return
 	}
@@ -354,16 +352,7 @@ func (c *Controller) resync(stopCh <-chan struct{}) {
 func (c *Controller) checkAuthzEnabledAnnotation(serviceObj *corev1.Service) bool {
 	if _, ok := serviceObj.Annotations[authzEnabledAnnotation]; ok {
 		if serviceObj.Annotations[authzEnabledAnnotation] == authzEnabled {
-			serviceName := serviceObj.ObjectMeta.Name
-			serviceNamespace := serviceObj.ObjectMeta.Namespace
-			if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
-				log.Infof("Service %s did not enable authz policy, please check command line arguments", serviceName)
-				return false
-			}
-			log.Infof("Service %s enabled authz polcy", serviceName)
 			return true
-		} else {
-			return false
 		}
 	}
 	return false
