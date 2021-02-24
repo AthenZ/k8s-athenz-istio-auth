@@ -945,20 +945,20 @@ func TestDryrunResource(t *testing.T) {
 
 	for _, tt := range tests {
 		// test findDeleteDryrunResource func
-		err := eHandler.createDryrunResource(&tt.item, os.TempDir())
+		err := eHandler.createDryrunResource(&tt.item, os.TempDir()+"/")
 		assert.Equal(t, tt.expErr, err, "error should be nil for creating resource")
-		if _, err := os.Stat(os.TempDir() + tt.fileName); err != nil {
+		if _, err := os.Stat(os.TempDir() + "/" + tt.fileName); err != nil {
 			assert.Equal(t, false, os.IsNotExist(err), "file should exist after calling createDryrunResource")
 			assert.Equal(t, tt.expErr, err, "os stat generated file should not return err")
 		}
 
 		// convert the created yaml back to config model format, compare the model spec
-		covertedConfig, err := ReadConvertToModelConfig(tt.item.Resource.Name, tt.item.Resource.Namespace, os.TempDir())
+		covertedConfig, err := ReadConvertToModelConfig(tt.item.Resource.Name, tt.item.Resource.Namespace, os.TempDir()+"/")
 		assert.Equal(t, tt.expErr, err, "error should be nil when converting config")
 		assert.Equal(t, *covertedConfig, tt.item.Resource, "model config should be the same")
 
 		// delete the created resource
-		err = eHandler.findDeleteDryrunResource(&tt.item, os.TempDir())
+		err = eHandler.findDeleteDryrunResource(&tt.item, os.TempDir()+"/")
 		assert.Equal(t, tt.expErr, err, "error should not be nil when deleting the yaml file")
 	}
 }

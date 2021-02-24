@@ -56,7 +56,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 	// generating rules, iterate through assertions, find the one match with desired format.
 	var rules []*v1beta1.Rule
 	for role, assertions := range athenzModel.Rules {
+		rule := &v1beta1.Rule{}
 		for _, assert := range assertions {
+			// form rule_to array by appending matching assertions.
 			// assert.Resource contains the svc information that needs to parse and match
 			svc, path, err := common.ParseAssertionResource(athenzModel.Name, assert)
 			if err != nil {
@@ -73,59 +75,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Debugf("athenz svc %s does not match with current svc %s", svc, svcLabel)
 				continue
 			}
-			rule := &v1beta1.Rule{}
-			// form rule.From, must initialize internal source here
-			from_principal := &v1beta1.Rule_From{
-				Source: &v1beta1.Source{},
-			}
-			from_requestPrincipal := &v1beta1.Rule_From{
-				Source: &v1beta1.Source{},
-			}
-			// role name should match zms resource name
-			for _, roleMember := range athenzModel.Members[role] {
-				res, err := common.CheckAthenzMemberExpiry(roleMember)
-				if err != nil {
-					log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", roleMember.MemberName, err)
-					continue
-				}
-				if !res {
-					log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
-					continue
-				}
-				res, err = common.CheckAthenzSystemDisabled(roleMember)
-				if err != nil {
-					log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", roleMember.MemberName, err)
-					continue
-				}
-				if !res {
-					log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
-					continue
-				}
-
-				spiffeName, err := common.MemberToSpiffe(roleMember)
-				if err != nil {
-					log.Errorln("error converting role member to spiffeName: ", err.Error())
-					continue
-				}
-				from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
-				if p.enableOriginJwtSubject {
-					originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
-					if err != nil {
-						log.Errorln(err.Error())
-						continue
-					}
-					from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
-				}
-			}
-			//add role spiffe for role certificate
-			roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
-			if err != nil {
-				log.Errorln("error when convert role to spiffe name: ", err.Error())
-				continue
-			}
-			from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
-			rule.From = append(rule.From, from_principal)
-			rule.From = append(rule.From, from_requestPrincipal)
 			// form rules_to
 			_, err = common.ParseAssertionEffect(assert)
 			if err != nil {
@@ -147,8 +96,65 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				to.Operation.Paths = []string{path}
 			}
 			rule.To = append(rule.To, to)
-			rules = append(rules, rule)
 		}
+
+		// group by role, for each role, form rule_from from role members,
+		// skip if rule.To is nil, indicating no assertion match with service
+		if rule.To == nil {
+			continue
+		}
+		from_principal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+		from_requestPrincipal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+		// role name should match zms resource name
+		for _, roleMember := range athenzModel.Members[role] {
+			res, err := common.CheckAthenzMemberExpiry(roleMember)
+			if err != nil {
+				log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", roleMember.MemberName, err)
+				continue
+			}
+			if !res {
+				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
+				continue
+			}
+			res, err = common.CheckAthenzSystemDisabled(roleMember)
+			if err != nil {
+				log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", roleMember.MemberName, err)
+				continue
+			}
+			if !res {
+				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
+				continue
+			}
+
+			spiffeName, err := common.MemberToSpiffe(roleMember)
+			if err != nil {
+				log.Errorln("error converting role member to spiffeName: ", err.Error())
+				continue
+			}
+			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+			if p.enableOriginJwtSubject {
+				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
+				if err != nil {
+					log.Errorln(err.Error())
+					continue
+				}
+				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+			}
+		}
+		//add role spiffe for role certificate
+		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
+		if err != nil {
+			log.Errorln("error when convert role to spiffe name: ", err.Error())
+			continue
+		}
+		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
+		rule.From = append(rule.From, from_principal)
+		rule.From = append(rule.From, from_requestPrincipal)
+		rules = append(rules, rule)
 	}
 	spec.Rules = rules
 	out.Spec = spec
