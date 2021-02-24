@@ -10,9 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"istio.io/api/rbac/v1alpha1"
+	"istio.io/api/security/v1beta1"
+	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
+	"os"
 	"testing"
 	"time"
 )
@@ -922,4 +925,94 @@ func TestEqual(t *testing.T) {
 			assert.Equal(t, tt.expected, actual, "comparison result should be equal to expected")
 		})
 	}
+}
+
+func TestDryrunResource(t *testing.T) {
+	eHandler := DryRunHandler{}
+	tests := []struct {
+		item            Item
+		fileName        string
+		expectedContent string
+		expErr          error
+	}{
+		{
+			item:            getAuthzPolicyItem(model.EventAdd),
+			fileName:        "onboarded-service--test-namespace.yaml",
+			expectedContent: "onboarded-service--test-namespace.yaml",
+			expErr:          nil,
+		},
+	}
+
+	for _, tt := range tests {
+		// test findDeleteDryrunResource func
+		err := eHandler.createDryrunResource(&tt.item, os.TempDir())
+		assert.Equal(t, tt.expErr, err, "error should be nil for creating resource")
+		if _, err := os.Stat(os.TempDir() + tt.fileName); err != nil {
+			assert.Equal(t, false, os.IsNotExist(err), "file should exist after calling createDryrunResource")
+			assert.Equal(t, tt.expErr, err, "os stat generated file should not return err")
+		}
+
+		// convert the created yaml back to config model format, compare the model spec
+		covertedConfig, err := ReadConvertToModelConfig(tt.item.Resource.Name, tt.item.Resource.Namespace, os.TempDir())
+		assert.Equal(t, tt.expErr, err, "error should be nil when converting config")
+		assert.Equal(t, *covertedConfig, tt.item.Resource, "model config should be the same")
+
+		// delete the created resource
+		err = eHandler.findDeleteDryrunResource(&tt.item, os.TempDir())
+		assert.Equal(t, tt.expErr, err, "error should not be nil when deleting the yaml file")
+	}
+}
+
+func getAuthzPolicyItem(action model.Event) Item {
+	var item Item
+	var out model.Config
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"svc": "productpage"},
+		},
+		Rules: []*v1beta1.Rule{
+			{
+				From: []*v1beta1.Rule_From{
+					{
+						Source: &v1beta1.Source{
+							Principals: []string{
+								"*",
+								"test.namespace/ra/test.namespace:role.productpage-reader",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							RequestPrincipals: []string{
+								"*",
+							},
+						},
+					},
+				},
+				To: []*v1beta1.Rule_To{
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"GET",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	item.Operation = action
+	item.Resource = out
+	return item
 }

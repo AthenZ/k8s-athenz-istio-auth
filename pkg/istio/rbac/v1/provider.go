@@ -27,7 +27,7 @@ func NewProvider(enableOriginJwtSubject bool) rbac.Provider {
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into the list of Istio Authorization V1 specific
 // RBAC custom resources (ServiceRoles, ServiceRoleBindings)
 // The idea is that with a given input model, the function should always return the same output list of resources
-func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model, serviceName string, svcLabel string) []model.Config {
+func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model, _ string, _ string) []model.Config {
 
 	out := make([]model.Config, 0)
 
@@ -94,7 +94,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model, serviceName string,
 }
 
 // GetCurrentIstioRbac returns the ServiceRole and ServiceRoleBinding resources for the specified model's namespace
-func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string, dryrun bool) []model.Config {
+func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, _ string) []model.Config {
 
 	sr, err := csc.List(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), m.Namespace)
 	if err != nil {

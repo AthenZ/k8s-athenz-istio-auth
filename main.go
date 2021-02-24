@@ -34,7 +34,7 @@ func main() {
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
-	apDryRun := flag.Bool("authz-policy-dry-run-mode", true, "enable dry run mode for authz policy resource")
+	apDryRun := flag.Bool("ap-dry-run-mode", true, "enable dry run mode for authz policy resource")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
 

@@ -54,7 +54,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		adIndexInformer:          adIndexInformer,
 		authzpolicyIndexInformer: authzpolicyIndexInformer,
 		queue:                    queue,
-		rbacProvider:             rbacv2.NewProvider(enableOriginJwtSubject),
+		rbacProvider:             rbacv2.NewProvider(dryRun, enableOriginJwtSubject),
 		apResyncInterval:         apResyncInterval,
 		enableOriginJwtSubject:   enableOriginJwtSubject,
 		dryRun:                   dryRun,
@@ -90,7 +90,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 func (c *Controller) EventHandler(_ model.Config, config model.Config, e model.Event) {
 	// authz policy event handler, Key() returns format <type>/<namespace>/<name>
 	// should drop the type and pass <namespace>/<name> only
-	c.queue.Add(strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
+	c.queue.Add(config.Namespace + "/" + config.Name)
 }
 
 // processEvent is responsible for calling the key function and adding the
@@ -149,7 +149,7 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
-// sync function receives a key string function, key can have three format:
+// sync function receives a key string function, key can have two format:
 // Case 1: for athenzdomain crd, key string is in format: <athenz domain name>, perform a service list scan.
 //         Compute, compare and update authz policy specs based on current state in cluster
 // Case 2: for service resource and authorization policy, key string is in format: <namespace name>/<service name>,
@@ -223,7 +223,7 @@ func (c *Controller) sync(key string) error {
 	}
 
 	// get current APs from cache
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName, c.dryRun)
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName)
 	cbHandler := c.getCallbackHandler(key)
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, c.checkOverrideAnnotation)
 

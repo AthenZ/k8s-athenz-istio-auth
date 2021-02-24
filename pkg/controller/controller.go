@@ -105,7 +105,7 @@ func (c *Controller) sync(key string) error {
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
 	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, "", "")
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, "", false)
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, "")
 	cbHandler := c.getCallbackHandler(key)
 
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, nil)
@@ -192,7 +192,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 }
 
 // processConfigEvent is responsible for adding the key of the item to the queue
-func (c *Controller) processConfigEvent(config model.Config, _ model.Config, e model.Event) {
+func (c *Controller) processConfigEvent(_ model.Config, config model.Config, e model.Event) {
 	domain := athenz.NamespaceToDomain(config.Namespace)
 	c.queue.Add(domain)
 }

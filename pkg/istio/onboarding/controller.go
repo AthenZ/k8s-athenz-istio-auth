@@ -286,7 +286,7 @@ func (c *Controller) sync() error {
 		}
 		// TODO: investigate: when dns-suffix is changed and results in full service list update, this update is likely to fail and controller will be stuck in fail and retry cycles.
 		// How to reproduce: 1. do not mention dns-suffix as part of controller, use default setting
-		//                   2. start the controller, at the beginning, controller will perform a full serivce list update
+		//                   2. start the controller, at the beginning, controller will perform a full service list update
 		//                   3. update will fail with message like
 		//						```
 		//						INFO[2021-02-04T20:00:45Z] [istio/processor/controller.go] [processNextItem] Processing update for resource: ClusterRbacConfig//default

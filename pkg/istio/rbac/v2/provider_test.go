@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	DomainName = "test.namespace"
-	username   = "user.name"
-	username1  = "user.*"
+	domainName       = "test.namespace"
+	username         = "user.name"
+	wildcardUsername = "user.*"
 )
 
 var (
@@ -49,7 +49,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 	labels := onboardedService.GetLabels()
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &fakeAthenzInformer)
 
-	p := NewProvider(true)
+	p := NewProvider(false, true)
 
 	convertedCR := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, onboardedService.Name, labels["app"])
 	expectedCR := getExpectedCR()
@@ -116,28 +116,28 @@ func getFakeDomain() zms.SignedDomain {
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
 			Modified: timestamp,
-			Name:     DomainName,
+			Name:     domainName,
 			Policies: &zms.SignedPolicies{
 				Contents: &zms.DomainPolicies{
-					Domain: DomainName,
+					Domain: domainName,
 					Policies: []*zms.Policy{
 						{
 							Assertions: []*zms.Assertion{
 								{
-									Role:     DomainName + ":role.admin",
-									Resource: DomainName + ":*",
+									Role:     domainName + ":role.admin",
+									Resource: domainName + ":*",
 									Action:   "*",
 									Effect:   &allow,
 								},
 								{
-									Role:     DomainName + ":role.productpage-reader",
-									Resource: DomainName + ":svc.productpage",
+									Role:     domainName + ":role.productpage-reader",
+									Resource: domainName + ":svc.productpage",
 									Action:   "get",
 									Effect:   &allow,
 								},
 							},
 							Modified: &timestamp,
-							Name:     DomainName + ":policy.admin",
+							Name:     domainName + ":policy.admin",
 						},
 					},
 				},
@@ -148,7 +148,7 @@ func getFakeDomain() zms.SignedDomain {
 				{
 					Members:  []zms.MemberName{username},
 					Modified: &timestamp,
-					Name:     DomainName + ":role.admin",
+					Name:     domainName + ":role.admin",
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: username,
@@ -158,10 +158,10 @@ func getFakeDomain() zms.SignedDomain {
 				{
 					Members:  []zms.MemberName{"productpage-reader"},
 					Modified: &timestamp,
-					Name:     DomainName + ":role.productpage-reader",
+					Name:     domainName + ":role.productpage-reader",
 					RoleMembers: []*zms.RoleMember{
 						{
-							MemberName: username1,
+							MemberName: wildcardUsername,
 						},
 					},
 				},

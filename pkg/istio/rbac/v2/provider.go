@@ -17,11 +17,13 @@ import (
 
 // implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
 type v2 struct {
+	dryRun                 bool
 	enableOriginJwtSubject bool
 }
 
-func NewProvider(enableOriginJwtSubject bool) rbac.Provider {
+func NewProvider(dryRun, enableOriginJwtSubject bool) rbac.Provider {
 	return &v2{
+		dryRun:                 dryRun,
 		enableOriginJwtSubject: enableOriginJwtSubject,
 	}
 }
@@ -156,11 +158,11 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 // GetCurrentIstioRbac returns the authorization policies resources for the specified model's namespace
 // if serviceName is "", return the all the authorization policies in the given namespace,
 // if serviceName is specific, return single authorization policy matching with serviceName.
-func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string, dryRun bool) []model.Config {
+func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
 	namespace := m.Namespace
-	if dryRun {
+	if p.dryRun {
 		if serviceName != "" {
-			config, err := common.ReadConvertToModelConfig(serviceName, namespace)
+			config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {
 				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
 				return []model.Config{}
@@ -168,9 +170,9 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 			return []model.Config{*config}
 		}
 		var modelList []model.Config
-		serviceList := common.FetchServices(namespace)
+		serviceList := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
 		for _, svc := range serviceList {
-			config, err := common.ReadConvertToModelConfig(svc, namespace)
+			config, err := common.ReadConvertToModelConfig(svc, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {
 				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
 				continue
@@ -189,6 +191,7 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 	}
 	ap := csc.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), serviceName, namespace)
 	if ap != nil {
+		log.Infof("authorization policy does not exist in the cache, name: %s, namespace: %s", serviceName, namespace)
 		return []model.Config{*ap}
 	}
 	return []model.Config{}
