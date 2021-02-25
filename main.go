@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
@@ -23,10 +24,6 @@ import (
 	"time"
 )
 
-const (
-	dryRunStoredFilesDirectory = "/root/authzpolicy/"
-)
-
 func main() {
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
@@ -42,8 +39,8 @@ func main() {
 	log.InitLogger(*logFile, *logLevel)
 
 	if *apDryRun {
-		if _, err := os.Stat(dryRunStoredFilesDirectory); os.IsNotExist(err) {
-			err := os.MkdirAll(dryRunStoredFilesDirectory, 0644)
+		if _, err := os.Stat(common.DryRunStoredFilesDirectory); os.IsNotExist(err) {
+			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0644)
 			if err != nil {
 				log.Panicf("Error when creating authz policy directory: %s", err.Error())
 			}

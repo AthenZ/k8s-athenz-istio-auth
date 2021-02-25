@@ -153,7 +153,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
 		rule.From = append(rule.From, from_principal)
-		rule.From = append(rule.From, from_requestPrincipal)
+		if p.enableOriginJwtSubject {
+			rule.From = append(rule.From, from_requestPrincipal)
+		}
 		rules = append(rules, rule)
 	}
 	spec.Rules = rules
@@ -176,7 +178,10 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 			return []model.Config{*config}
 		}
 		var modelList []model.Config
-		serviceList := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
+		serviceList, err := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
+		if err != nil {
+			log.Errorf("error when fetching services from directory, error: %s", err)
+		}
 		for _, svc := range serviceList {
 			config, err := common.ReadConvertToModelConfig(svc, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {
@@ -197,8 +202,8 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 	}
 	ap := csc.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), serviceName, namespace)
 	if ap != nil {
-		log.Infof("authorization policy does not exist in the cache, name: %s, namespace: %s", serviceName, namespace)
 		return []model.Config{*ap}
 	}
+	log.Infof("authorization policy does not exist in the cache, name: %s, namespace: %s", serviceName, namespace)
 	return []model.Config{}
 }

@@ -930,21 +930,19 @@ func TestEqual(t *testing.T) {
 func TestDryrunResource(t *testing.T) {
 	eHandler := DryRunHandler{}
 	tests := []struct {
-		item            Item
-		fileName        string
-		expectedContent string
-		expErr          error
+		item     Item
+		fileName string
+		expErr   error
 	}{
 		{
-			item:            getAuthzPolicyItem(model.EventAdd),
-			fileName:        "onboarded-service--test-namespace.yaml",
-			expectedContent: "onboarded-service--test-namespace.yaml",
-			expErr:          nil,
+			item:     getAuthzPolicyItem(model.EventAdd),
+			fileName: "onboarded-service--test-namespace.yaml",
+			expErr:   nil,
 		},
 	}
 
 	for _, tt := range tests {
-		// test findDeleteDryrunResource func
+		// test the flow of creating dry run resource, checking created content, and deleting dry run resource
 		err := eHandler.createDryrunResource(&tt.item, os.TempDir()+"/")
 		assert.Equal(t, tt.expErr, err, "error should be nil for creating resource")
 		if _, err := os.Stat(os.TempDir() + "/" + tt.fileName); err != nil {
@@ -960,6 +958,10 @@ func TestDryrunResource(t *testing.T) {
 		// delete the created resource
 		err = eHandler.findDeleteDryrunResource(&tt.item, os.TempDir()+"/")
 		assert.Equal(t, tt.expErr, err, "error should not be nil when deleting the yaml file")
+
+		// stat the file, file should not exist anymore
+		_, err = os.Stat(os.TempDir() + "/" + tt.fileName)
+		assert.Equal(t, true, os.IsNotExist(err), "err should be file not exists error")
 	}
 }
 

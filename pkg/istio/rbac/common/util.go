@@ -386,7 +386,7 @@ func (d *DryRunHandler) findDeleteDryrunResource(item *Item, localDirPath string
 
 // ReadConvertToModelConfig reads in the authorization policy yaml object and converts it into a model.Config struct
 func ReadConvertToModelConfig(serviceName, namespace, localDirPath string) (*model.Config, error) {
-	// define istio object interface to unmarshall yaml object into
+	// define istio object interface to unmarshal yaml object into
 	item := &crd.IstioKind{Spec: map[string]interface{}{}}
 	yamlFileName := serviceName + "--" + namespace + ".yaml"
 	yamlFile, err := ioutil.ReadFile(localDirPath + yamlFileName)
@@ -406,10 +406,10 @@ func ReadConvertToModelConfig(serviceName, namespace, localDirPath string) (*mod
 
 // FetchServicesFromDir walks through the files under a directory, based on the naming convention, it parses the service name
 // from the file name.
-func FetchServicesFromDir(namespace, localDirPath string) []string {
+func FetchServicesFromDir(namespace, localDirPath string) ([]string, error) {
 	files, err := ioutil.ReadDir(localDirPath)
 	if err != nil {
-		log.Errorf("unable to read yaml files to local directory, err: %s", err)
+		return []string{}, fmt.Errorf("unable to read yaml files to local directory, err: %s", err)
 	}
 
 	var svcList []string
@@ -419,5 +419,5 @@ func FetchServicesFromDir(namespace, localDirPath string) []string {
 			svcList = append(svcList, service)
 		}
 	}
-	return svcList
+	return svcList, nil
 }

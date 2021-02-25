@@ -39,6 +39,7 @@ type Controller struct {
 	queue                    workqueue.RateLimitingInterface
 	rbacProvider             rbac.Provider
 	apResyncInterval         time.Duration
+	eventHandler             common.EventHandler
 	enableOriginJwtSubject   bool
 	dryRun                   bool
 }
@@ -58,6 +59,14 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		apResyncInterval:         apResyncInterval,
 		enableOriginJwtSubject:   enableOriginJwtSubject,
 		dryRun:                   dryRun,
+	}
+
+	if c.dryRun {
+		c.eventHandler = &common.DryRunHandler{}
+	} else {
+		c.eventHandler = &common.ApiHandler{
+			ConfigStoreCache: c.configStoreCache,
+		}
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -257,22 +266,14 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 		return nil
 	}
 	var err error
-	var eHandler common.EventHandler
-	if c.dryRun {
-		eHandler = &common.DryRunHandler{}
-	} else {
-		eHandler = &common.ApiHandler{
-			ConfigStoreCache: c.configStoreCache,
-		}
-	}
 
 	switch item.Operation {
 	case model.EventAdd:
-		err = eHandler.Add(item)
+		err = c.eventHandler.Add(item)
 	case model.EventUpdate:
-		err = eHandler.Update(item)
+		err = c.eventHandler.Update(item)
 	case model.EventDelete:
-		err = eHandler.Delete(item)
+		err = c.eventHandler.Delete(item)
 	}
 
 	return err
