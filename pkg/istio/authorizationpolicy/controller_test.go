@@ -142,7 +142,6 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 
 	source := fcache.NewFakeControllerSource()
 	source.Add(service)
-	go c.configStoreCache.Run(stopCh)
 
 	fakeIndexInformer := cache.NewSharedIndexInformer(source, &v1.Service{}, 0, nil)
 	go fakeIndexInformer.Run(stopCh)
@@ -302,8 +301,13 @@ func TestSyncAthenzDomain(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		var Lock sync.Mutex
+		Lock.Lock()
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(onboardedAthenzDomain, onboardedService, tt.fake, make(chan struct{}))
+			stopCh := make(chan struct{})
+			c := newFakeController(&adv1.AthenzDomain{}, &v1.Service{}, tt.fake, stopCh)
+			c.adIndexInformer.GetStore().Add(onboardedAthenzDomain.DeepCopy())
+			c.serviceIndexInformer.GetStore().Add(onboardedService.DeepCopy())
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				_, err := c.configStoreCache.Create(getOldCR())
@@ -330,6 +334,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				assert.Equal(t, tt.expectedAuthzPolicy.ConfigMeta.Version, genAuthzPolicy.ConfigMeta.Version, "apiVersion should be equal")
 			}
 		})
+		Lock.Unlock()
 	}
 }
 
