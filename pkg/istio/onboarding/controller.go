@@ -5,10 +5,11 @@ package onboarding
 
 import (
 	"errors"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -183,7 +184,7 @@ func (c *Controller) getOnboardedServiceList() []string {
 }
 
 // callbackHandler re-adds the key for a failed processor.sync operation
-func (c *Controller) callbackHandler(err error, item *processor.Item) error {
+func (c *Controller) callbackHandler(err error, item *common.Item) error {
 	if err == nil {
 		return nil
 	}
@@ -222,7 +223,7 @@ func (c *Controller) sync() error {
 
 	if config == nil {
 		log.Infoln("Creating cluster rbac config...")
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventAdd,
 			Resource:        newClusterRbacConfig(serviceList),
 			CallbackHandler: c.callbackHandler,
@@ -233,7 +234,7 @@ func (c *Controller) sync() error {
 
 	if len(serviceList) == 0 {
 		log.Infoln("Deleting cluster rbac config...")
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventDelete,
 			Resource:        newClusterRbacConfig(serviceList),
 			CallbackHandler: c.callbackHandler,
@@ -253,7 +254,7 @@ func (c *Controller) sync() error {
 			ConfigMeta: config.ConfigMeta,
 			Spec:       newClusterRbacSpec(serviceList),
 		}
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventUpdate,
 			Resource:        config,
 			CallbackHandler: c.callbackHandler,
@@ -278,11 +279,21 @@ func (c *Controller) sync() error {
 			ConfigMeta: config.ConfigMeta,
 			Spec:       clusterRbacConfig,
 		}
-		item := processor.Item{
+		item := common.Item{
 			Operation:       model.EventUpdate,
 			Resource:        config,
 			CallbackHandler: c.callbackHandler,
 		}
+		// TODO: investigate: when dns-suffix is changed and results in full service list update, this update is likely to fail and controller will be stuck in fail and retry cycles.
+		// How to reproduce: 1. do not mention dns-suffix as part of controller, use default setting
+		//                   2. start the controller, at the beginning, controller will perform a full service list update
+		//                   3. update will fail with message like
+		//						```
+		//						INFO[2021-02-04T20:00:45Z] [istio/processor/controller.go] [processNextItem] Processing update for resource: ClusterRbacConfig//default
+		//						INFO[2021-02-04T20:00:45Z] [istio/onboarding/controller.go] [sync] Sync state is current, no changes needed...
+		//						INFO[2021-02-04T20:00:45Z] [istio/onboarding/controller.go] [sync] Updating cluster rbac config...
+		//                      ```
+		//                      It will stuck in this loop and won't proceed.
 		c.processor.ProcessConfigChange(&item)
 		return nil
 	}

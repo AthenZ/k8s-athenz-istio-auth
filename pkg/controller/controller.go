@@ -6,11 +6,10 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collections"
 	"time"
-
-	"github.com/gogo/protobuf/proto"
 
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
@@ -50,81 +49,10 @@ type Controller struct {
 	adResyncInterval     time.Duration
 }
 
-// convertSliceToKeyedMap converts the input model.Config slice into a map with (type/namespace/name) formatted key
-func convertSliceToKeyedMap(in []model.Config) map[string]model.Config {
-	out := make(map[string]model.Config, len(in))
-	for _, c := range in {
-		key := c.Key()
-		out[key] = c
-	}
-	return out
-}
-
-// equal compares the Spec of two model.Config items
-func equal(c1, c2 model.Config) bool {
-	return c1.Key() == c2.Key() && proto.Equal(c1.Spec, c2.Spec)
-}
-
-// computeChangeList determines a list of change operations to convert the current state of model.Config items into the
-// desired state of model.Config items in the following manner:
-// 1. Converts the current and desired slices into a map for quick lookup
-// 2. Loops through the desired slice of items and identifies items that need to be created/updated
-// 3. Loops through the current slice of items and identifies items that need to be deleted
-func computeChangeList(current []model.Config, desired []model.Config, cbHandler processor.OnCompleteFunc) []*processor.Item {
-
-	currMap := convertSliceToKeyedMap(current)
-	desiredMap := convertSliceToKeyedMap(desired)
-
-	changeList := make([]*processor.Item, 0)
-
-	// loop through the desired slice of model.Config and add the items that need to be created or updated
-	for _, desiredConfig := range desired {
-		key := desiredConfig.Key()
-		existingConfig, exists := currMap[key]
-		if !exists {
-			item := processor.Item{
-				Operation:       model.EventAdd,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-
-		if !equal(existingConfig, desiredConfig) {
-			// copy metadata(for resource version) from current config to desired config
-			desiredConfig.ConfigMeta = existingConfig.ConfigMeta
-			item := processor.Item{
-				Operation:       model.EventUpdate,
-				Resource:        desiredConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-			continue
-		}
-	}
-
-	// loop through the current slice of model.Config and add the items that need to be deleted
-	for _, currConfig := range current {
-		key := currConfig.Key()
-		_, exists := desiredMap[key]
-		if !exists {
-			item := processor.Item{
-				Operation:       model.EventDelete,
-				Resource:        currConfig,
-				CallbackHandler: cbHandler,
-			}
-			changeList = append(changeList, &item)
-		}
-	}
-
-	return changeList
-}
-
 // getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
 // this explicit func definition takes in the key to avoid data race while accessing key
-func (c *Controller) getCallbackHandler(key string) processor.OnCompleteFunc {
-	return func(err error, item *processor.Item) error {
+func (c *Controller) getCallbackHandler(key string) common.OnCompleteFunc {
+	return func(err error, item *common.Item) error {
 
 		if err == nil {
 			return nil
@@ -176,11 +104,11 @@ func (c *Controller) sync(key string) error {
 
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC)
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache)
+	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, "", "")
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, "")
 	cbHandler := c.getCallbackHandler(key)
 
-	changeList := computeChangeList(currentCRs, desiredCRs, cbHandler)
+	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, nil)
 
 	// If change list is empty, nothing to do
 	if len(changeList) == 0 {
@@ -206,6 +134,8 @@ func (c *Controller) sync(key string) error {
 //    cluster rbac config object based on a service label
 // 4. Service shared index informer
 // 5. Athenz Domain shared index informer
+// 6. Authorization Policy controller responsible for creating / updating / deleting
+//    the authorization policy object based on service annotation and athenz domain spec
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
 	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
@@ -262,7 +192,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 }
 
 // processConfigEvent is responsible for adding the key of the item to the queue
-func (c *Controller) processConfigEvent(config model.Config, _ model.Config, e model.Event) {
+func (c *Controller) processConfigEvent(_ model.Config, config model.Config, e model.Event) {
 	domain := athenz.NamespaceToDomain(config.Namespace)
 	c.queue.Add(domain)
 }
