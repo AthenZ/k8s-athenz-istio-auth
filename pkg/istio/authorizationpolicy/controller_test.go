@@ -516,7 +516,6 @@ func getExpectedCR() model.Config {
 	return out
 }
 
-
 func getFakeOnboardedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2019-07-22T20:29:10.305Z")
