@@ -52,11 +52,11 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
 
 	c := &Controller{
-		configStoreCache:            configStoreCache,
-		serviceIndexInformer:        serviceIndexInformer,
-		adIndexInformer:             adIndexInformer,
-		authzpolicyIndexInformer:    authzpolicyIndexInformer,
-		queue:                       queue,
+		configStoreCache:         configStoreCache,
+		serviceIndexInformer:     serviceIndexInformer,
+		adIndexInformer:          adIndexInformer,
+		authzpolicyIndexInformer: authzpolicyIndexInformer,
+		queue:                    queue,
 		// TODO: fix methods in rbacv2 provider funcs, find a way to check dry run flag for current ns / svc
 		// use this check dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
 		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
