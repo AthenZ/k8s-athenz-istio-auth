@@ -5,14 +5,8 @@ package main
 
 import (
 	"flag"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
-
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
-	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
@@ -23,10 +17,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-)
-
-const (
-	dryRunStoredFilesDirectory = "/root/authzpolicy/"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 )
 
 func main() {
@@ -45,8 +40,8 @@ func main() {
 	log.InitLogger(*logFile, *logLevel)
 
 	if *enableAuthzPolicyController {
-		if _, err := os.Stat(dryRunStoredFilesDirectory); os.IsNotExist(err) {
-			err := os.MkdirAll(dryRunStoredFilesDirectory, 0644)
+		if _, err := os.Stat(common.DryRunStoredFilesDirectory); os.IsNotExist(err) {
+			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0644)
 			if err != nil {
 				log.Panicf("Error when creating authz policy directory: %s", err.Error())
 			}
@@ -101,7 +96,7 @@ func main() {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
 	}
 
-	componentsEnabledAuthzPolicy, err := authzpolicy.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
 	if err != nil {
 		log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
 	}

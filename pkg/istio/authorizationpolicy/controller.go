@@ -41,12 +41,12 @@ type Controller struct {
 	rbacProvider                rbac.Provider
 	apResyncInterval            time.Duration
 	enableOriginJwtSubject      bool
-	componentEnabledAuthzPolicy *ComponentEnabled
+	componentEnabledAuthzPolicy *common.ComponentEnabled
 	dryRunHandler               common.DryRunHandler
 	apiHandler                  common.ApiHandler
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *ComponentEnabled) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
@@ -57,7 +57,9 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		adIndexInformer:             adIndexInformer,
 		authzpolicyIndexInformer:    authzpolicyIndexInformer,
 		queue:                       queue,
-		rbacProvider:                rbacv2.NewProvider(enableOriginJwtSubject),
+		// TODO: fix methods in rbacv2 provider funcs, find a way to check dry run flag for current ns / svc
+		// use this check dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
+		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
@@ -98,7 +100,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 func (c *Controller) EventHandler(_ model.Config, config model.Config, e model.Event) {
 	// authz policy event handler, Key() returns format <type>/<namespace>/<name>
 	// should drop the type and pass <namespace>/<name> only
-	c.queue.Add(strings.Join(strings.Split(config.Key(), "/")[1:], "/"))
+	c.queue.Add(config.Namespace + "/" + config.Name)
 }
 
 // processEvent is responsible for calling the key function and adding the
@@ -157,7 +159,7 @@ func (c *Controller) processNextItem() bool {
 	return true
 }
 
-// sync function receives a key string function, key can have three format:
+// sync function receives a key string function, key can have two format:
 // Case 1: for athenzdomain crd, key string is in format: <athenz domain name>, perform a service list scan.
 //         Compute, compare and update authz policy specs based on current state in cluster
 // Case 2: for service resource and authorization policy, key string is in format: <namespace name>/<service name>,
@@ -231,8 +233,8 @@ func (c *Controller) sync(key string) error {
 	}
 
 	// get current APs from cache
-	dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName, dryRun)
+	// dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
+	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName)
 	cbHandler := c.getCallbackHandler(key)
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, c.checkOverrideAnnotation)
 

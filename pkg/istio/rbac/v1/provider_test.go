@@ -859,7 +859,7 @@ func TestGetCurrentIstioRbac(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.test, func(t *testing.T) {
 			p := NewProvider(true)
-			gotConfigs := p.GetCurrentIstioRbac(c.input.m, c.input.csc, "", false)
+			gotConfigs := p.GetCurrentIstioRbac(c.input.m, c.input.csc, "")
 			assert.EqualValues(t, c.expected, gotConfigs, c.test)
 		})
 	}

@@ -18,12 +18,14 @@ import (
 
 // implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
 type v2 struct {
-	enableOriginJwtSubject bool
+	componentEnabledAuthzPolicy *common.ComponentEnabled
+	enableOriginJwtSubject      bool
 }
 
-func NewProvider(enableOriginJwtSubject bool) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool) rbac.Provider {
 	return &v2{
-		enableOriginJwtSubject: enableOriginJwtSubject,
+		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
+		enableOriginJwtSubject:      enableOriginJwtSubject,
 	}
 }
 
@@ -55,7 +57,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 	// generating rules, iterate through assertions, find the one match with desired format.
 	var rules []*v1beta1.Rule
 	for role, assertions := range athenzModel.Rules {
+		rule := &v1beta1.Rule{}
 		for _, assert := range assertions {
+			// form rule_to array by appending matching assertions.
 			// assert.Resource contains the svc information that needs to parse and match
 			svc, path, err := common.ParseAssertionResource(athenzModel.Name, assert)
 			if err != nil {
@@ -72,59 +76,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Debugf("athenz svc %s does not match with current svc %s", svc, svcLabel)
 				continue
 			}
-			rule := &v1beta1.Rule{}
-			// form rule.From, must initialize internal source here
-			from_principal := &v1beta1.Rule_From{
-				Source: &v1beta1.Source{},
-			}
-			from_requestPrincipal := &v1beta1.Rule_From{
-				Source: &v1beta1.Source{},
-			}
-			// role name should match zms resource name
-			for _, roleMember := range athenzModel.Members[role] {
-				res, err := common.CheckAthenzMemberExpiry(roleMember)
-				if err != nil {
-					log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", roleMember.MemberName, err)
-					continue
-				}
-				if !res {
-					log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
-					continue
-				}
-				res, err = common.CheckAthenzSystemDisabled(roleMember)
-				if err != nil {
-					log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", roleMember.MemberName, err)
-					continue
-				}
-				if !res {
-					log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
-					continue
-				}
-
-				spiffeName, err := common.MemberToSpiffe(roleMember)
-				if err != nil {
-					log.Errorln("error converting role member to spiffeName: ", err.Error())
-					continue
-				}
-				from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
-				if p.enableOriginJwtSubject {
-					originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
-					if err != nil {
-						log.Errorln(err.Error())
-						continue
-					}
-					from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
-				}
-			}
-			//add role spiffe for role certificate
-			roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
-			if err != nil {
-				log.Errorln("error when convert role to spiffe name: ", err.Error())
-				continue
-			}
-			from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
-			rule.From = append(rule.From, from_principal)
-			rule.From = append(rule.From, from_requestPrincipal)
 			// form rules_to
 			_, err = common.ParseAssertionEffect(assert)
 			if err != nil {
@@ -146,8 +97,67 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				to.Operation.Paths = []string{path}
 			}
 			rule.To = append(rule.To, to)
-			rules = append(rules, rule)
 		}
+
+		// group by role, for each role, form rule_from from role members,
+		// skip if rule.To is nil, indicating no assertion match with service
+		if rule.To == nil {
+			continue
+		}
+		from_principal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+		from_requestPrincipal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+		// role name should match zms resource name
+		for _, roleMember := range athenzModel.Members[role] {
+			res, err := common.CheckAthenzMemberExpiry(roleMember)
+			if err != nil {
+				log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", roleMember.MemberName, err)
+				continue
+			}
+			if !res {
+				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
+				continue
+			}
+			res, err = common.CheckAthenzSystemDisabled(roleMember)
+			if err != nil {
+				log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", roleMember.MemberName, err)
+				continue
+			}
+			if !res {
+				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
+				continue
+			}
+
+			spiffeName, err := common.MemberToSpiffe(roleMember)
+			if err != nil {
+				log.Errorln("error converting role member to spiffeName: ", err.Error())
+				continue
+			}
+			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+			if p.enableOriginJwtSubject {
+				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
+				if err != nil {
+					log.Errorln(err.Error())
+					continue
+				}
+				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+			}
+		}
+		//add role spiffe for role certificate
+		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
+		if err != nil {
+			log.Errorln("error when convert role to spiffe name: ", err.Error())
+			continue
+		}
+		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
+		rule.From = append(rule.From, from_principal)
+		if p.enableOriginJwtSubject {
+			rule.From = append(rule.From, from_requestPrincipal)
+		}
+		rules = append(rules, rule)
 	}
 	spec.Rules = rules
 	out.Spec = spec
@@ -157,11 +167,11 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 // GetCurrentIstioRbac returns the authorization policies resources for the specified model's namespace
 // if serviceName is "", return the all the authorization policies in the given namespace,
 // if serviceName is specific, return single authorization policy matching with serviceName.
-func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string, dryRun bool) []model.Config {
+func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
 	namespace := m.Namespace
-	if dryRun {
+	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
 		if serviceName != "" {
-			config, err := common.ReadConvertToModelConfig(serviceName, namespace)
+			config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {
 				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
 				return []model.Config{}
@@ -169,9 +179,12 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 			return []model.Config{*config}
 		}
 		var modelList []model.Config
-		serviceList := common.FetchServices(namespace)
+		serviceList, err := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
+		if err != nil {
+			log.Errorf("error when fetching services from directory, error: %s", err)
+		}
 		for _, svc := range serviceList {
-			config, err := common.ReadConvertToModelConfig(svc, namespace)
+			config, err := common.ReadConvertToModelConfig(svc, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {
 				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
 				continue
@@ -192,5 +205,6 @@ func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, ser
 	if ap != nil {
 		return []model.Config{*ap}
 	}
+	log.Infof("authorization policy does not exist in the cache, name: %s, namespace: %s", serviceName, namespace)
 	return []model.Config{}
 }

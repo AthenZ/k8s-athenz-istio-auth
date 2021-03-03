@@ -10,9 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"istio.io/api/rbac/v1alpha1"
+	"istio.io/api/security/v1beta1"
+	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
+	"os"
 	"testing"
 	"time"
 )
@@ -921,5 +924,279 @@ func TestEqual(t *testing.T) {
 			actual := Equal(tt.in1, tt.in2)
 			assert.Equal(t, tt.expected, actual, "comparison result should be equal to expected")
 		})
+	}
+}
+
+func TestDryrunResource(t *testing.T) {
+	eHandler := DryRunHandler{}
+	tests := []struct {
+		item     Item
+		fileName string
+		expErr   error
+	}{
+		{
+			item:     getAuthzPolicyItem(model.EventAdd),
+			fileName: "onboarded-service--test-namespace.yaml",
+			expErr:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		// test the flow of creating dry run resource, checking created content, and deleting dry run resource
+		err := eHandler.createDryrunResource(&tt.item, os.TempDir()+"/")
+		assert.Equal(t, tt.expErr, err, "error should be nil for creating resource")
+		if _, err := os.Stat(os.TempDir() + "/" + tt.fileName); err != nil {
+			assert.Equal(t, false, os.IsNotExist(err), "file should exist after calling createDryrunResource")
+			assert.Equal(t, tt.expErr, err, "os stat generated file should not return err")
+		}
+
+		// convert the created yaml back to config model format, compare the model spec
+		covertedConfig, err := ReadConvertToModelConfig(tt.item.Resource.Name, tt.item.Resource.Namespace, os.TempDir()+"/")
+		assert.Equal(t, tt.expErr, err, "error should be nil when converting config")
+		assert.Equal(t, *covertedConfig, tt.item.Resource, "model config should be the same")
+
+		// delete the created resource
+		err = eHandler.findDeleteDryrunResource(&tt.item, os.TempDir()+"/")
+		assert.Equal(t, tt.expErr, err, "error should not be nil when deleting the yaml file")
+
+		// stat the file, file should not exist anymore
+		_, err = os.Stat(os.TempDir() + "/" + tt.fileName)
+		assert.Equal(t, true, os.IsNotExist(err), "err should be file not exists error")
+	}
+}
+
+func getAuthzPolicyItem(action model.Event) Item {
+	var item Item
+	var out model.Config
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"svc": "productpage"},
+		},
+		Rules: []*v1beta1.Rule{
+			{
+				From: []*v1beta1.Rule_From{
+					{
+						Source: &v1beta1.Source{
+							Principals: []string{
+								"*",
+								"test.namespace/ra/test.namespace:role.productpage-reader",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							RequestPrincipals: []string{
+								"*",
+							},
+						},
+					},
+				},
+				To: []*v1beta1.Rule_To{
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"GET",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	item.Operation = action
+	item.Resource = out
+	return item
+}
+
+func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
+	type inputData struct {
+		description string
+		objectList  string
+	}
+	type outputData struct {
+		result *ComponentEnabled
+		err    string
+	}
+	type testData struct {
+		input  inputData
+		output outputData
+	}
+	tests := []testData{
+		{
+			input: inputData{
+				description: "Parse services-enabled-authzpolicy list",
+				objectList:  "namespace1/service1,namespace2/service2",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceList: []ServiceEnabled{
+						{
+							service:   "service1",
+							namespace: "namespace1",
+						},
+						{
+							service:   "service2",
+							namespace: "namespace2",
+						},
+					},
+					namespaceList: []string{},
+					cluster:       false,
+				},
+				err: "",
+			},
+		}, {
+			input: inputData{
+				description: "Services-enabled-authzpolicy list item has invalid format",
+				objectList:  "service1-namespace1,service2-namespace2",
+			},
+			output: outputData{
+				result: nil,
+				err:    "service item service1-namespace1 from command line arg components-enabled-authzpolicy is in incorrect format",
+			},
+		}, {
+			input: inputData{
+				description: "Parse namespaces-enabled-authzpolicy list",
+				objectList:  "ns1/*,ns2/*,ns3/*",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceList:   []ServiceEnabled{},
+					namespaceList: []string{"ns1", "ns2", "ns3"},
+					cluster:       false,
+				},
+				err: "",
+			},
+		}, {
+			input: inputData{
+				description: "Parse clusters-enabled-authzpolicy argument",
+				objectList:  "*",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceList:   []ServiceEnabled{},
+					namespaceList: []string{},
+					cluster:       true,
+				},
+				err: "",
+			},
+		},
+	}
+	for _, testcase := range tests {
+		components, err := ParseComponentsEnabledAuthzPolicy(testcase.input.objectList)
+		if err != nil {
+			if err.Error() != testcase.output.err {
+				t.Errorf("Wrong error message. Expected: %s, Actual: %s", testcase.output.err, err.Error())
+			} else {
+				continue
+			}
+		}
+
+		if len(components.serviceList) != len(testcase.output.result.serviceList) {
+			t.Error("Object serviceList length mismatch")
+		}
+		for i := 0; i < len(components.serviceList); i++ {
+			if components.serviceList[i].service != testcase.output.result.serviceList[i].service || components.serviceList[i].namespace != testcase.output.result.serviceList[i].namespace {
+				t.Error("ServiceEnabled object mismatch")
+			}
+		}
+		if len(components.namespaceList) != len(testcase.output.result.namespaceList) {
+			t.Error("Object namespaceList length mismatch")
+		}
+		for i := 0; i < len(components.namespaceList); i++ {
+			if components.namespaceList[i] != testcase.output.result.namespaceList[i] {
+				t.Error("Namespace mismatch")
+			}
+		}
+		if components.cluster != testcase.output.result.cluster {
+			t.Error("Object cluster value mismatch")
+		}
+	}
+
+}
+
+func TestIsEnabled(t *testing.T) {
+	type inputData struct {
+		obj       ComponentEnabled
+		service   string
+		namespace string
+	}
+	type testData struct {
+		input  inputData
+		output bool
+	}
+	tests := []testData{
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceList: []ServiceEnabled{
+						{
+							service:   "service1",
+							namespace: "namespace1",
+						},
+						{
+							service:   "service2",
+							namespace: "namespace2",
+						},
+					},
+					namespaceList: []string{},
+					cluster:       false,
+				},
+				service:   "service1",
+				namespace: "namespace1",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceList:   []ServiceEnabled{},
+					namespaceList: []string{"ns1", "ns2", "ns3"},
+					cluster:       false,
+				},
+				service:   "service1",
+				namespace: "ns1",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceList:   []ServiceEnabled{},
+					namespaceList: []string{},
+					cluster:       true,
+				},
+				service:   "test",
+				namespace: "test",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceList:   []ServiceEnabled{},
+					namespaceList: []string{},
+					cluster:       false,
+				},
+				service:   "service1",
+				namespace: "namespace1",
+			},
+			output: false,
+		},
+	}
+	for index, testcase := range tests {
+		if testcase.input.obj.IsEnabled(testcase.input.service, testcase.input.namespace) != testcase.output {
+			t.Errorf("Test %d failed, does not match expected output", index)
+		}
 	}
 }

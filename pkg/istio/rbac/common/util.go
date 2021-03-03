@@ -27,7 +27,7 @@ const (
 	ServiceRoleKind              = "ServiceRole"
 	AthenzJwtPrefix              = "athenz/"
 	RequestAuthPrincipalProperty = "request.auth.principal"
-	dryRunStoredFilesDirectory   = "/root/authzpolicy/"
+	DryRunStoredFilesDirectory   = "/root/authzpolicy/"
 )
 
 var supportedMethods = map[string]bool{
@@ -65,15 +65,15 @@ type EventHandler interface {
 type DryRunHandler struct{}
 
 func (d *DryRunHandler) Add(item *Item) error {
-	return d.createDryrunResource(item)
+	return d.createDryrunResource(item, DryRunStoredFilesDirectory)
 }
 
 func (d *DryRunHandler) Update(item *Item) error {
-	return d.createDryrunResource(item)
+	return d.createDryrunResource(item, DryRunStoredFilesDirectory)
 }
 
 func (d *DryRunHandler) Delete(item *Item) error {
-	return d.findDeleteDryrunResource(item)
+	return d.findDeleteDryrunResource(item, DryRunStoredFilesDirectory)
 }
 
 type ApiHandler struct {
@@ -313,7 +313,8 @@ func ComputeChangeList(currentCRs []model.Config, desiredCRs []model.Config, cbH
 		}
 
 		if !Equal(existingConfig, desiredConfig) {
-			// case 2: current CR is not empty, desired CR is not empty, current CR != desired CR, no overrideAnnotation set in current CR, results in resource update
+			// case 2: current CR is not empty, desired CR is not empty, current CR != desired CR, and additional check is not set or not true,
+			// results in resource update
 			if checkFn != nil && checkFn(existingConfig) {
 				continue
 			}
@@ -351,8 +352,8 @@ func ComputeChangeList(currentCRs []model.Config, desiredCRs []model.Config, cbH
 	return changeList
 }
 
-// createDryrunResource creates the yaml file of given authorization policy spec in a local directory
-func (d *DryRunHandler) createDryrunResource(item *Item) error {
+// createDryrunResource creates the yaml file of given authorization policy spec and a local directory path
+func (d *DryRunHandler) createDryrunResource(item *Item, localDirPath string) error {
 	convertedCR := item.Resource
 	authzPolicyName := item.Resource.ConfigMeta.Name
 	namespace := item.Resource.ConfigMeta.Namespace
@@ -365,36 +366,36 @@ func (d *DryRunHandler) createDryrunResource(item *Item) error {
 		return fmt.Errorf("could not marshal %v: %v", convertedCR.Name, err)
 	}
 	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
-	return ioutil.WriteFile(dryRunStoredFilesDirectory+yamlFileName, configInBytes, 0644)
+	return ioutil.WriteFile(localDirPath+yamlFileName, configInBytes, 0644)
 }
 
 // findDeleteDryrunResource retrieves the yaml file from local directory and deletes it
-func (d *DryRunHandler) findDeleteDryrunResource(item *Item) error {
+func (d *DryRunHandler) findDeleteDryrunResource(item *Item, localDirPath string) error {
 	authzPolicyName := item.Resource.ConfigMeta.Name
 	namespace := item.Resource.ConfigMeta.Namespace
 	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
-	if _, err := os.Stat(dryRunStoredFilesDirectory + yamlFileName); os.IsNotExist(err) {
-		log.Infof("file %s does not exist in local directory", dryRunStoredFilesDirectory+yamlFileName)
+	if _, err := os.Stat(localDirPath + yamlFileName); os.IsNotExist(err) {
+		log.Infof("file %s does not exist in local directory", localDirPath+yamlFileName)
 		return nil
 	} else if err != nil {
-		log.Infof("error stating file %s in local directory: %s, error: %s", dryRunStoredFilesDirectory+yamlFileName, err)
+		return fmt.Errorf("error stating file %s in local directory, error: %s", localDirPath+yamlFileName, err)
 	}
-	log.Infof("deleting file under path: %s\n", dryRunStoredFilesDirectory+yamlFileName)
-	return os.Remove(dryRunStoredFilesDirectory + yamlFileName)
+	log.Infof("deleting file under path: %s\n", localDirPath+yamlFileName)
+	return os.Remove(localDirPath + yamlFileName)
 }
 
 // ReadConvertToModelConfig reads in the authorization policy yaml object and converts it into a model.Config struct
-func ReadConvertToModelConfig(serviceName, namespace string) (*model.Config, error) {
-	// define istio object interface to unmarshall yaml object into
+func ReadConvertToModelConfig(serviceName, namespace, localDirPath string) (*model.Config, error) {
+	// define istio object interface to unmarshal yaml object into
 	item := &crd.IstioKind{Spec: map[string]interface{}{}}
 	yamlFileName := serviceName + "--" + namespace + ".yaml"
-	yamlFile, err := ioutil.ReadFile(dryRunStoredFilesDirectory + yamlFileName)
+	yamlFile, err := ioutil.ReadFile(localDirPath + yamlFileName)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read yaml file to local directory, err: %s", err)
 	}
 	err = yaml.Unmarshal(yamlFile, item)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshall yaml file, err: %s", err)
+		return nil, fmt.Errorf("unable to unmarshal yaml file, err: %s", err)
 	}
 	config, err := crd.ConvertObject(collections.IstioSecurityV1Beta1Authorizationpolicies, item, "")
 	if err != nil {
@@ -403,12 +404,12 @@ func ReadConvertToModelConfig(serviceName, namespace string) (*model.Config, err
 	return config, nil
 }
 
-// FetchServices walks through the files under a directory, based on the naming convention, it parses the service name
+// FetchServicesFromDir walks through the files under a directory, based on the naming convention, it parses the service name
 // from the file name.
-func FetchServices(namespace string) []string {
-	files, err := ioutil.ReadDir(dryRunStoredFilesDirectory)
+func FetchServicesFromDir(namespace, localDirPath string) ([]string, error) {
+	files, err := ioutil.ReadDir(localDirPath)
 	if err != nil {
-		log.Errorf("unable to read yaml files to local directory, err: %s", err)
+		return []string{}, fmt.Errorf("unable to read yaml files to local directory, err: %s", err)
 	}
 
 	var svcList []string
@@ -418,5 +419,83 @@ func FetchServices(namespace string) []string {
 			svcList = append(svcList, service)
 		}
 	}
-	return svcList
+	return svcList, nil
+}
+
+// ServiceEnabled - service and namespace combination that enabled authz policy
+type ServiceEnabled struct {
+	service   string
+	namespace string
+}
+
+type ComponentEnabled struct {
+	serviceList   []ServiceEnabled
+	namespaceList []string
+	cluster       bool
+}
+
+func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled, error) {
+	componentEnabledObj := ComponentEnabled{}
+	if componentsList == "" {
+		return &componentEnabledObj, nil
+	}
+	serviceEnabledList := []ServiceEnabled{}
+	namespaceEnabledList := []string{}
+	serviceNamespaceComboList := strings.Split(componentsList, ",")
+	if len(serviceNamespaceComboList) == 1 && serviceNamespaceComboList[0] == "*" {
+		componentEnabledObj.cluster = true
+		return &componentEnabledObj, nil
+	}
+	for _, item := range serviceNamespaceComboList {
+		if item != "" {
+			serviceWithNS := strings.Split(item, "/")
+			if len(serviceWithNS) != 2 {
+				return nil, fmt.Errorf("service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
+			} else {
+				if serviceWithNS[1] == "*" {
+					namespaceEnabledList = append(namespaceEnabledList, serviceWithNS[0])
+				} else {
+					serviceObj := ServiceEnabled{
+						service:   serviceWithNS[1],
+						namespace: serviceWithNS[0],
+					}
+					serviceEnabledList = append(serviceEnabledList, serviceObj)
+				}
+			}
+		}
+	}
+	componentEnabledObj.serviceList = serviceEnabledList
+	componentEnabledObj.namespaceList = namespaceEnabledList
+	return &componentEnabledObj, nil
+}
+
+func (c *ComponentEnabled) containsService(service string, ns string) bool {
+	for _, item := range c.serviceList {
+		if item.service == service && item.namespace == ns {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ComponentEnabled) containsNamespace(ns string) bool {
+	for _, item := range c.namespaceList {
+		if item == ns {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ComponentEnabled) IsEnabled(serviceName string, serviceNamespace string) bool {
+	if c.cluster {
+		return true
+	}
+	if c.containsNamespace(serviceNamespace) {
+		return true
+	}
+	if c.containsService(serviceName, serviceNamespace) {
+		return true
+	}
+	return false
 }
