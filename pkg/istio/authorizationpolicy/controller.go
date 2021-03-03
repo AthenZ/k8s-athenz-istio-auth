@@ -42,6 +42,8 @@ type Controller struct {
 	apResyncInterval            time.Duration
 	enableOriginJwtSubject      bool
 	componentEnabledAuthzPolicy *ComponentEnabled
+	dryRunHandler               common.DryRunHandler
+	apiHandler                  common.ApiHandler
 }
 
 func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *ComponentEnabled) *Controller {
@@ -59,6 +61,11 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
+		dryRunHandler:               common.DryRunHandler{},
+	}
+
+	c.apiHandler = common.ApiHandler{
+		ConfigStoreCache: c.configStoreCache,
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -263,11 +270,9 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 	serviceName := item.Resource.ConfigMeta.Name
 	serviceNamespace := item.Resource.ConfigMeta.Namespace
 	if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
-		eHandler = &common.DryRunHandler{}
+		eHandler = &c.dryRunHandler
 	} else {
-		eHandler = &common.ApiHandler{
-			ConfigStoreCache: c.configStoreCache,
-		}
+		eHandler = &c.apiHandler
 	}
 
 	switch item.Operation {

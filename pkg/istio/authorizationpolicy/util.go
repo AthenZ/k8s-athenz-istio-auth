@@ -36,7 +36,7 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 		if item != "" {
 			serviceWithNS := strings.Split(item, "/")
 			if len(serviceWithNS) != 2 {
-				return nil, fmt.Errorf("Service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
+				return nil, fmt.Errorf("service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
 			} else {
 				if serviceWithNS[1] == "*" {
 					namespaceEnabledList = append(namespaceEnabledList, serviceWithNS[0])

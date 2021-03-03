@@ -47,7 +47,7 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: nil,
-				err:    "Service item service1-namespace1 from command line arg components-enabled-authzpolicy is in incorrect format",
+				err:    "service item service1-namespace1 from command line arg components-enabled-authzpolicy is in incorrect format",
 			},
 		}, {
 			input: inputData{
