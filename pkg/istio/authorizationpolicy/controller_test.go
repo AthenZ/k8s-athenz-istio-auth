@@ -290,7 +290,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 			item:                Item{Operation: model.EventUpdate, Resource: onboardedAthenzDomain},
 		},
 		{
-			name:                "no action on authz policy when athenz doamin crd is deleted",
+			name:                "no action on authz policy when athenz domain crd is deleted",
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventDelete, Resource: onboardedAthenzDomain},
 			expErr:              fmt.Errorf("athenz domain test.namespace.onboarded does not exist in cache"),
@@ -365,6 +365,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		name                string
 		inputService        *v1.Service
 		inputAthenzDomain   *adv1.AthenzDomain
+		initAuthzPolicySpec model.Config
 		item                Item
 		expectedAuthzPolicy model.Config
 	}{
@@ -372,6 +373,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getOldAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 		},
@@ -379,6 +381,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is deletion of authz policy resource, controller will recreate the authz policy",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getOldAuthzPolicy(),
 			item:                Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 		},
@@ -386,6 +389,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is manual modification of authz policy resource with override annotation, controller should do nothing",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
 			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicyWithOverrideAnnotation()},
 			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
 		},
@@ -393,6 +397,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is manual creation of authz policy without override annotation, controller should delete this create resource",
 			inputService:        notOnboardedServiceWithAnnotation,
 			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getOldAuthzPolicy(),
 			item:                Item{Operation: model.EventAdd, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: model.Config{},
 		},
@@ -403,12 +408,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
-				authzPolicyConfig := getOldAuthzPolicy()
-				annotations := (tt.item.Resource).(*authz.AuthorizationPolicy).Annotations
-				if annotations != nil {
-					authzPolicyConfig.Annotations = annotations
-				}
-				_, err := c.configStoreCache.Create(authzPolicyConfig)
+				_, err := c.configStoreCache.Create(tt.initAuthzPolicySpec)
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -422,11 +422,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventDelete:
-				c := newFakeController(&adv1.AthenzDomain{}, &v1.Service{}, true, make(chan struct{}))
-				err := c.adIndexInformer.GetStore().Add(tt.inputAthenzDomain.DeepCopy())
-				assert.Nil(t, err, "add athenz domain crd to cache should not return error")
-				err = c.serviceIndexInformer.GetStore().Add(tt.inputService.DeepCopy())
-				assert.Nil(t, err, "add service object to cache should not return error")
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
