@@ -39,10 +39,10 @@ type Item struct {
 }
 
 const (
-	domainNameOnboarded             = "test.namespace.onboarded"
-	domainNameOnboardedNotOnboarded = "test.namespace.not.onboarded"
-	username                        = "user.name"
-	wildcardUsername                = "user.*"
+	domainNameOnboarded    = "test.namespace.onboarded"
+	domainNameNotOnboarded = "test.namespace.not.onboarded"
+	username               = "user.name"
+	wildcardUsername       = "user.*"
 )
 
 var (
@@ -90,7 +90,7 @@ var (
 	}
 	notOnboardedAthenzDomain = &adv1.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      domainNameOnboardedNotOnboarded,
+			Name:      domainNameNotOnboarded,
 			Namespace: "",
 		},
 		Spec: adv1.AthenzDomainSpec{
@@ -197,15 +197,15 @@ func TestSyncService(t *testing.T) {
 		name                string
 		inputService        *v1.Service
 		inputAthenzDomain   *adv1.AthenzDomain
-		existingAuthzPolicy model.Config
-		expectedAuthzPolicy model.Config
+		existingAuthzPolicy *model.Config
+		expectedAuthzPolicy *model.Config
 		item                Item
 	}{
 		{
 			name:                "generate Authorization Policy spec for service with annotation set",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
-			existingAuthzPolicy: model.Config{},
+			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventAdd, Resource: onboardedService},
 		},
@@ -213,8 +213,8 @@ func TestSyncService(t *testing.T) {
 			name:                "not generate Authorization Policy spec for service without annotation set",
 			inputService:        notOnboardedService,
 			inputAthenzDomain:   notOnboardedAthenzDomain,
-			existingAuthzPolicy: model.Config{},
-			expectedAuthzPolicy: model.Config{},
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: nil,
 			item:                Item{Operation: model.EventAdd, Resource: notOnboardedService},
 		},
 		{
@@ -222,14 +222,14 @@ func TestSyncService(t *testing.T) {
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
-			expectedAuthzPolicy: model.Config{},
+			expectedAuthzPolicy: nil,
 			item:                Item{Operation: model.EventDelete, Resource: onboardedService},
 		},
 		{
 			name:                "create Authorization Policy spec when there is update event of service from no annotation set to annotation set",
 			inputService:        notOnboardedServiceWithAnnotation,
 			inputAthenzDomain:   onboardedAthenzDomain,
-			existingAuthzPolicy: model.Config{},
+			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: onboardedService},
 		},
@@ -240,7 +240,7 @@ func TestSyncService(t *testing.T) {
 			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
 			switch action := tt.item.Operation; action {
 			case model.EventDelete:
-				c.configStoreCache.Create(tt.existingAuthzPolicy)
+				c.configStoreCache.Create(*tt.existingAuthzPolicy)
 				time.Sleep(100 * time.Millisecond)
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
@@ -267,10 +267,10 @@ func TestSyncService(t *testing.T) {
 					// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 					tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 					tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-					assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
+					assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 				} else {
 					// generated spec returns nil, compare with empty config
-					assert.Equal(t, tt.expectedAuthzPolicy, model.Config{}, "generated authorization policy should be nil")
+					assert.Nil(t, genAuthzPolicy, "generated authorization policy should be nil")
 				}
 			}
 		})
@@ -280,7 +280,7 @@ func TestSyncService(t *testing.T) {
 func TestSyncAthenzDomain(t *testing.T) {
 	tests := []struct {
 		name                string
-		expectedAuthzPolicy model.Config
+		expectedAuthzPolicy *model.Config
 		item                Item
 		expErr              error
 	}{
@@ -309,7 +309,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				c := newFakeController(onboardedAthenzDomain, onboardedService, true, stopCh)
-				_, err := c.configStoreCache.Create(getOldAuthzPolicy())
+				_, err := c.configStoreCache.Create(*getOldAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -322,10 +322,10 @@ func TestSyncAthenzDomain(t *testing.T) {
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "updated authorization policy spec should be equal")
+				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "updated authorization policy spec should be equal")
 			case model.EventDelete:
 				c := newFakeController(onboardedAthenzDomain, onboardedService, true, stopCh)
-				_, err := c.configStoreCache.Create(getExpectedAuthzPolicy())
+				_, err := c.configStoreCache.Create(*getExpectedAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
 				// simulate domain deletion
@@ -339,7 +339,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
+				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
 				c := newFakeController(&adv1.AthenzDomain{}, onboardedService, true, stopCh)
 				err := c.adIndexInformer.GetStore().Add(onboardedAthenzDomain)
@@ -354,7 +354,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
+				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			}
 		})
 	}
@@ -365,9 +365,9 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		name                string
 		inputService        *v1.Service
 		inputAthenzDomain   *adv1.AthenzDomain
-		initAuthzPolicySpec model.Config
+		initAuthzPolicySpec *model.Config
 		item                Item
-		expectedAuthzPolicy model.Config
+		expectedAuthzPolicy *model.Config
 	}{
 		{
 			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
@@ -397,9 +397,9 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is manual creation of authz policy without override annotation, controller should delete this create resource",
 			inputService:        notOnboardedServiceWithAnnotation,
 			inputAthenzDomain:   onboardedAthenzDomain,
-			initAuthzPolicySpec: getOldAuthzPolicy(),
+			initAuthzPolicySpec: nil,
 			item:                Item{Operation: model.EventAdd, Resource: getModifiedAuthzPolicy()},
-			expectedAuthzPolicy: model.Config{},
+			expectedAuthzPolicy: nil,
 		},
 	}
 
@@ -408,7 +408,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
-				_, err := c.configStoreCache.Create(tt.initAuthzPolicySpec)
+				_, err := c.configStoreCache.Create(*tt.initAuthzPolicySpec)
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -420,7 +420,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
+				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventDelete:
 				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt.item.Resource)
@@ -432,7 +432,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
 				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
-				assert.Equal(t, tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
+				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
 				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -464,9 +464,10 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
+	assert.Equal(t, true, c.dryRun, "dryRun bool should be equal")
 }
 
-func getExpectedAuthzPolicy() model.Config {
+func getExpectedAuthzPolicy() *model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
@@ -516,7 +517,7 @@ func getExpectedAuthzPolicy() model.Config {
 			},
 		},
 	}
-	return out
+	return &out
 }
 
 func getFakeOnboardedDomain() zms.SignedDomain {
@@ -590,7 +591,7 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 							SystemDisabled: &isNotSystemDisabled,
 						},
 						{
-							MemberName: "user.expired",
+							MemberName: "user.disabled",
 							Expiration: &rdl.Timestamp{
 								Time: time.Now().Add(time.Hour),
 							},
@@ -617,28 +618,28 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 	return zms.SignedDomain{
 		Domain: &zms.DomainData{
 			Modified: timestamp,
-			Name:     domainNameOnboardedNotOnboarded,
+			Name:     domainNameNotOnboarded,
 			Policies: &zms.SignedPolicies{
 				Contents: &zms.DomainPolicies{
-					Domain: domainNameOnboardedNotOnboarded,
+					Domain: domainNameNotOnboarded,
 					Policies: []*zms.Policy{
 						{
 							Assertions: []*zms.Assertion{
 								{
-									Role:     domainNameOnboardedNotOnboarded + ":role.admin",
-									Resource: domainNameOnboardedNotOnboarded + ":*",
+									Role:     domainNameNotOnboarded + ":role.admin",
+									Resource: domainNameNotOnboarded + ":*",
 									Action:   "*",
 									Effect:   &allow,
 								},
 								{
-									Role:     domainNameOnboardedNotOnboarded + ":role.details",
-									Resource: domainNameOnboardedNotOnboarded + ":svc.details",
+									Role:     domainNameNotOnboarded + ":role.details",
+									Resource: domainNameNotOnboarded + ":svc.details",
 									Action:   "get",
 									Effect:   &allow,
 								},
 							},
 							Modified: &timestamp,
-							Name:     domainNameOnboardedNotOnboarded + ":policy.admin",
+							Name:     domainNameNotOnboarded + ":policy.admin",
 						},
 					},
 				},
@@ -649,7 +650,7 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 				{
 					Members:  []zms.MemberName{username},
 					Modified: &timestamp,
-					Name:     domainNameOnboardedNotOnboarded + ":role.admin",
+					Name:     domainNameNotOnboarded + ":role.admin",
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: wildcardUsername,
@@ -659,7 +660,7 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 				{
 					Members:  []zms.MemberName{"details"},
 					Modified: &timestamp,
-					Name:     domainNameOnboardedNotOnboarded + ":role.details",
+					Name:     domainNameNotOnboarded + ":role.details",
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: wildcardUsername,
@@ -675,7 +676,7 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 	}
 }
 
-func getOldAuthzPolicy() model.Config {
+func getOldAuthzPolicy() *model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "05/1/2017 12:00:00")
@@ -724,7 +725,7 @@ func getOldAuthzPolicy() model.Config {
 			},
 		},
 	}
-	return out
+	return &out
 }
 
 func getModifiedAuthzPolicy() *authz.AuthorizationPolicy {
@@ -790,7 +791,7 @@ func getModifiedAuthzPolicyWithOverrideAnnotation() *authz.AuthorizationPolicy {
 	return authzPolicySpec
 }
 
-func getModifiedAuthzPolicyCRWithOverrideAnnotation() model.Config {
+func getModifiedAuthzPolicyCRWithOverrideAnnotation() *model.Config {
 	out := getOldAuthzPolicy()
 	out.ConfigMeta.Annotations = map[string]string{"overrideAuthzPolicy": "true"}
 	return out
