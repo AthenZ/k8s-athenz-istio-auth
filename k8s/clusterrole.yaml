@@ -32,3 +32,15 @@ rules:
   verbs:
   - watch
   - list
+- apiGroups:
+    - security.istio.io
+  resources:
+    - authorizationpolicies
+  verbs:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
