@@ -59,7 +59,20 @@ var (
 		},
 	}
 
-	notOnboardedServiceWithAnnotation = &v1.Service{
+	notOnboardedServiceWithAnnotationTrue = &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "onboarded-service",
+			Namespace: "test-namespace-not-onboarded",
+			Annotations: map[string]string{
+				authzEnabledAnnotation: "true",
+			},
+			Labels: map[string]string{
+				"svc": "productpage",
+			},
+		},
+	}
+
+	notOnboardedServiceWithAnnotationFalse = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "onboarded-service",
 			Namespace: "test-namespace-onboarded",
@@ -227,11 +240,19 @@ func TestSyncService(t *testing.T) {
 		},
 		{
 			name:                "create Authorization Policy spec when there is update event of service from no annotation set to annotation set",
-			inputService:        notOnboardedServiceWithAnnotation,
+			inputService:        notOnboardedServiceWithAnnotationFalse,
 			inputAthenzDomain:   onboardedAthenzDomain,
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: onboardedService},
+		},
+		{
+			name:                "create empty Authorization Policy spec when there is create event of service which doesn't have roles / policies defined",
+			inputService:        notOnboardedServiceWithAnnotationTrue,
+			inputAthenzDomain:   notOnboardedAthenzDomain,
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+			item:                Item{Operation: model.EventAdd, Resource: notOnboardedServiceWithAnnotationTrue},
 		},
 	}
 
@@ -309,7 +330,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
 				c := newFakeController(onboardedAthenzDomain, onboardedService, true, stopCh)
-				_, err := c.configStoreCache.Create(*getOldAuthzPolicy())
+				_, err := c.configStoreCache.Create(*getExistingAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -373,7 +394,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
-			initAuthzPolicySpec: getOldAuthzPolicy(),
+			initAuthzPolicySpec: getExistingAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 		},
@@ -381,7 +402,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			name:                "when there is deletion of authz policy resource, controller will recreate the authz policy",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
-			initAuthzPolicySpec: getOldAuthzPolicy(),
+			initAuthzPolicySpec: getExistingAuthzPolicy(),
 			item:                Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 		},
@@ -395,7 +416,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		},
 		{
 			name:                "when there is manual creation of authz policy without override annotation, controller should delete this create resource",
-			inputService:        notOnboardedServiceWithAnnotation,
+			inputService:        notOnboardedServiceWithAnnotationFalse,
 			inputAthenzDomain:   onboardedAthenzDomain,
 			initAuthzPolicySpec: nil,
 			item:                Item{Operation: model.EventAdd, Resource: getModifiedAuthzPolicy()},
@@ -676,10 +697,13 @@ func getFakeNotOnboardedDomain() zms.SignedDomain {
 	}
 }
 
-func getOldAuthzPolicy() *model.Config {
+func getExistingAuthzPolicy() *model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
-	createTimestamp, _ := time.Parse("", "05/1/2017 12:00:00")
+	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
 	out.ConfigMeta = model.ConfigMeta{
 		Type:              schema.Resource().Kind(),
 		Group:             schema.Resource().Group(),
@@ -785,6 +809,29 @@ func getModifiedAuthzPolicy() *authz.AuthorizationPolicy {
 	}
 }
 
+func getExpectedEmptyAuthzPolicy() *model.Config {
+	out := &model.Config{}
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace-not-onboarded",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"svc": "productpage"},
+		},
+	}
+	return out
+}
+
 func getModifiedAuthzPolicyWithOverrideAnnotation() *authz.AuthorizationPolicy {
 	authzPolicySpec := getModifiedAuthzPolicy()
 	authzPolicySpec.ObjectMeta.Annotations = map[string]string{"overrideAuthzPolicy": "true"}
@@ -792,7 +839,7 @@ func getModifiedAuthzPolicyWithOverrideAnnotation() *authz.AuthorizationPolicy {
 }
 
 func getModifiedAuthzPolicyCRWithOverrideAnnotation() *model.Config {
-	out := getOldAuthzPolicy()
+	out := getExistingAuthzPolicy()
 	out.ConfigMeta.Annotations = map[string]string{"overrideAuthzPolicy": "true"}
 	return out
 }

@@ -40,23 +40,76 @@ var (
 			},
 		},
 	}
+
+	notOnboardedServiceWithAnnotationTrue = &k8sv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "onboarded-service",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				"authz.istio.io/enabled": "true",
+			},
+			Labels: map[string]string{
+				"app": "productpage",
+			},
+		},
+	}
 )
 
 func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
-	athenzclientset := fakev1.NewSimpleClientset()
-	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	signedDomain := getFakeDomain()
-	labels := onboardedService.GetLabels()
-	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &fakeAthenzInformer)
+	tests := []struct {
+		name                string
+		inputAthenzDomain   zms.SignedDomain
+		inputService        *k8sv1.Service
+		expectedAuthzPolicy []model.Config
+	}{
+		{
+			name:                "should create expected authz policy spec",
+			inputAthenzDomain:   getFakeOnboardedDomain(),
+			inputService:        onboardedService,
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+		},
+		{
+			name:                "should create empty authz policy spec for service which doesn't have roles / policies defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(),
+			inputService:        notOnboardedServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+	}
 
-	p := NewProvider(false, true)
-
-	convertedCR := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, onboardedService.Name, labels["app"])
-	expectedCR := getExpectedCR()
-	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			athenzclientset := fakev1.NewSimpleClientset()
+			fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+			labels := onboardedService.GetLabels()
+			domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(tt.inputAthenzDomain.Domain, &fakeAthenzInformer)
+			p := NewProvider(false, true)
+			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["app"])
+			assert.Equal(t, tt.expectedAuthzPolicy, convertedAuthzPolicy, "converted authz policy should be equal")
+		})
+	}
 }
 
-func getExpectedCR() []model.Config {
+func getExpectedEmptyAuthzPolicy() []model.Config {
+	var out model.Config
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"svc": "productpage"},
+		},
+	}
+	return []model.Config{out}
+}
+
+func getExpectedAuthzPolicy() []model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
 	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
@@ -134,7 +187,7 @@ func getExpectedCR() []model.Config {
 	return []model.Config{out}
 }
 
-func getFakeDomain() zms.SignedDomain {
+func getFakeOnboardedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2019-07-22T20:29:10.305Z")
 	if err != nil {
@@ -212,6 +265,16 @@ func getFakeDomain() zms.SignedDomain {
 			},
 			Services: []*zms.ServiceIdentity{},
 			Entities: []*zms.Entity{},
+		},
+		KeyId:     "colo-env-1.1",
+		Signature: "signature",
+	}
+}
+
+func getFakeNotOnboardedDomain() zms.SignedDomain {
+	return zms.SignedDomain{
+		Domain: &zms.DomainData{
+			Name: domainName,
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
