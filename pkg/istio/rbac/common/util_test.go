@@ -1040,17 +1040,8 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: &ComponentEnabled{
-					serviceMap: map[ServiceEnabled]string{
-						ServiceEnabled{
-							service:   "service1",
-							namespace: "namespace1",
-						}:"",
-						ServiceEnabled{
-							service:   "service2",
-							namespace: "namespace2",
-						}:"",
-					},
-					namespaceMap: map[string]string{},
+					serviceMap:   map[string]bool{"namespace1/service1": true, "namespace2/service2": true},
+					namespaceMap: map[string]bool{},
 					cluster:      false,
 				},
 				err: "",
@@ -1071,8 +1062,8 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: &ComponentEnabled{
-					serviceMap:   map[ServiceEnabled]string{},
-					namespaceMap: map[string]string{"ns1":"", "ns2":"", "ns3":""},
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{"ns1": true, "ns2": true, "ns3": true},
 					cluster:      false,
 				},
 				err: "",
@@ -1126,17 +1117,8 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceMap: map[ServiceEnabled]string{
-						ServiceEnabled{
-							service:   "service1",
-							namespace: "namespace1",
-						}:"",
-						ServiceEnabled{
-							service:   "service2",
-							namespace: "namespace2",
-						}:"",
-					},
-					namespaceMap: map[string]string{},
+					serviceMap:   map[string]bool{"namespace1/service1": true, "namespace2/service2": true},
+					namespaceMap: map[string]bool{},
 					cluster:      false,
 				},
 				service:   "service1",
@@ -1147,8 +1129,8 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceMap:   map[ServiceEnabled]string{},
-					namespaceMap: map[string]string{"ns1":"", "ns2":"", "ns3":""},
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{"ns1": true, "ns2": true, "ns3": true},
 					cluster:      false,
 				},
 				service:   "service1",
@@ -1159,8 +1141,8 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceMap:   map[ServiceEnabled]string{},
-					namespaceMap: map[string]string{},
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{},
 					cluster:      true,
 				},
 				service:   "test",
@@ -1171,8 +1153,8 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceMap:   map[ServiceEnabled]string{},
-					namespaceMap: map[string]string{},
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{},
 					cluster:      false,
 				},
 				service:   "service1",

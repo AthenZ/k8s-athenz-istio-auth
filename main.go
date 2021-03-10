@@ -34,7 +34,7 @@ func main() {
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
 	enableAuthzPolicyController := flag.Bool("enable-authzpolicy-controller", true, "enable authzpolicy controller to create authzpolicy dry run resource")
-	authzPolicyEnabledList := flag.String("components-enabled-authzpolicy", "", "List of namespace/service that enabled authz policy, "+
+	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)

@@ -190,7 +190,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 	}
 	c.componentEnabledAuthzPolicy = componentsEnabledAuthzPolicy
 	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject)
-	c.dryRunHandler =  common.DryRunHandler{}
+	c.dryRunHandler = common.DryRunHandler{}
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
@@ -473,7 +473,7 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 	assert.Equal(t, common.DryRunHandler{}, c.dryRunHandler, "dryRun handler should be equal")
-	assert.Equal(t, apiHandler, c.apiHandler,"api handler should be equal")
+	assert.Equal(t, apiHandler, c.apiHandler, "api handler should be equal")
 }
 
 func getExpectedAuthzPolicy() *model.Config {

@@ -422,16 +422,10 @@ func FetchServicesFromDir(namespace, localDirPath string) ([]string, error) {
 	return svcList, nil
 }
 
-// ServiceEnabled - service and namespace combination that enabled authz policy
-type ServiceEnabled struct {
-	service   string
-	namespace string
-}
-
 type ComponentEnabled struct {
-	serviceMap    map[ServiceEnabled]string
-	namespaceMap  map[string]string
-	cluster       bool
+	serviceMap   map[string]bool
+	namespaceMap map[string]bool
+	cluster      bool
 }
 
 func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled, error) {
@@ -439,8 +433,8 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 	if componentsList == "" {
 		return &componentEnabledObj, nil
 	}
-	serviceEnabledMap := make(map[ServiceEnabled]string)
-	namespaceEnabledMap := make(map[string]string)
+	serviceEnabledMap := make(map[string]bool)
+	namespaceEnabledMap := make(map[string]bool)
 	serviceNamespaceComboList := strings.Split(componentsList, ",")
 	if len(serviceNamespaceComboList) == 1 && serviceNamespaceComboList[0] == "*" {
 		componentEnabledObj.cluster = true
@@ -453,13 +447,9 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 				return nil, fmt.Errorf("service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
 			} else {
 				if serviceWithNS[1] == "*" {
-					namespaceEnabledMap[serviceWithNS[0]] = ""
+					namespaceEnabledMap[serviceWithNS[0]] = true
 				} else {
-					serviceObj := ServiceEnabled{
-						service:   serviceWithNS[1],
-						namespace: serviceWithNS[0],
-					}
-					serviceEnabledMap[serviceObj] = ""
+					serviceEnabledMap[serviceWithNS[0]+"/"+serviceWithNS[1]] = true
 				}
 			}
 		}
@@ -470,11 +460,7 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 }
 
 func (c *ComponentEnabled) containsService(service string, ns string) bool {
-	currSvc := ServiceEnabled{
-		service: service,
-		namespace: ns,
-	}
-	_, exists := c.serviceMap[currSvc]
+	_, exists := c.serviceMap[ns+"/"+service]
 	return exists
 }
 
