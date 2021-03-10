@@ -59,7 +59,7 @@ var (
 		},
 	}
 
-	notOnboardedServiceWithAnnotationTrue = &v1.Service{
+	undefinedAthenzRulesServiceWithAnnotationTrue = &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "onboarded-service",
 			Namespace: "test-namespace-not-onboarded",
@@ -248,11 +248,11 @@ func TestSyncService(t *testing.T) {
 		},
 		{
 			name:                "create empty Authorization Policy spec when there is create event of service which doesn't have roles / policies defined",
-			inputService:        notOnboardedServiceWithAnnotationTrue,
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
 			inputAthenzDomain:   notOnboardedAthenzDomain,
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
-			item:                Item{Operation: model.EventAdd, Resource: notOnboardedServiceWithAnnotationTrue},
+			item:                Item{Operation: model.EventAdd, Resource: undefinedAthenzRulesServiceWithAnnotationTrue},
 		},
 	}
 

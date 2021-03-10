@@ -41,7 +41,7 @@ var (
 		},
 	}
 
-	notOnboardedServiceWithAnnotationTrue = &k8sv1.Service{
+	undefinedAthenzRulesServiceWithAnnotationTrue = &k8sv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "onboarded-service",
 			Namespace: "test-namespace",
@@ -71,7 +71,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 		{
 			name:                "should create empty authz policy spec for service which doesn't have roles / policies defined",
 			inputAthenzDomain:   getFakeNotOnboardedDomain(),
-			inputService:        notOnboardedServiceWithAnnotationTrue,
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
 			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
 		},
 	}
