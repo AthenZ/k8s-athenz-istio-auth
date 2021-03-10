@@ -52,13 +52,11 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
 
 	c := &Controller{
-		configStoreCache:         configStoreCache,
-		serviceIndexInformer:     serviceIndexInformer,
-		adIndexInformer:          adIndexInformer,
-		authzpolicyIndexInformer: authzpolicyIndexInformer,
-		queue:                    queue,
-		// TODO: fix methods in rbacv2 provider funcs, find a way to check dry run flag for current ns / svc
-		// use this check dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
+		configStoreCache:            configStoreCache,
+		serviceIndexInformer:        serviceIndexInformer,
+		adIndexInformer:             adIndexInformer,
+		authzpolicyIndexInformer:    authzpolicyIndexInformer,
+		queue:                       queue,
 		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
@@ -233,7 +231,6 @@ func (c *Controller) sync(key string) error {
 	}
 
 	// get current APs from cache
-	// dryRun := !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, domainRBAC.Namespace)
 	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, serviceName)
 	cbHandler := c.getCallbackHandler(key)
 	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, c.checkOverrideAnnotation)

@@ -103,6 +103,34 @@ func getExpectedCR() []model.Config {
 					},
 				},
 			},
+			{
+				From: []*v1beta1.Rule_From{
+					{
+						Source: &v1beta1.Source{
+							Principals: []string{
+								"user/sa/name",
+								"test.namespace/ra/test.namespace:role.productpage-writer",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							RequestPrincipals: []string{
+								"athenz/user.name",
+							},
+						},
+					},
+				},
+				To: []*v1beta1.Rule_To{
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 	return []model.Config{out}
@@ -137,6 +165,12 @@ func getFakeDomain() zms.SignedDomain {
 									Action:   "get",
 									Effect:   &allow,
 								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage",
+									Action:   "post",
+									Effect:   &allow,
+								},
 							},
 							Modified: &timestamp,
 							Name:     domainName + ":policy.admin",
@@ -164,6 +198,16 @@ func getFakeDomain() zms.SignedDomain {
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: wildcardUsername,
+						},
+					},
+				},
+				{
+					Members:  []zms.MemberName{"productpage-writer"},
+					Modified: &timestamp,
+					Name:     domainName + ":role.productpage-writer",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: username,
 						},
 					},
 				},

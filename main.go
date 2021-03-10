@@ -96,9 +96,12 @@ func main() {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
 	}
 
-	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
-	if err != nil {
-		log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
+	var componentsEnabledAuthzPolicy *common.ComponentEnabled
+	if *enableAuthzPolicyController {
+		componentsEnabledAuthzPolicy, err = common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+		if err != nil {
+			log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
+		}
 	}
 
 	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)

@@ -1040,18 +1040,18 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: &ComponentEnabled{
-					serviceList: []ServiceEnabled{
-						{
+					serviceMap: map[ServiceEnabled]string{
+						ServiceEnabled{
 							service:   "service1",
 							namespace: "namespace1",
-						},
-						{
+						}:"",
+						ServiceEnabled{
 							service:   "service2",
 							namespace: "namespace2",
-						},
+						}:"",
 					},
-					namespaceList: []string{},
-					cluster:       false,
+					namespaceMap: map[string]string{},
+					cluster:      false,
 				},
 				err: "",
 			},
@@ -1071,9 +1071,9 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: &ComponentEnabled{
-					serviceList:   []ServiceEnabled{},
-					namespaceList: []string{"ns1", "ns2", "ns3"},
-					cluster:       false,
+					serviceMap:   map[ServiceEnabled]string{},
+					namespaceMap: map[string]string{"ns1":"", "ns2":"", "ns3":""},
+					cluster:      false,
 				},
 				err: "",
 			},
@@ -1084,9 +1084,9 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			},
 			output: outputData{
 				result: &ComponentEnabled{
-					serviceList:   []ServiceEnabled{},
-					namespaceList: []string{},
-					cluster:       true,
+					serviceMap:   nil,
+					namespaceMap: nil,
+					cluster:      true,
 				},
 				err: "",
 			},
@@ -1102,22 +1102,9 @@ func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
 			}
 		}
 
-		if len(components.serviceList) != len(testcase.output.result.serviceList) {
-			t.Error("Object serviceList length mismatch")
-		}
-		for i := 0; i < len(components.serviceList); i++ {
-			if components.serviceList[i].service != testcase.output.result.serviceList[i].service || components.serviceList[i].namespace != testcase.output.result.serviceList[i].namespace {
-				t.Error("ServiceEnabled object mismatch")
-			}
-		}
-		if len(components.namespaceList) != len(testcase.output.result.namespaceList) {
-			t.Error("Object namespaceList length mismatch")
-		}
-		for i := 0; i < len(components.namespaceList); i++ {
-			if components.namespaceList[i] != testcase.output.result.namespaceList[i] {
-				t.Error("Namespace mismatch")
-			}
-		}
+		assert.EqualValues(t, components.serviceMap, testcase.output.result.serviceMap, "Object serviceMap spec mismatch")
+		assert.EqualValues(t, components.namespaceMap, testcase.output.result.namespaceMap, "Object namespaceMap spec mismatch")
+
 		if components.cluster != testcase.output.result.cluster {
 			t.Error("Object cluster value mismatch")
 		}
@@ -1139,18 +1126,18 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceList: []ServiceEnabled{
-						{
+					serviceMap: map[ServiceEnabled]string{
+						ServiceEnabled{
 							service:   "service1",
 							namespace: "namespace1",
-						},
-						{
+						}:"",
+						ServiceEnabled{
 							service:   "service2",
 							namespace: "namespace2",
-						},
+						}:"",
 					},
-					namespaceList: []string{},
-					cluster:       false,
+					namespaceMap: map[string]string{},
+					cluster:      false,
 				},
 				service:   "service1",
 				namespace: "namespace1",
@@ -1160,9 +1147,9 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceList:   []ServiceEnabled{},
-					namespaceList: []string{"ns1", "ns2", "ns3"},
-					cluster:       false,
+					serviceMap:   map[ServiceEnabled]string{},
+					namespaceMap: map[string]string{"ns1":"", "ns2":"", "ns3":""},
+					cluster:      false,
 				},
 				service:   "service1",
 				namespace: "ns1",
@@ -1172,9 +1159,9 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceList:   []ServiceEnabled{},
-					namespaceList: []string{},
-					cluster:       true,
+					serviceMap:   map[ServiceEnabled]string{},
+					namespaceMap: map[string]string{},
+					cluster:      true,
 				},
 				service:   "test",
 				namespace: "test",
@@ -1184,9 +1171,9 @@ func TestIsEnabled(t *testing.T) {
 		{
 			input: inputData{
 				obj: ComponentEnabled{
-					serviceList:   []ServiceEnabled{},
-					namespaceList: []string{},
-					cluster:       false,
+					serviceMap:   map[ServiceEnabled]string{},
+					namespaceMap: map[string]string{},
+					cluster:      false,
 				},
 				service:   "service1",
 				namespace: "namespace1",

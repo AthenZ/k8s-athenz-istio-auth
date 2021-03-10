@@ -33,3 +33,4 @@ branches:
   only: 
     - master
     - authzpolicy
+    - authztest

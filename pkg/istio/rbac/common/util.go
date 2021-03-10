@@ -429,8 +429,8 @@ type ServiceEnabled struct {
 }
 
 type ComponentEnabled struct {
-	serviceList   []ServiceEnabled
-	namespaceList []string
+	serviceMap    map[ServiceEnabled]string
+	namespaceMap  map[string]string
 	cluster       bool
 }
 
@@ -439,8 +439,8 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 	if componentsList == "" {
 		return &componentEnabledObj, nil
 	}
-	serviceEnabledList := []ServiceEnabled{}
-	namespaceEnabledList := []string{}
+	serviceEnabledMap := make(map[ServiceEnabled]string)
+	namespaceEnabledMap := make(map[string]string)
 	serviceNamespaceComboList := strings.Split(componentsList, ",")
 	if len(serviceNamespaceComboList) == 1 && serviceNamespaceComboList[0] == "*" {
 		componentEnabledObj.cluster = true
@@ -453,38 +453,34 @@ func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled
 				return nil, fmt.Errorf("service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
 			} else {
 				if serviceWithNS[1] == "*" {
-					namespaceEnabledList = append(namespaceEnabledList, serviceWithNS[0])
+					namespaceEnabledMap[serviceWithNS[0]] = ""
 				} else {
 					serviceObj := ServiceEnabled{
 						service:   serviceWithNS[1],
 						namespace: serviceWithNS[0],
 					}
-					serviceEnabledList = append(serviceEnabledList, serviceObj)
+					serviceEnabledMap[serviceObj] = ""
 				}
 			}
 		}
 	}
-	componentEnabledObj.serviceList = serviceEnabledList
-	componentEnabledObj.namespaceList = namespaceEnabledList
+	componentEnabledObj.serviceMap = serviceEnabledMap
+	componentEnabledObj.namespaceMap = namespaceEnabledMap
 	return &componentEnabledObj, nil
 }
 
 func (c *ComponentEnabled) containsService(service string, ns string) bool {
-	for _, item := range c.serviceList {
-		if item.service == service && item.namespace == ns {
-			return true
-		}
+	currSvc := ServiceEnabled{
+		service: service,
+		namespace: ns,
 	}
-	return false
+	_, exists := c.serviceMap[currSvc]
+	return exists
 }
 
 func (c *ComponentEnabled) containsNamespace(ns string) bool {
-	for _, item := range c.namespaceList {
-		if item == ns {
-			return true
-		}
-	}
-	return false
+	_, exists := c.namespaceMap[ns]
+	return exists
 }
 
 func (c *ComponentEnabled) IsEnabled(serviceName string, serviceNamespace string) bool {

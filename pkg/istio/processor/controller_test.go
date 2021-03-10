@@ -95,7 +95,7 @@ func TestSync(t *testing.T) {
 		expectedErr   error
 	}{
 		{
-			name:          "should not perfom any cache op on nil item",
+			name:          "should not perform any cache op on nil item",
 			input:         nil,
 			startingCache: memory.NewController(memory.Make(configDescriptor)),
 			expectedCache: memory.NewController(memory.Make(configDescriptor)),
