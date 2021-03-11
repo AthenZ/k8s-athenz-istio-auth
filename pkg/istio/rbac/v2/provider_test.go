@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	fakev1 "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned/fake"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"istio.io/api/security/v1beta1"
@@ -17,6 +18,7 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"sort"
 	"testing"
 	"time"
 )
@@ -48,12 +50,23 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 	signedDomain := getFakeDomain()
 	labels := onboardedService.GetLabels()
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &fakeAthenzInformer)
-
-	p := NewProvider(false, true)
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
+	p := NewProvider(componentsEnabledAuthzPolicy, true)
 
 	convertedCR := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, onboardedService.Name, labels["app"])
 	expectedCR := getExpectedCR()
-	assert.Equal(t, expectedCR, convertedCR, "converted authz policy should be equal")
+	// when there are multiple assertions matched with svc,
+	// base on which assertion will be processed from the athenzModel mapping, order of the authz rule generated
+	// may be different each time. Using a workaround here to sort the configSpec in alphabetical order of first
+	// method in each rule.
+	configSpec := (convertedCR[0].Spec).(*v1beta1.AuthorizationPolicy)
+	sort.Slice(configSpec.Rules, func(i, j int) bool {
+		return configSpec.Rules[i].To[0].Operation.Methods[0] < configSpec.Rules[j].To[0].Operation.Methods[0]
+	})
+	convertedCR[0].Spec = configSpec
+
+	assert.EqualValues(t, expectedCR, convertedCR, "converted authz policy should be equal")
 }
 
 func getExpectedCR() []model.Config {
@@ -163,6 +176,12 @@ func getFakeDomain() zms.SignedDomain {
 									Action:   "get",
 									Effect:   &allow,
 								},
+							},
+							Modified: &timestamp,
+							Name:     domainName + ":policy.admin",
+						},
+						{
+							Assertions: []*zms.Assertion{
 								{
 									Role:     domainName + ":role.productpage-writer",
 									Resource: domainName + ":svc.productpage",
@@ -171,7 +190,7 @@ func getFakeDomain() zms.SignedDomain {
 								},
 							},
 							Modified: &timestamp,
-							Name:     domainName + ":policy.admin",
+							Name:     domainName + ":policy.productpage-writer",
 						},
 					},
 				},

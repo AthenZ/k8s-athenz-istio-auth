@@ -31,14 +31,15 @@ func main() {
 	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
-	apDryRun := flag.Bool("ap-dry-run-mode", true, "enable dry run mode for authz policy resource")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
 	logLevel := flag.String("log-level", "info", "logging level")
-
+	enableAuthzPolicyController := flag.Bool("enable-ap-controller", true, "enable authzpolicy controller to create authzpolicy dry run resource")
+	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
+		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
-	if *apDryRun {
+	if *enableAuthzPolicyController {
 		if _, err := os.Stat(common.DryRunStoredFilesDirectory); os.IsNotExist(err) {
 			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0644)
 			if err != nil {
@@ -95,7 +96,15 @@ func main() {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *apDryRun)
+	var componentsEnabledAuthzPolicy *common.ComponentEnabled
+	if *enableAuthzPolicyController {
+		componentsEnabledAuthzPolicy, err = common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+		if err != nil {
+			log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
+		}
+	}
+
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)

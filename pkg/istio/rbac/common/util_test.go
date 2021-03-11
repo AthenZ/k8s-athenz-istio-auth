@@ -1018,3 +1018,154 @@ func getAuthzPolicyItem(action model.Event) Item {
 	item.Resource = out
 	return item
 }
+
+func TestParseComponentsEnabledAuthzPolicy(t *testing.T) {
+	type inputData struct {
+		description string
+		objectList  string
+	}
+	type outputData struct {
+		result *ComponentEnabled
+		err    string
+	}
+	type testData struct {
+		input  inputData
+		output outputData
+	}
+	tests := []testData{
+		{
+			input: inputData{
+				description: "Parse services-enabled-authzpolicy list",
+				objectList:  "namespace1/service1,namespace2/service2",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceMap:   map[string]bool{"namespace1/service1": true, "namespace2/service2": true},
+					namespaceMap: map[string]bool{},
+					cluster:      false,
+				},
+				err: "",
+			},
+		}, {
+			input: inputData{
+				description: "Services-enabled-authzpolicy list item has invalid format",
+				objectList:  "service1-namespace1,service2-namespace2",
+			},
+			output: outputData{
+				result: nil,
+				err:    "service item service1-namespace1 from command line arg components-enabled-authzpolicy is in incorrect format",
+			},
+		}, {
+			input: inputData{
+				description: "Parse namespaces-enabled-authzpolicy list",
+				objectList:  "ns1/*,ns2/*,ns3/*",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{"ns1": true, "ns2": true, "ns3": true},
+					cluster:      false,
+				},
+				err: "",
+			},
+		}, {
+			input: inputData{
+				description: "Parse clusters-enabled-authzpolicy argument",
+				objectList:  "*",
+			},
+			output: outputData{
+				result: &ComponentEnabled{
+					serviceMap:   nil,
+					namespaceMap: nil,
+					cluster:      true,
+				},
+				err: "",
+			},
+		},
+	}
+	for _, testcase := range tests {
+		components, err := ParseComponentsEnabledAuthzPolicy(testcase.input.objectList)
+		if err != nil {
+			if err.Error() != testcase.output.err {
+				t.Errorf("Wrong error message. Expected: %s, Actual: %s", testcase.output.err, err.Error())
+			} else {
+				continue
+			}
+		}
+
+		assert.EqualValues(t, components.serviceMap, testcase.output.result.serviceMap, "Object serviceMap spec mismatch")
+		assert.EqualValues(t, components.namespaceMap, testcase.output.result.namespaceMap, "Object namespaceMap spec mismatch")
+
+		if components.cluster != testcase.output.result.cluster {
+			t.Error("Object cluster value mismatch")
+		}
+	}
+
+}
+
+func TestIsEnabled(t *testing.T) {
+	type inputData struct {
+		obj       ComponentEnabled
+		service   string
+		namespace string
+	}
+	type testData struct {
+		input  inputData
+		output bool
+	}
+	tests := []testData{
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceMap:   map[string]bool{"namespace1/service1": true, "namespace2/service2": true},
+					namespaceMap: map[string]bool{},
+					cluster:      false,
+				},
+				service:   "service1",
+				namespace: "namespace1",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{"ns1": true, "ns2": true, "ns3": true},
+					cluster:      false,
+				},
+				service:   "service1",
+				namespace: "ns1",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{},
+					cluster:      true,
+				},
+				service:   "test",
+				namespace: "test",
+			},
+			output: true,
+		},
+		{
+			input: inputData{
+				obj: ComponentEnabled{
+					serviceMap:   map[string]bool{},
+					namespaceMap: map[string]bool{},
+					cluster:      false,
+				},
+				service:   "service1",
+				namespace: "namespace1",
+			},
+			output: false,
+		},
+	}
+	for index, testcase := range tests {
+		if testcase.input.obj.IsEnabled(testcase.input.service, testcase.input.namespace) != testcase.output {
+			t.Errorf("Test %d failed, does not match expected output", index)
+		}
+	}
+}

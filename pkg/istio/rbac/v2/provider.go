@@ -4,6 +4,8 @@
 package v2
 
 import (
+	"regexp"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
@@ -12,19 +14,18 @@ import (
 	workloadv1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
-	"regexp"
 )
 
 // implements github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/Provider interface
 type v2 struct {
-	dryRun                 bool
-	enableOriginJwtSubject bool
+	componentEnabledAuthzPolicy *common.ComponentEnabled
+	enableOriginJwtSubject      bool
 }
 
-func NewProvider(dryRun, enableOriginJwtSubject bool) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool) rbac.Provider {
 	return &v2{
-		dryRun:                 dryRun,
-		enableOriginJwtSubject: enableOriginJwtSubject,
+		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
+		enableOriginJwtSubject:      enableOriginJwtSubject,
 	}
 }
 
@@ -168,7 +169,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 // if serviceName is specific, return single authorization policy matching with serviceName.
 func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
 	namespace := m.Namespace
-	if p.dryRun {
+	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
 		if serviceName != "" {
 			config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
 			if err != nil {

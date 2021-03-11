@@ -421,3 +421,63 @@ func FetchServicesFromDir(namespace, localDirPath string) ([]string, error) {
 	}
 	return svcList, nil
 }
+
+type ComponentEnabled struct {
+	serviceMap   map[string]bool
+	namespaceMap map[string]bool
+	cluster      bool
+}
+
+func ParseComponentsEnabledAuthzPolicy(componentsList string) (*ComponentEnabled, error) {
+	componentEnabledObj := ComponentEnabled{}
+	if componentsList == "" {
+		return &componentEnabledObj, nil
+	}
+	serviceEnabledMap := make(map[string]bool)
+	namespaceEnabledMap := make(map[string]bool)
+	serviceNamespaceComboList := strings.Split(componentsList, ",")
+	if len(serviceNamespaceComboList) == 1 && serviceNamespaceComboList[0] == "*" {
+		componentEnabledObj.cluster = true
+		return &componentEnabledObj, nil
+	}
+	for _, item := range serviceNamespaceComboList {
+		if item != "" {
+			serviceWithNS := strings.Split(item, "/")
+			if len(serviceWithNS) != 2 {
+				return nil, fmt.Errorf("service item %s from command line arg components-enabled-authzpolicy is in incorrect format", item)
+			} else {
+				if serviceWithNS[1] == "*" {
+					namespaceEnabledMap[serviceWithNS[0]] = true
+				} else {
+					serviceEnabledMap[serviceWithNS[0]+"/"+serviceWithNS[1]] = true
+				}
+			}
+		}
+	}
+	componentEnabledObj.serviceMap = serviceEnabledMap
+	componentEnabledObj.namespaceMap = namespaceEnabledMap
+	return &componentEnabledObj, nil
+}
+
+func (c *ComponentEnabled) containsService(service string, ns string) bool {
+	_, exists := c.serviceMap[ns+"/"+service]
+	return exists
+}
+
+func (c *ComponentEnabled) containsNamespace(ns string) bool {
+	_, exists := c.namespaceMap[ns]
+	return exists
+}
+
+func (c *ComponentEnabled) IsEnabled(serviceName string, serviceNamespace string) bool {
+	if c.cluster {
+		return true
+	}
+	if c.containsNamespace(serviceNamespace) {
+		return true
+	}
+	if c.containsService(serviceName, serviceNamespace) {
+		return true
+	}
+	return false
+}

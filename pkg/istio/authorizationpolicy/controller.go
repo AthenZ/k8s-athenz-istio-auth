@@ -6,6 +6,9 @@ package authzpolicy
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
@@ -20,8 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"strings"
-	"time"
 )
 
 const (
@@ -32,41 +33,39 @@ const (
 )
 
 type Controller struct {
-	configStoreCache         model.ConfigStoreCache
-	serviceIndexInformer     cache.SharedIndexInformer
-	adIndexInformer          cache.SharedIndexInformer
-	authzpolicyIndexInformer cache.SharedIndexInformer
-	queue                    workqueue.RateLimitingInterface
-	rbacProvider             rbac.Provider
-	apResyncInterval         time.Duration
-	eventHandler             common.EventHandler
-	enableOriginJwtSubject   bool
-	dryRun                   bool
+	configStoreCache            model.ConfigStoreCache
+	serviceIndexInformer        cache.SharedIndexInformer
+	adIndexInformer             cache.SharedIndexInformer
+	authzpolicyIndexInformer    cache.SharedIndexInformer
+	queue                       workqueue.RateLimitingInterface
+	rbacProvider                rbac.Provider
+	apResyncInterval            time.Duration
+	enableOriginJwtSubject      bool
+	componentEnabledAuthzPolicy *common.ComponentEnabled
+	dryRunHandler               common.DryRunHandler
+	apiHandler                  common.ApiHandler
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, dryRun bool) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
 
 	c := &Controller{
-		configStoreCache:         configStoreCache,
-		serviceIndexInformer:     serviceIndexInformer,
-		adIndexInformer:          adIndexInformer,
-		authzpolicyIndexInformer: authzpolicyIndexInformer,
-		queue:                    queue,
-		rbacProvider:             rbacv2.NewProvider(dryRun, enableOriginJwtSubject),
-		apResyncInterval:         apResyncInterval,
-		enableOriginJwtSubject:   enableOriginJwtSubject,
-		dryRun:                   dryRun,
+		configStoreCache:            configStoreCache,
+		serviceIndexInformer:        serviceIndexInformer,
+		adIndexInformer:             adIndexInformer,
+		authzpolicyIndexInformer:    authzpolicyIndexInformer,
+		queue:                       queue,
+		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
+		apResyncInterval:            apResyncInterval,
+		enableOriginJwtSubject:      enableOriginJwtSubject,
+		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
+		dryRunHandler:               common.DryRunHandler{},
 	}
 
-	if c.dryRun {
-		c.eventHandler = &common.DryRunHandler{}
-	} else {
-		c.eventHandler = &common.ApiHandler{
-			ConfigStoreCache: c.configStoreCache,
-		}
+	c.apiHandler = common.ApiHandler{
+		ConfigStoreCache: c.configStoreCache,
 	}
 
 	serviceIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -266,14 +265,22 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 		return nil
 	}
 	var err error
+	var eHandler common.EventHandler
+	serviceName := item.Resource.ConfigMeta.Name
+	serviceNamespace := item.Resource.ConfigMeta.Namespace
+	if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
+		eHandler = &c.dryRunHandler
+	} else {
+		eHandler = &c.apiHandler
+	}
 
 	switch item.Operation {
 	case model.EventAdd:
-		err = c.eventHandler.Add(item)
+		err = eHandler.Add(item)
 	case model.EventUpdate:
-		err = c.eventHandler.Update(item)
+		err = eHandler.Update(item)
 	case model.EventDelete:
-		err = c.eventHandler.Delete(item)
+		err = eHandler.Delete(item)
 	}
 
 	return err
