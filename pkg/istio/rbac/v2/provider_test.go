@@ -56,16 +56,14 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 
 	convertedCR := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, onboardedService.Name, labels["app"])
 	expectedCR := getExpectedCR()
-	// when there are mulitple assertions matched with svc,
+	// when there are multiple assertions matched with svc,
 	// base on which assertion will be processed from the athenzModel mapping, order of the authz rule generated
 	// may be different each time. Using a workaround here to sort the configSpec in alphabetical order of first
 	// method in each rule.
 	configSpec := (convertedCR[0].Spec).(*v1beta1.AuthorizationPolicy)
-	rules := configSpec.Rules
-	sort.Slice(rules, func(i, j int) bool {
-		return rules[i].To[0].Operation.Methods[0] < rules[j].To[0].Operation.Methods[0]
+	sort.Slice(configSpec.Rules, func(i, j int) bool {
+		return configSpec.Rules[i].To[0].Operation.Methods[0] < configSpec.Rules[j].To[0].Operation.Methods[0]
 	})
-	configSpec.Rules = rules
 	convertedCR[0].Spec = configSpec
 
 	assert.EqualValues(t, expectedCR, convertedCR, "converted authz policy should be equal")
