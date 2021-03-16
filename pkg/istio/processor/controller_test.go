@@ -2,6 +2,8 @@ package processor
 
 import (
 	"fmt"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +39,7 @@ func newSrSpec() *v1alpha1.ServiceRole {
 }
 
 func newSr(ns, role string) model.Config {
-	return common.NewConfig(model.ServiceRole.Type, ns, role, newSrSpec())
+	return common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, role, newSrSpec())
 }
 
 func newSrbSpec(role string) *v1alpha1.ServiceRoleBinding {
@@ -55,15 +57,11 @@ func newSrbSpec(role string) *v1alpha1.ServiceRoleBinding {
 }
 
 func newSrb(ns, role string) model.Config {
-	return common.NewConfig(model.ServiceRoleBinding.Type, ns, role, newSrbSpec(role))
+	return common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, role, newSrbSpec(role))
 }
 
 func cacheWithItems() (model.ConfigStoreCache, error) {
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
 
 	c := memory.NewController(memory.Make(configDescriptor))
 	_, err := c.Create(newSr("test-ns", "test-svc"))
@@ -79,13 +77,9 @@ func cacheWithItems() (model.ConfigStoreCache, error) {
 
 func TestSync(t *testing.T) {
 
-	configDescriptor := model.ConfigDescriptor{
-		model.ClusterRbacConfig,
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-	}
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
 
-	cbHandler := func(err error, i *Item) error {
+	cbHandler := func(err error, i *common.Item) error {
 		assert.Fail(t, "CallbackHandler should not be called")
 		return nil
 	}
@@ -95,13 +89,13 @@ func TestSync(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		input         *Item
+		input         *common.Item
 		startingCache model.ConfigStoreCache
 		expectedCache model.ConfigStoreCache
 		expectedErr   error
 	}{
 		{
-			name:          "should not perfom any cache op on nil item",
+			name:          "should not perform any cache op on nil item",
 			input:         nil,
 			startingCache: memory.NewController(memory.Make(configDescriptor)),
 			expectedCache: memory.NewController(memory.Make(configDescriptor)),
@@ -109,7 +103,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perfom valid create operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventAdd,
 				Resource:        newSr("test-ns", "test-role"),
 				CallbackHandler: cbHandler,
@@ -125,10 +119,10 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perform valid update operation",
-			input: &Item{
+			input: &common.Item{
 				Operation: model.EventUpdate,
 				Resource: func() model.Config {
-					obj := updateTestCache.Get(model.ServiceRole.Type, "test-svc", "test-ns")
+					obj := updateTestCache.Get(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), "test-svc", "test-ns")
 					assert.NotNil(t, obj, "cache should return the ServiceRole resource")
 					srSpec, ok := (obj.Spec).(*v1alpha1.ServiceRole)
 					assert.True(t, ok, "cache should return a ServiceRole resource")
@@ -160,7 +154,7 @@ func TestSync(t *testing.T) {
 						},
 					},
 				})
-				_, err := c.Create(common.NewConfig(model.ServiceRole.Type, "test-ns", "test-svc", srSpec))
+				_, err := c.Create(common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, "test-ns", "test-svc", srSpec))
 				assert.Nil(t, err, fmt.Sprintf("unexpected error while setting up expectedCache: %s", err))
 				_, err = c.Create(newSrb("test-ns", "test-svc"))
 				assert.Nil(t, err, fmt.Sprintf("unexpected error while setting up expectedCache: %s", err))
@@ -171,7 +165,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should perfom valid delete operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventDelete,
 				Resource:        newSr("test-ns", "test-svc"),
 				CallbackHandler: cbHandler,
@@ -191,7 +185,7 @@ func TestSync(t *testing.T) {
 		},
 		{
 			name: "should return error if valid update operation",
-			input: &Item{
+			input: &common.Item{
 				Operation:       model.EventUpdate,
 				Resource:        newSr("test-ns", "test-svc"),
 				CallbackHandler: cbHandler,
@@ -210,11 +204,11 @@ func TestSync(t *testing.T) {
 			err := c.sync(tt.input)
 			assert.Equal(t, tt.expectedErr, err, "sync err should match expected error")
 
-			for _, typ := range configDescriptor.Types() {
-				actualItemsT, err := configStoreCache.List(typ, v1.NamespaceAll)
+			for _, typ := range configDescriptor.All() {
+				actualItemsT, err := configStoreCache.List(typ.Resource().GroupVersionKind(), v1.NamespaceAll)
 				assert.Nil(t, err, fmt.Sprintf("error should be nil while fetching %s resources: %s", typ, err))
 
-				expectedItemsT, err := tt.expectedCache.List(typ, v1.NamespaceAll)
+				expectedItemsT, err := tt.expectedCache.List(typ.Resource().GroupVersionKind(), v1.NamespaceAll)
 				assert.Nil(t, err, fmt.Sprintf("error should be nil whil efetching %s resources: %s", typ, err))
 
 				assert.Equal(t, len(expectedItemsT), len(actualItemsT), fmt.Sprintf("len(list) of %s resources on the cache should match", typ))

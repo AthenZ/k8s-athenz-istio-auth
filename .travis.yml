@@ -32,3 +32,6 @@ after_script:
 branches:
   only: 
     - master
+    - authzpolicy
+    - authztest
+    - default-ap

@@ -13,8 +13,8 @@ type Provider interface {
 
 	// ConvertAthenzModelIntoIstioRbac converts the given Athenz model into a list of Istio type RBAC resources
 	// Any implementation should return exactly the same list of output resources for a given Athenz model
-	ConvertAthenzModelIntoIstioRbac(model athenz.Model) []model.Config
+	ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceName string, svcLabel string) []model.Config
 
 	// GetCurrentIstioRbac returns the Istio RBAC custom resources associated with the given model
-	GetCurrentIstioRbac(model athenz.Model, csc model.ConfigStoreCache) []model.Config
+	GetCurrentIstioRbac(model athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config
 }

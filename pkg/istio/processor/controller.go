@@ -4,8 +4,8 @@
 package processor
 
 import (
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/istio/pilot/pkg/model"
-
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 
@@ -17,17 +17,6 @@ const queueNumRetries = 3
 type Controller struct {
 	configStoreCache model.ConfigStoreCache
 	queue            workqueue.RateLimitingInterface
-}
-
-type OnCompleteFunc func(err error, item *Item) error
-
-type Item struct {
-	Operation model.Event
-	Resource  model.Config
-
-	// Handler function that should be invoked with the status of the current sync operation on the item
-	// If the handler returns an error, the operation is retried up to `queueNumRetries`
-	CallbackHandler OnCompleteFunc
 }
 
 // NewController is responsible for creating the processing controller workqueue
@@ -43,7 +32,7 @@ func NewController(configStoreCache model.ConfigStoreCache) *Controller {
 }
 
 // ProcessConfigChange is responsible for adding the key of the item to the queue
-func (c *Controller) ProcessConfigChange(item *Item) {
+func (c *Controller) ProcessConfigChange(item *common.Item) {
 	log.Infof("Item added to queue Resource: %s, Action: %s", item.Resource.Key(), item.Operation)
 	c.queue.Add(item)
 }
@@ -70,7 +59,7 @@ func (c *Controller) processNextItem() bool {
 
 	defer c.queue.Done(itemRaw)
 
-	item, ok := itemRaw.(*Item)
+	item, ok := itemRaw.(*common.Item)
 	if !ok {
 		log.Errorf("Item cast failed for resource %v", item)
 		return true
@@ -103,8 +92,7 @@ func (c *Controller) processNextItem() bool {
 }
 
 // sync is responsible for invoking the appropriate API operation on the model.Config resource
-func (c *Controller) sync(item *Item) error {
-
+func (c *Controller) sync(item *common.Item) error {
 	if item == nil {
 		return nil
 	}
@@ -117,7 +105,7 @@ func (c *Controller) sync(item *Item) error {
 		_, err = c.configStoreCache.Update(item.Resource)
 	case model.EventDelete:
 		res := item.Resource
-		err = c.configStoreCache.Delete(res.Type, res.Name, res.Namespace)
+		err = c.configStoreCache.Delete(res.GroupVersionKind(), res.Name, res.Namespace)
 	}
 
 	return err

@@ -4,58 +4,11 @@
 package common
 
 import (
-	"fmt"
-
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 
 	"istio.io/api/rbac/v1alpha1"
 )
-
-const (
-	allUsers                     = "user.*"
-	WildCardAll                  = "*"
-	ServiceRoleKind              = "ServiceRole"
-	AthenzJwtPrefix              = "athenz/"
-	RequestAuthPrincipalProperty = "request.auth.principal"
-)
-
-// memberToSpiffe parses the Athenz role member into a SPIFFE compliant name.
-// Example: example.domain/sa/service
-func memberToSpiffe(member *zms.RoleMember) (string, error) {
-
-	if member == nil {
-		return "", fmt.Errorf("member is nil")
-	}
-
-	memberStr := string(member.MemberName)
-
-	// special condition: if member == 'user.*', return '*'
-	if memberStr == allUsers {
-		return WildCardAll, nil
-	}
-
-	return PrincipalToSpiffe(memberStr)
-}
-
-// memberToOriginSubject parses the Athenz role member into the request.auth.principal
-// jwt format. Example: athenz/example.domain.service
-func memberToOriginJwtSubject(member *zms.RoleMember) (string, error) {
-
-	if member == nil {
-		return "", fmt.Errorf("member is nil")
-	}
-
-	memberStr := string(member.MemberName)
-
-	// special condition: if member == 'user.*', return '*'
-	if memberStr == allUsers {
-		return WildCardAll, nil
-	}
-
-	requestAuthPrincipal := AthenzJwtPrefix + memberStr
-	return requestAuthPrincipal, nil
-}
 
 // GetServiceRoleBindingSpec returns the ServiceRoleBindingSpec for a given Athenz role and its members
 func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRoleName string, members []*zms.RoleMember, enableOriginJwtSubject bool) (*v1alpha1.ServiceRoleBinding, error) {
@@ -65,7 +18,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 
 		//TODO: handle member.Expiration for expired members, for now ignore expiration
 
-		spiffeName, err := memberToSpiffe(member)
+		spiffeName, err := MemberToSpiffe(member)
 		if err != nil {
 			log.Warningln(err.Error())
 			continue
@@ -77,7 +30,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 		subjects = append(subjects, spiffeSubject)
 
 		if enableOriginJwtSubject {
-			originJwtName, err := memberToOriginJwtSubject(member)
+			originJwtName, err := MemberToOriginJwtSubject(member)
 			if err != nil {
 				log.Warningln(err.Error())
 				continue

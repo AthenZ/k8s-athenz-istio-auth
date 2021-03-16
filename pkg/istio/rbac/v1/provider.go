@@ -8,8 +8,8 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
-
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/validation"
 )
 
@@ -27,7 +27,7 @@ func NewProvider(enableOriginJwtSubject bool) rbac.Provider {
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into the list of Istio Authorization V1 specific
 // RBAC custom resources (ServiceRoles, ServiceRoleBindings)
 // The idea is that with a given input model, the function should always return the same output list of resources
-func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
+func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model, _ string, _ string) []model.Config {
 
 	out := make([]model.Config, 0)
 
@@ -63,7 +63,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 		}
 
 		k8sRoleName := common.ConvertAthenzRoleNameToK8sName(roleName)
-		sr := common.NewConfig(model.ServiceRole.Type, m.Namespace, k8sRoleName, srSpec)
+		sr := common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, m.Namespace, k8sRoleName, srSpec)
 		out = append(out, sr)
 
 		// Transform the members for an Athenz Role into a ServiceRoleBinding spec
@@ -86,7 +86,7 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 			continue
 		}
 
-		srb := common.NewConfig(model.ServiceRoleBinding.Type, m.Namespace, k8sRoleName, srbSpec)
+		srb := common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, m.Namespace, k8sRoleName, srbSpec)
 		out = append(out, srb)
 	}
 
@@ -94,14 +94,14 @@ func (p *v1) ConvertAthenzModelIntoIstioRbac(m athenz.Model) []model.Config {
 }
 
 // GetCurrentIstioRbac returns the ServiceRole and ServiceRoleBinding resources for the specified model's namespace
-func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache) []model.Config {
+func (p *v1) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, _ string) []model.Config {
 
-	sr, err := csc.List(model.ServiceRole.Type, m.Namespace)
+	sr, err := csc.List(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), m.Namespace)
 	if err != nil {
 		log.Errorf("Error listing the ServiceRole resources in the namespace: %s", m.Namespace)
 	}
 
-	srb, err := csc.List(model.ServiceRoleBinding.Type, m.Namespace)
+	srb, err := csc.List(collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(), m.Namespace)
 	if err != nil {
 		log.Errorf("Error listing the ServiceRoleBinding resources in the namespace: %s", m.Namespace)
 	}
