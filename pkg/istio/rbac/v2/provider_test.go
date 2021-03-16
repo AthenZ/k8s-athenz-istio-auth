@@ -416,10 +416,5 @@ func getFakeNotOnboardedDomain(addRole, addRoleMember, addPolicy, addAssertion b
 		domain.Domain.Policies = policy
 	}
 
-
 	return domain
 }
-
-
-// TODO, use RoleMembers instead of Members?
-
