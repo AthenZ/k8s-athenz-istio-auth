@@ -65,7 +65,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 		expectedAuthzPolicy []model.Config
 	}{
 		{
-			name:                "should create empty authz policy spec for service which doesn't have roles / policies defined",
+			name:                "should create empty authz policy spec for service which doesn't have roles and policies defined",
 			inputAthenzDomain:   getFakeNotOnboardedDomain(false, false, false, false),
 			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
 			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
