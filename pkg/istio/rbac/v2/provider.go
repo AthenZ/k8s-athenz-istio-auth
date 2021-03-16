@@ -154,7 +154,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
 		rule.From = append(rule.From, from_principal)
-		if p.enableOriginJwtSubject {
+		if p.enableOriginJwtSubject && len(from_requestPrincipal.Source.RequestPrincipals) > 0 {
 			rule.From = append(rule.From, from_requestPrincipal)
 		}
 		rules = append(rules, rule)

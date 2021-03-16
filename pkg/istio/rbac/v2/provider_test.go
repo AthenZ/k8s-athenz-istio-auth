@@ -42,37 +42,159 @@ var (
 			},
 		},
 	}
+
+	undefinedAthenzRulesServiceWithAnnotationTrue = &k8sv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "onboarded-service",
+			Namespace: "test-namespace",
+			Annotations: map[string]string{
+				"authz.istio.io/enabled": "true",
+			},
+			Labels: map[string]string{
+				"app": "productpage",
+			},
+		},
+	}
 )
 
 func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
-	athenzclientset := fakev1.NewSimpleClientset()
-	fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
-	signedDomain := getFakeDomain()
-	labels := onboardedService.GetLabels()
-	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &fakeAthenzInformer)
-	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
-	assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
-	p := NewProvider(componentsEnabledAuthzPolicy, true)
+	tests := []struct {
+		name                string
+		inputAthenzDomain   zms.SignedDomain
+		inputService        *k8sv1.Service
+		expectedAuthzPolicy []model.Config
+	}{
+		{
+			name:                "should create empty authz policy spec for service which doesn't have roles and policies defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(false, false, false, false),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+		{
+			name:                "should create empty authz policy spec for service with empty role and no policies defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(true, false, false, false),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+		{
+			name:                "should create empty authz policy spec for service with one member in role and no policies defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(true, true, false, false),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+		{
+			name:                "should create empty authz policy spec for service with no role and empty policy defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(false, false, true, false),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+		{
+			name:                "should create empty authz policy spec for service with empty role and empty policy defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(true, false, true, false),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+		},
+		{
+			name:                "should create authz policy spec with role for service with no role and policy defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(false, false, true, true),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedAuthzPolicyWithRole(),
+		},
+		{
+			name:                "should create authz policy spec with role for service with empty role and policy defined",
+			inputAthenzDomain:   getFakeNotOnboardedDomain(true, false, true, true),
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			expectedAuthzPolicy: getExpectedAuthzPolicyWithRole(),
+		},
+		{
+			name:                "should create expected authz policy spec",
+			inputAthenzDomain:   getFakeOnboardedDomain(),
+			inputService:        onboardedService,
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+		},
+	}
 
-	convertedCR := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, onboardedService.Name, labels["app"])
-	expectedCR := getExpectedCR()
-	// when there are multiple assertions matched with svc,
-	// base on which assertion will be processed from the athenzModel mapping, order of the authz rule generated
-	// may be different each time. Using a workaround here to sort the configSpec in alphabetical order of first
-	// method in each rule.
-	configSpec := (convertedCR[0].Spec).(*v1beta1.AuthorizationPolicy)
-	sort.Slice(configSpec.Rules, func(i, j int) bool {
-		return configSpec.Rules[i].To[0].Operation.Methods[0] < configSpec.Rules[j].To[0].Operation.Methods[0]
-	})
-	convertedCR[0].Spec = configSpec
-
-	assert.EqualValues(t, expectedCR, convertedCR, "converted authz policy should be equal")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			athenzclientset := fakev1.NewSimpleClientset()
+			fakeAthenzInformer := adInformer.NewAthenzDomainInformer(athenzclientset, 0, cache.Indexers{})
+			labels := onboardedService.GetLabels()
+			domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(tt.inputAthenzDomain.Domain, &fakeAthenzInformer)
+			componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
+			assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
+			p := NewProvider(componentsEnabledAuthzPolicy, true)
+			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["app"])
+			configSpec := (convertedAuthzPolicy[0].Spec).(*v1beta1.AuthorizationPolicy)
+			sort.Slice(configSpec.Rules, func(i, j int) bool {
+				return configSpec.Rules[i].To[0].Operation.Methods[0] < configSpec.Rules[j].To[0].Operation.Methods[0]
+			})
+			convertedAuthzPolicy[0].Spec = configSpec
+			convertedAuthzPolicy[0].CreationTimestamp = tt.expectedAuthzPolicy[0].CreationTimestamp
+			assert.Equal(t, tt.expectedAuthzPolicy, convertedAuthzPolicy, "converted authz policy should be equal")
+		})
+	}
 }
 
-func getExpectedCR() []model.Config {
+func getExpectedEmptyAuthzPolicy() []model.Config {
 	var out model.Config
 	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
-	createTimestamp, _ := time.Parse("", "12/8/2015 12:00:00")
+	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"svc": "productpage"},
+		},
+	}
+	return []model.Config{out}
+}
+
+func getExpectedAuthzPolicyWithRole() []model.Config {
+	ap := getExpectedEmptyAuthzPolicy()
+
+	configSpec := (ap[0].Spec).(*v1beta1.AuthorizationPolicy)
+	configSpec.Rules = []*v1beta1.Rule{
+		{
+			From: []*v1beta1.Rule_From{
+				{
+					Source: &v1beta1.Source{
+						Principals: []string{
+							"test.namespace/ra/test.namespace:role.onboarded-service-access",
+						},
+					},
+				},
+			},
+			To: []*v1beta1.Rule_To{
+				{
+					Operation: &v1beta1.Operation{
+						Methods: []string{
+							"POST",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return ap
+}
+
+func getExpectedAuthzPolicy() []model.Config {
+	var out model.Config
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
 	out.ConfigMeta = model.ConfigMeta{
 		Type:              schema.Resource().Kind(),
 		Group:             schema.Resource().Group(),
@@ -147,9 +269,9 @@ func getExpectedCR() []model.Config {
 	return []model.Config{out}
 }
 
-func getFakeDomain() zms.SignedDomain {
+func getFakeOnboardedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
-	timestamp, err := rdl.TimestampParse("2019-07-22T20:29:10.305Z")
+	timestamp, err := rdl.TimestampParse("2012-11-01T22:08:41+00:00")
 	if err != nil {
 		panic(err)
 	}
@@ -199,7 +321,6 @@ func getFakeDomain() zms.SignedDomain {
 			},
 			Roles: []*zms.Role{
 				{
-					Members:  []zms.MemberName{username},
 					Modified: &timestamp,
 					Name:     domainName + ":role.admin",
 					RoleMembers: []*zms.RoleMember{
@@ -209,7 +330,6 @@ func getFakeDomain() zms.SignedDomain {
 					},
 				},
 				{
-					Members:  []zms.MemberName{"productpage-reader"},
 					Modified: &timestamp,
 					Name:     domainName + ":role.productpage-reader",
 					RoleMembers: []*zms.RoleMember{
@@ -219,7 +339,6 @@ func getFakeDomain() zms.SignedDomain {
 					},
 				},
 				{
-					Members:  []zms.MemberName{"productpage-writer"},
 					Modified: &timestamp,
 					Name:     domainName + ":role.productpage-writer",
 					RoleMembers: []*zms.RoleMember{
@@ -235,4 +354,67 @@ func getFakeDomain() zms.SignedDomain {
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
 	}
+}
+
+func getFakeNotOnboardedDomain(addRole, addRoleMember, addPolicy, addAssertion bool) zms.SignedDomain {
+	allow := zms.ALLOW
+	timestamp, err := rdl.TimestampParse("2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
+
+	domain := zms.SignedDomain{
+		Domain: &zms.DomainData{
+			Name: domainName,
+		},
+		KeyId:     "colo-env-1.1",
+		Signature: "signature",
+	}
+
+	if addRole {
+		role := &zms.Role{
+			Modified: &timestamp,
+			Name:     domainName + ":role.onboarded-service-access",
+		}
+
+		if addRoleMember {
+			role.RoleMembers = []*zms.RoleMember{
+				{
+					MemberName: username,
+				},
+			}
+		}
+
+		domain.Domain.Roles = append(domain.Domain.Roles, role)
+	}
+
+	if addPolicy {
+		policy := &zms.SignedPolicies{
+			Contents: &zms.DomainPolicies{
+				Domain: domainName,
+				Policies: []*zms.Policy{
+					{
+						Modified: &timestamp,
+						Name:     domainName + ":policy.onboarded-service-access",
+					},
+				},
+			},
+			KeyId:     "col-env-1.1",
+			Signature: "signature-policy",
+		}
+
+		if addAssertion {
+			assertion := &zms.Assertion{
+				Role:     domainName + ":role.onboarded-service-access",
+				Resource: domainName + ":svc.productpage",
+				Action:   "post",
+				Effect:   &allow,
+			}
+			policy.Contents.Policies[0].Assertions = append(policy.Contents.Policies[0].Assertions, assertion)
+		}
+
+		domain.Domain.Policies = policy
+	}
+
+	return domain
 }

@@ -34,3 +34,4 @@ branches:
     - master
     - authzpolicy
     - authztest
+    - default-ap

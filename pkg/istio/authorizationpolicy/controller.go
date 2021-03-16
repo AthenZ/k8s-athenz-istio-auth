@@ -244,7 +244,10 @@ func (c *Controller) sync(key string) error {
 
 	for _, item := range changeList {
 		log.Infof("Adding resource action to queue: %s on %s for key: %s", item.Operation, item.Resource.Key(), key)
-		c.processConfigChange(item)
+		err := c.processConfigChange(item)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
