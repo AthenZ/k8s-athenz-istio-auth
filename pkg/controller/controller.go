@@ -6,10 +6,11 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collections"
-	"time"
 
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
@@ -38,15 +39,16 @@ import (
 const queueNumRetries = 3
 
 type Controller struct {
-	configStoreCache     model.ConfigStoreCache
-	crcController        *onboarding.Controller
-	processor            *processor.Controller
-	serviceIndexInformer cache.SharedIndexInformer
-	adIndexInformer      cache.SharedIndexInformer
-	rbacProvider         rbac.Provider
-	apController         *authzpolicy.Controller
-	queue                workqueue.RateLimitingInterface
-	adResyncInterval     time.Duration
+	configStoreCache            model.ConfigStoreCache
+	crcController               *onboarding.Controller
+	processor                   *processor.Controller
+	serviceIndexInformer        cache.SharedIndexInformer
+	adIndexInformer             cache.SharedIndexInformer
+	rbacProvider                rbac.Provider
+	apController                *authzpolicy.Controller
+	queue                       workqueue.RateLimitingInterface
+	adResyncInterval            time.Duration
+	enableAuthzPolicyController bool
 }
 
 // getCallbackHandler returns a error handler func that re-adds the athenz domain back to queue
@@ -137,7 +139,7 @@ func (c *Controller) sync(key string) error {
 // 6. Authorization Policy controller responsible for creating / updating / deleting
 //    the authorization policy object based on service annotation and athenz domain spec
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
-	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, apDryRun bool) *Controller {
+	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, enableAuthzPolicyController bool, componentsEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -146,24 +148,28 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, apDryRun)
+	var apController *authzpolicy.Controller
+	if enableAuthzPolicyController {
+		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy)
+		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
+	}
 
 	c := &Controller{
-		serviceIndexInformer: serviceIndexInformer,
-		adIndexInformer:      adIndexInformer,
-		configStoreCache:     configStoreCache,
-		crcController:        crcController,
-		processor:            processor,
-		apController:         apController,
-		rbacProvider:         rbacv1.NewProvider(enableOriginJwtSubject),
-		queue:                queue,
-		adResyncInterval:     adResyncInterval,
+		serviceIndexInformer:        serviceIndexInformer,
+		adIndexInformer:             adIndexInformer,
+		configStoreCache:            configStoreCache,
+		crcController:               crcController,
+		processor:                   processor,
+		apController:                apController,
+		rbacProvider:                rbacv1.NewProvider(enableOriginJwtSubject),
+		queue:                       queue,
+		adResyncInterval:            adResyncInterval,
+		enableAuthzPolicyController: enableAuthzPolicyController,
 	}
 
 	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Serviceroles.Resource().GroupVersionKind(), c.processConfigEvent)
 	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Servicerolebindings.Resource().GroupVersionKind(), c.processConfigEvent)
 	configStoreCache.RegisterEventHandler(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), crcController.EventHandler)
-	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 
 	adIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -214,7 +220,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	// crc controller must wait for service informer to sync before starting
 	go c.processor.Run(stopCh)
 	go c.crcController.Run(stopCh)
-	go c.apController.Run(stopCh)
+	if c.enableAuthzPolicyController {
+		go c.apController.Run(stopCh)
+	}
 	go c.resync(stopCh)
 
 	defer c.queue.ShutDown()

@@ -197,9 +197,14 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 	c.queue = queue
 
 	c.enableOriginJwtSubject = true
-	c.dryRun = false
-	c.rbacProvider = rbacv2.NewProvider(c.dryRun, c.enableOriginJwtSubject)
-	c.eventHandler = &common.ApiHandler{
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	if err != nil {
+		panic(err)
+	}
+	c.componentEnabledAuthzPolicy = componentsEnabledAuthzPolicy
+	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject)
+	c.dryRunHandler = common.DryRunHandler{}
+	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
 	return c
@@ -480,12 +485,16 @@ func TestNewController(t *testing.T) {
 	assert.Nil(t, err, "time parseDuration call should not fail with error")
 	configStore := memory.Make(configDescriptor)
 	configStoreCache := memory.NewController(configStore)
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, true)
+	apiHandler := common.ApiHandler{
+		ConfigStoreCache: configStoreCache,
+	}
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{})
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
-	assert.Equal(t, true, c.dryRun, "dryRun bool should be equal")
+	assert.Equal(t, common.DryRunHandler{}, c.dryRunHandler, "dryRun handler should be equal")
+	assert.Equal(t, apiHandler, c.apiHandler, "api handler should be equal")
 }
 
 func getExpectedAuthzPolicy() *model.Config {
