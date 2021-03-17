@@ -366,13 +366,13 @@ func (d *DryRunHandler) createDryrunResource(item *Item, localDirPath string) er
 		return fmt.Errorf("could not marshal %v: %v", convertedCR.Name, err)
 	}
 	if _, err := os.Stat(localDirPath + namespace); os.IsNotExist(err) {
-		err := os.MkdirAll(localDirPath+namespace, 0644)
+		err := os.MkdirAll(localDirPath+namespace, 0755)
 		if err != nil {
 			return fmt.Errorf("error when creating authz policy directory: %s, error: %s", localDirPath+namespace, err.Error())
 		}
 	}
 	yamlFileName := authzPolicyName + ".yaml"
-	return ioutil.WriteFile(localDirPath+namespace+"/"+yamlFileName, configInBytes, 0644)
+	return ioutil.WriteFile(localDirPath+namespace+"/"+yamlFileName, configInBytes, 0666)
 }
 
 // findDeleteDryrunResource retrieves the yaml file from local directory and deletes it
