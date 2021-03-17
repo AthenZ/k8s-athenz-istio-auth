@@ -936,7 +936,7 @@ func TestDryrunResource(t *testing.T) {
 	}{
 		{
 			item:     getAuthzPolicyItem(model.EventAdd),
-			fileName: "onboarded-service--test-namespace.yaml",
+			fileName: "test-namespace/onboarded-service.yaml",
 			expErr:   nil,
 		},
 	}

@@ -169,37 +169,29 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 // if serviceName is specific, return single authorization policy matching with serviceName.
 func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
 	namespace := m.Namespace
-	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
-		if serviceName != "" {
-			config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
-			if err != nil {
-				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
-				return []model.Config{}
-			}
-			return []model.Config{*config}
-		}
-		var modelList []model.Config
-		serviceList, err := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
-		if err != nil {
-			log.Errorf("error when fetching services from directory, error: %s", err)
-		}
-		for _, svc := range serviceList {
-			config, err := common.ReadConvertToModelConfig(svc, namespace, common.DryRunStoredFilesDirectory)
-			if err != nil {
-				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
-				continue
-			}
-			modelList = append(modelList, *config)
-		}
-		return modelList
-	}
-
+	// case when there is athenz domain sync
 	if serviceName == "" {
 		apList, err := csc.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), namespace)
 		if err != nil {
 			log.Errorf("Error listing the Authorization Policy resources in the namespace: %s", namespace)
 		}
+		// if namespace is enabled, meaning all services in the namespace are authz enabled, return the list directly
+		if p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
+			return apList
+		}
+		configList, err := common.ReadDirectoryConvertToModelConfig(namespace, common.DryRunStoredFilesDirectory)
+		apList = append(apList, configList...)
 		return apList
+	}
+
+	// case when there is single service sync
+	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
+		config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
+		if err != nil {
+			log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
+			return []model.Config{}
+		}
+		return []model.Config{*config}
 	}
 	ap := csc.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), serviceName, namespace)
 	if ap != nil {
