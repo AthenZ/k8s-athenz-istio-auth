@@ -5,20 +5,22 @@ package common
 
 import (
 	"fmt"
-	"github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/proto"
-	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"io/ioutil"
-	"istio.io/istio/pilot/pkg/config/kube/crd"
-	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/schema/collection"
-	"istio.io/istio/pkg/config/schema/collections"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ghodss/yaml"
+	"github.com/gogo/protobuf/proto"
+	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
 )
 
 const (
@@ -94,6 +96,24 @@ func (a *ApiHandler) Delete(item *Item) error {
 	res := item.Resource
 	err := a.ConfigStoreCache.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), res.Name, res.Namespace)
 	return err
+}
+
+// CheckIfMemberIsAllUsers returns namespace for Athenz domain when role member is of form '<athenz-domain>.*'.
+// Example: domain.sub-domain.* -> domain-sub--domain
+func CheckIfMemberIsAllUsers(member *zms.RoleMember, domainName zms.DomainName) (string, error) {
+
+	if member == nil {
+		return "", fmt.Errorf("member is nil")
+	}
+
+	memberStr := string(member.MemberName)
+
+	// if member name is of the form '<athenz-domain>.*', return namespace
+	if strings.HasPrefix(memberStr, "user.") || !strings.HasSuffix(memberStr, ".*") {
+		return "", nil
+	}
+
+	return athenz.DomainToNamespace(memberStr[0 : len(memberStr)-2]), nil
 }
 
 // MemberToSpiffe parses the Athenz role member into a SPIFFE compliant name.

@@ -110,6 +110,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		from_requestPrincipal := &v1beta1.Rule_From{
 			Source: &v1beta1.Source{},
 		}
+		from_namespace := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
 		// role name should match zms resource name
 		for _, roleMember := range athenzModel.Members[role] {
 			res, err := common.CheckAthenzMemberExpiry(roleMember)
@@ -130,13 +133,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
-
-			spiffeName, err := common.MemberToSpiffe(roleMember)
-			if err != nil {
-				log.Errorln("error converting role member to spiffeName: ", err.Error())
-				continue
-			}
-			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
 			if p.enableOriginJwtSubject {
 				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
 				if err != nil {
@@ -145,6 +141,21 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				}
 				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
 			}
+			namespace, err := common.CheckIfMemberIsAllUsers(roleMember, athenzModel.Name)
+			if err != nil {
+				log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
+				continue
+			}
+			if namespace != "" {
+				from_namespace.Source.Namespaces = append(from_namespace.Source.Namespaces, namespace)
+				continue
+			}
+			spiffeName, err := common.MemberToSpiffe(roleMember)
+			if err != nil {
+				log.Errorln("error converting role member to spiffeName: ", err.Error())
+				continue
+			}
+			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
 		}
 		//add role spiffe for role certificate
 		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
@@ -154,6 +165,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
 		rule.From = append(rule.From, from_principal)
+		if len(from_namespace.Source.Namespaces) > 0 {
+			rule.From = append(rule.From, from_namespace)
+		}
 		if p.enableOriginJwtSubject && len(from_requestPrincipal.Source.RequestPrincipals) > 0 {
 			rule.From = append(rule.From, from_requestPrincipal)
 		}
