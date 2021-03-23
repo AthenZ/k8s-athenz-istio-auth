@@ -133,14 +133,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
-			if p.enableOriginJwtSubject {
-				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
-				if err != nil {
-					log.Errorln(err.Error())
-					continue
-				}
-				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
-			}
 			namespace, err := common.CheckIfMemberIsAllUsers(roleMember, athenzModel.Name)
 			if err != nil {
 				log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
@@ -156,6 +148,14 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				continue
 			}
 			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+			if p.enableOriginJwtSubject {
+				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
+				if err != nil {
+					log.Errorln(err.Error())
+					continue
+				}
+				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+			}
 		}
 		//add role spiffe for role certificate
 		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))

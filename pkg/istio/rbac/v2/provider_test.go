@@ -231,7 +231,6 @@ func getExpectedAuthzPolicy() []model.Config {
 						Source: &v1beta1.Source{
 							RequestPrincipals: []string{
 								"*",
-								"athenz/test-domain.namespace2.*",
 							},
 						},
 					},

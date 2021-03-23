@@ -109,7 +109,7 @@ func CheckIfMemberIsAllUsers(member *zms.RoleMember, domainName zms.DomainName) 
 	memberStr := string(member.MemberName)
 
 	// if member name is of the form '<athenz-domain>.*', return namespace
-	if strings.HasPrefix(memberStr, "user.") || !strings.HasSuffix(memberStr, ".*") {
+	if strings.HasPrefix(memberStr, "unix.") || strings.HasPrefix(memberStr, "user.") || !strings.HasSuffix(memberStr, ".*") {
 		return "", nil
 	}
 
