@@ -133,7 +133,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
-			namespace, err := common.CheckIfMemberIsAllUsers(roleMember, athenzModel.Name)
+			namespace, err := common.CheckIfMemberIsAllUsersFromDomain(roleMember, athenzModel.Name)
 			if err != nil {
 				log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
 				continue

@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	domainName       = "test.namespace"
-	username         = "user.name"
-	wildcardUsername = "user.*"
-	wildcardAllUsers = "test-domain.namespace2.*"
+	domainName                 = "test.namespace"
+	username                   = "user.name"
+	wildcardUsername           = "user.*"
+	wildcardAllUsersFromDomain = "test-domain.namespace2.*"
 )
 
 var (
@@ -346,7 +346,7 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 							MemberName: wildcardUsername,
 						},
 						{
-							MemberName: wildcardAllUsers,
+							MemberName: wildcardAllUsersFromDomain,
 						},
 					},
 				},

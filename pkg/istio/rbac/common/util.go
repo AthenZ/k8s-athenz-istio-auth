@@ -98,9 +98,9 @@ func (a *ApiHandler) Delete(item *Item) error {
 	return err
 }
 
-// CheckIfMemberIsAllUsers returns namespace for Athenz domain when role member is of form '<athenz-domain>.*'.
+// CheckIfMemberIsAllUsersFromDomain returns namespace for Athenz domain when role member is of form '<athenz-domain>.*'.
 // Example: domain.sub-domain.* -> domain-sub--domain
-func CheckIfMemberIsAllUsers(member *zms.RoleMember, domainName zms.DomainName) (string, error) {
+func CheckIfMemberIsAllUsersFromDomain(member *zms.RoleMember, domainName zms.DomainName) (string, error) {
 
 	if member == nil {
 		return "", fmt.Errorf("member is nil")
