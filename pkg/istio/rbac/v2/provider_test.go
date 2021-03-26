@@ -4,6 +4,10 @@
 package v2
 
 import (
+	"sort"
+	"testing"
+	"time"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -18,9 +22,6 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
-	"sort"
-	"testing"
-	"time"
 )
 
 const (
@@ -262,6 +263,16 @@ func getExpectedAuthzPolicy() []model.Config {
 							},
 						},
 					},
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+							Paths: []string{
+								"/api/query",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -307,6 +318,12 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 								{
 									Role:     domainName + ":role.productpage-writer",
 									Resource: domainName + ":svc.productpage",
+									Action:   "post",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage:/api/query?*",
 									Action:   "post",
 									Effect:   &allow,
 								},

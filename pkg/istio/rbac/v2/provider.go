@@ -33,6 +33,9 @@ func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOri
 	}
 }
 
+// Regex for finding if the HTTP path contains a query parameter
+var re = regexp.MustCompile(`.*\?.*`)
+
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into Istio Authorization V1Beta1 specific
 // RBAC custom resource (AuthorizationPolicy)
 func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceName string, svcLabel string) []model.Config {
@@ -86,12 +89,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			// Which in case of,
 			// Authentication Policy - is created with a url_path object
 			// ServiceRole/ServiceRoleBindings - is created with a header object
-			re, err := regexp.Compile(`.*\?.*`)
-			if err != nil {
-				log.Errorln("Error while parsing the path regex: ", err.Error())
-				continue
-			}
-
 			if re.MatchString(path) {
 				pathArr := strings.Split(path, "?")
 				path = pathArr[0]
