@@ -4,9 +4,11 @@
 package v2
 
 import (
-	"github.com/yahoo/athenz/clients/go/zms"
 	"regexp"
 	"sort"
+	"strings"
+
+	"github.com/yahoo/athenz/clients/go/zms"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
@@ -78,6 +80,23 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			if err != nil {
 				continue
 			}
+
+			// Drop the query parameters from the HTTP path in the assertions due to the difference
+			// in the RBAC Envoy permissions config created by Authentication Policy and ServiceRole/ServiceRoleBindings.
+			// Which in case of,
+			// Authentication Policy - is created with a url_path object
+			// ServiceRole/ServiceRoleBindings - is created with a header object
+			re, err := regexp.Compile(`.*\?.*`)
+			if err != nil {
+				log.Errorln("Error while parsing the path regex: ", err.Error())
+				continue
+			}
+
+			if re.MatchString(path) {
+				pathArr := strings.Split(path, "?")
+				path = pathArr[0]
+			}
+
 			// if svc match with current svc, process it and add it to the rules
 			// note that svc defined on athenz can be a regex, need to match the pattern
 			res, err := regexp.MatchString(svc, svcLabel)
