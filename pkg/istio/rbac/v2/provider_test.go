@@ -4,6 +4,10 @@
 package v2
 
 import (
+	"sort"
+	"testing"
+	"time"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -18,15 +22,13 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
-	"sort"
-	"testing"
-	"time"
 )
 
 const (
-	domainName       = "test.namespace"
-	username         = "user.name"
-	wildcardUsername = "user.*"
+	domainName                 = "test.namespace"
+	username                   = "user.name"
+	wildcardUsername           = "user.*"
+	wildcardAllUsersFromDomain = "test-domain.namespace2.*"
 )
 
 var (
@@ -220,6 +222,13 @@ func getExpectedAuthzPolicy() []model.Config {
 					},
 					{
 						Source: &v1beta1.Source{
+							Namespaces: []string{
+								"test--domain-namespace2",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
 							RequestPrincipals: []string{
 								"*",
 							},
@@ -335,6 +344,9 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: wildcardUsername,
+						},
+						{
+							MemberName: wildcardAllUsersFromDomain,
 						},
 					},
 				},
