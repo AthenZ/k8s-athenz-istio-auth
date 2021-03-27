@@ -271,6 +271,26 @@ func getExpectedAuthzPolicy() []model.Config {
 							},
 						},
 					},
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+							Paths: []string{
+								"/api/query",
+							},
+						},
+					},
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+							Paths: []string{
+								"/api/query",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -316,6 +336,18 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 								{
 									Role:     domainName + ":role.productpage-writer",
 									Resource: domainName + ":svc.productpage",
+									Action:   "post",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage:/api/query?*",
+									Action:   "post",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage:/api/query?foo=bar&bar=foo",
 									Action:   "post",
 									Effect:   &allow,
 								},
