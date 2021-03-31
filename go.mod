@@ -7,6 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.1
+	github.com/kr/pty v1.1.5 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.5.1
 	github.com/yahoo/athenz v1.9.30

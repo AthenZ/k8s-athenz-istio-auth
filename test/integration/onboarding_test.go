@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 
 	"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/constants"
 
 	"k8s.io/api/core/v1"
@@ -31,7 +31,7 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 	}
 
 	err := wait.PollImmediate(time.Second, time.Second*10, func() (bool, error) {
-		config := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
+		config := framework.Global.IstioClientset.Get(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 		if config == nil && len(s.ServiceDNS) == 0 {
 			return true, nil
 		} else if config == nil {
@@ -52,7 +52,7 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 
 	assert.Nil(t, err, "time out waiting for rollout for crc with error")
 
-	crc := framework.Global.IstioClientset.Get(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
+	crc := framework.Global.IstioClientset.Get(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 	if crc == nil && len(s.ServiceDNS) == 0 {
 		return
 	}
@@ -184,7 +184,7 @@ func TestDeleteCRCIfServiceExists(t *testing.T) {
 	s := fixtures.GetExpectedServices(nil)
 	rolloutAndValidateOnboarding(t, s, create)
 
-	err := framework.Global.IstioClientset.Delete(model.ClusterRbacConfig.Type, constants.DefaultRbacConfigName, "")
+	err := framework.Global.IstioClientset.Delete(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 	assert.Nil(t, err, "cluster rbac config delete error should be nil")
 
 	rolloutAndValidateOnboarding(t, s, noop)
