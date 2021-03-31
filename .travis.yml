@@ -19,7 +19,7 @@ after_script:
 - go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver; go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver; go mod init
-- cd $GOPATH/src/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
+- cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery; go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
 - cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator; go mod init

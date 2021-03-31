@@ -154,7 +154,6 @@ func Setup() error {
 		return err
 	}
 
-	// TODO: What is going on here ?
 	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, false, componentsEnabled)
 	go c.Run(stopCh)
 
