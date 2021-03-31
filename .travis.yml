@@ -3,7 +3,7 @@ env:
 - GO111MODULE=on
 
 go:
-- 1.12.x
+- 1.16.x
 
 script:
 - cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth
