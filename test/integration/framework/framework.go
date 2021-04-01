@@ -20,11 +20,11 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"go.etcd.io/etcd/embed"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 
 	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	"k8s.io/apimachinery/pkg/util/errors"
