@@ -18,6 +18,7 @@ import (
 	"istio.io/client-go/pkg/clientset/versioned"
 	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collections"
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -117,6 +118,15 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.authzpolicyIndexInformer.Run(stopCh)
 	go c.resync(stopCh)
 
+	if c.configStoreCache.HasSynced() {
+		// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
+		// existing Authorization Policy associated to the service
+		err := c.cleanUpStaleAP()
+		if err != nil {
+			log.Errorf("Error while running cleanUpStaleAP: %v", err.Error())
+		}
+	}
+
 	defer c.queue.ShutDown()
 	wait.Until(c.runWorker, 0, stopCh)
 }
@@ -189,12 +199,14 @@ func (c *Controller) sync(key string) error {
 
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+
 	var serviceList []*corev1.Service
 	if serviceName != "" {
 		serviceObj, err := c.getSvcObj(athenz.DomainToNamespace(athenzDomainName) + "/" + serviceName)
 		if err != nil {
 			return fmt.Errorf("error getting service from cache: %s", err.Error())
 		}
+
 		if serviceObj != nil {
 			serviceList = append(serviceList, serviceObj)
 		}
@@ -267,10 +279,14 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 	if item == nil {
 		return nil
 	}
+
 	var err error
 	var eHandler common.EventHandler
 	serviceName := item.Resource.ConfigMeta.Name
 	serviceNamespace := item.Resource.ConfigMeta.Namespace
+
+	// Depending on if the Authz Policy is enabled for the particular service
+	// create dry run files or actual Authz Policy resources
 	if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
 		eHandler = &c.dryRunHandler
 	} else {
@@ -368,4 +384,44 @@ func (c *Controller) checkAuthzEnabledAnnotation(serviceObj *corev1.Service) boo
 		}
 	}
 	return false
+}
+
+// cleanUpStaleAP deletes the existing Authorization Policy associated to the service which is switching back from
+// Authorization Policy Enabled back to SR/SRB
+func (c *Controller) cleanUpStaleAP() error {
+	// Fetch the Authorization Policies present across all the namespaces
+	currentAPList, err := c.configStoreCache.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), "")
+	if err != nil {
+		return fmt.Errorf("Error while fetching the Authorization Policy resources from cache : %v", err.Error())
+	}
+
+	for _, currAP := range currentAPList {
+		nsSvcArr := strings.Split(currAP.Key(), "/")
+		serviceName := nsSvcArr[2]
+		serviceNamespace := nsSvcArr[1]
+
+		// Creating the Item to pass to the apiHandler
+		// with a delete event
+		key := serviceNamespace + "/" + serviceName
+		cbHandler := c.getCallbackHandler(key)
+
+		item := &common.Item{
+			Operation:       model.EventDelete,
+			Resource:        currAP,
+			CallbackHandler: cbHandler,
+		}
+
+		eHandler := &c.apiHandler
+
+		// Check if the Authorization Policy is enabled for the service through ap-enabled-list
+		if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
+			log.Infof("Deleting stale AP, namespace: %v service name: %v", serviceNamespace, serviceName)
+			err = eHandler.Delete(item)
+			if err != nil {
+				return fmt.Errorf("Error while deleting the Authorization Policy: %v", err.Error())
+			}
+		}
+	}
+
+	return nil
 }

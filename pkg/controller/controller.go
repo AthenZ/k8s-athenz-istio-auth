@@ -148,6 +148,8 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	processor := processor.NewController(configStoreCache)
 	crcController := onboarding.NewController(configStoreCache, dnsSuffix, serviceIndexInformer, crcResyncInterval, processor)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
+
+	// If enableAuthzPolicyController is enabled start the authzpolicy controller
 	var apController *authzpolicy.Controller
 	if enableAuthzPolicyController {
 		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy)
