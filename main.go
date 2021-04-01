@@ -41,7 +41,7 @@ func main() {
 
 	if *enableAuthzPolicyController {
 		if _, err := os.Stat(common.DryRunStoredFilesDirectory); os.IsNotExist(err) {
-			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0644)
+			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0755)
 			if err != nil {
 				log.Panicf("Error when creating authz policy directory: %s", err.Error())
 			}

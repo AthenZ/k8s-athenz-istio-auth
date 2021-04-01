@@ -5,20 +5,22 @@ package common
 
 import (
 	"fmt"
-	"github.com/ghodss/yaml"
-	"github.com/gogo/protobuf/proto"
-	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"io/ioutil"
-	"istio.io/istio/pilot/pkg/config/kube/crd"
-	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pkg/config/schema/collection"
-	"istio.io/istio/pkg/config/schema/collections"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ghodss/yaml"
+	"github.com/gogo/protobuf/proto"
+	"github.com/yahoo/athenz/clients/go/zms"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	"istio.io/istio/pilot/pkg/config/kube/crd"
+	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
 )
 
 const (
@@ -94,6 +96,24 @@ func (a *ApiHandler) Delete(item *Item) error {
 	res := item.Resource
 	err := a.ConfigStoreCache.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), res.Name, res.Namespace)
 	return err
+}
+
+// CheckIfMemberIsAllUsersFromDomain returns namespace for Athenz domain when role member is of form '<athenz-domain>.*'.
+// Example: domain.sub-domain.* -> domain-sub--domain
+func CheckIfMemberIsAllUsersFromDomain(member *zms.RoleMember, domainName zms.DomainName) (string, error) {
+
+	if member == nil {
+		return "", fmt.Errorf("member is nil")
+	}
+
+	memberStr := string(member.MemberName)
+
+	// if member name is of the form '<athenz-domain>.*', return namespace
+	if strings.HasPrefix(memberStr, "unix.") || strings.HasPrefix(memberStr, "user.") || !strings.HasSuffix(memberStr, ".*") {
+		return "", nil
+	}
+
+	return athenz.DomainToNamespace(memberStr[0 : len(memberStr)-2]), nil
 }
 
 // MemberToSpiffe parses the Athenz role member into a SPIFFE compliant name.
@@ -211,7 +231,11 @@ func ParseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 				return "", "", fmt.Errorf("resource: %s does not belong to the Athenz domain: %s", resource, domainName)
 			}
 		case "svc":
-			svc = match
+			if match == "*" {
+				svc = ".*"
+			} else {
+				svc = match
+			}
 		case "path":
 			path = match
 		}
@@ -365,33 +389,39 @@ func (d *DryRunHandler) createDryrunResource(item *Item, localDirPath string) er
 	if err != nil {
 		return fmt.Errorf("could not marshal %v: %v", convertedCR.Name, err)
 	}
-	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
-	return ioutil.WriteFile(localDirPath+yamlFileName, configInBytes, 0644)
+	if _, err := os.Stat(localDirPath + namespace); os.IsNotExist(err) {
+		err := os.MkdirAll(localDirPath+namespace, 0755)
+		if err != nil {
+			return fmt.Errorf("error when creating authz policy directory: %s, error: %s", localDirPath+namespace, err.Error())
+		}
+	}
+	yamlFileName := authzPolicyName + ".yaml"
+	return ioutil.WriteFile(localDirPath+namespace+"/"+yamlFileName, configInBytes, 0666)
 }
 
 // findDeleteDryrunResource retrieves the yaml file from local directory and deletes it
 func (d *DryRunHandler) findDeleteDryrunResource(item *Item, localDirPath string) error {
 	authzPolicyName := item.Resource.ConfigMeta.Name
 	namespace := item.Resource.ConfigMeta.Namespace
-	yamlFileName := authzPolicyName + "--" + namespace + ".yaml"
-	if _, err := os.Stat(localDirPath + yamlFileName); os.IsNotExist(err) {
-		log.Infof("file %s does not exist in local directory", localDirPath+yamlFileName)
+	yamlFilePath := namespace + "/" + authzPolicyName + ".yaml"
+	if _, err := os.Stat(localDirPath + yamlFilePath); os.IsNotExist(err) {
+		log.Infof("file %s does not exist in local directory", localDirPath+yamlFilePath)
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("error stating file %s in local directory, error: %s", localDirPath+yamlFileName, err)
+		return fmt.Errorf("error stating file %s in local directory, error: %s", localDirPath+yamlFilePath, err)
 	}
-	log.Infof("deleting file under path: %s\n", localDirPath+yamlFileName)
-	return os.Remove(localDirPath + yamlFileName)
+	log.Infof("deleting file under path: %s\n", localDirPath+yamlFilePath)
+	return os.Remove(localDirPath + yamlFilePath)
 }
 
 // ReadConvertToModelConfig reads in the authorization policy yaml object and converts it into a model.Config struct
 func ReadConvertToModelConfig(serviceName, namespace, localDirPath string) (*model.Config, error) {
 	// define istio object interface to unmarshal yaml object into
 	item := &crd.IstioKind{Spec: map[string]interface{}{}}
-	yamlFileName := serviceName + "--" + namespace + ".yaml"
-	yamlFile, err := ioutil.ReadFile(localDirPath + yamlFileName)
+	yamlFileName := serviceName + ".yaml"
+	yamlFile, err := ioutil.ReadFile(localDirPath + namespace + "/" + yamlFileName)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read yaml file to local directory, err: %s", err)
+		return nil, fmt.Errorf("unable to read yaml file to local directory: %s, err: %s", localDirPath+namespace+"/"+yamlFileName, err)
 	}
 	err = yaml.Unmarshal(yamlFile, item)
 	if err != nil {
@@ -404,22 +434,25 @@ func ReadConvertToModelConfig(serviceName, namespace, localDirPath string) (*mod
 	return config, nil
 }
 
-// FetchServicesFromDir walks through the files under a directory, based on the naming convention, it parses the service name
-// from the file name.
-func FetchServicesFromDir(namespace, localDirPath string) ([]string, error) {
-	files, err := ioutil.ReadDir(localDirPath)
+// ReadDirectoryConvertToModelConfig reads in the subdirectory for one namespace and converts files under the directory to a list
+// of model.Config struct
+func ReadDirectoryConvertToModelConfig(namespace, localDirPath string) ([]model.Config, error) {
+	var res []model.Config
+	files, err := ioutil.ReadDir(localDirPath + namespace + "/")
 	if err != nil {
-		return []string{}, fmt.Errorf("unable to read yaml files to local directory, err: %s", err)
+		return res, fmt.Errorf("error when reading files under directory %s, error: %s", localDirPath+namespace+"/", err)
 	}
 
-	var svcList []string
 	for _, file := range files {
-		if strings.Contains(file.Name(), namespace) {
-			service := strings.Replace(file.Name(), "--"+namespace+".yaml", "", -1)
-			svcList = append(svcList, service)
+		service := strings.TrimSuffix(file.Name(), ".yaml")
+		config, err := ReadConvertToModelConfig(service, namespace, localDirPath)
+		if err != nil {
+			return res, fmt.Errorf("error when converting file to istio config: %s", err)
 		}
+		res = append(res, *config)
 	}
-	return svcList, nil
+
+	return res, nil
 }
 
 type ComponentEnabled struct {

@@ -5,6 +5,10 @@ package v2
 
 import (
 	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/yahoo/athenz/clients/go/zms"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
@@ -28,6 +32,9 @@ func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOri
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 	}
 }
+
+// Regex for finding if the HTTP path contains a query parameter
+var queryRegex = regexp.MustCompile(`.*\?.*`)
 
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into Istio Authorization V1Beta1 specific
 // RBAC custom resource (AuthorizationPolicy)
@@ -54,9 +61,20 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		MatchLabels: map[string]string{"svc": svcLabel},
 	}
 
+	// sort athenzModel.Rules map based on alphabetical order of key's name (role's name)
+	// this is to make sure generated authz policy's rule is in ordered, which will help in spec equality check
+	// after v1 provider is deprecated, can update athenzModel.Rules field to list instead of map to improve performance
+	roleList := make([]string, 0, len(athenzModel.Rules))
+	for role, _ := range athenzModel.Rules {
+		roleList = append(roleList, string(role))
+	}
+	sort.Strings(roleList)
+
 	// generating rules, iterate through assertions, find the one match with desired format.
 	var rules []*v1beta1.Rule
-	for role, assertions := range athenzModel.Rules {
+	for _, roleKey := range roleList {
+		role := zms.ResourceName(roleKey)
+		assertions := athenzModel.Rules[role]
 		rule := &v1beta1.Rule{}
 		for _, assert := range assertions {
 			// form rule_to array by appending matching assertions.
@@ -65,6 +83,17 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			if err != nil {
 				continue
 			}
+
+			// Drop the query parameters from the HTTP path in the assertions due to the difference
+			// in the RBAC Envoy permissions config created by Authorization Policy and ServiceRole/ServiceRoleBindings.
+			// Which in case of,
+			// Authorization Policy - is created with a url_path object
+			// ServiceRole/ServiceRoleBindings - is created with a header object
+			if queryRegex.MatchString(path) {
+				pathArr := strings.Split(path, "?")
+				path = pathArr[0]
+			}
+
 			// if svc match with current svc, process it and add it to the rules
 			// note that svc defined on athenz can be a regex, need to match the pattern
 			res, err := regexp.MatchString(svc, svcLabel)
@@ -110,6 +139,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		from_requestPrincipal := &v1beta1.Rule_From{
 			Source: &v1beta1.Source{},
 		}
+		from_namespace := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
 		// role name should match zms resource name
 		for _, roleMember := range athenzModel.Members[role] {
 			res, err := common.CheckAthenzMemberExpiry(roleMember)
@@ -130,7 +162,15 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
-
+			namespace, err := common.CheckIfMemberIsAllUsersFromDomain(roleMember, athenzModel.Name)
+			if err != nil {
+				log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
+				continue
+			}
+			if namespace != "" {
+				from_namespace.Source.Namespaces = append(from_namespace.Source.Namespaces, namespace)
+				continue
+			}
 			spiffeName, err := common.MemberToSpiffe(roleMember)
 			if err != nil {
 				log.Errorln("error converting role member to spiffeName: ", err.Error())
@@ -154,6 +194,9 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
 		rule.From = append(rule.From, from_principal)
+		if len(from_namespace.Source.Namespaces) > 0 {
+			rule.From = append(rule.From, from_namespace)
+		}
 		if p.enableOriginJwtSubject && len(from_requestPrincipal.Source.RequestPrincipals) > 0 {
 			rule.From = append(rule.From, from_requestPrincipal)
 		}
@@ -169,37 +212,29 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 // if serviceName is specific, return single authorization policy matching with serviceName.
 func (p *v2) GetCurrentIstioRbac(m athenz.Model, csc model.ConfigStoreCache, serviceName string) []model.Config {
 	namespace := m.Namespace
-	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
-		if serviceName != "" {
-			config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
-			if err != nil {
-				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
-				return []model.Config{}
-			}
-			return []model.Config{*config}
-		}
-		var modelList []model.Config
-		serviceList, err := common.FetchServicesFromDir(namespace, common.DryRunStoredFilesDirectory)
-		if err != nil {
-			log.Errorf("error when fetching services from directory, error: %s", err)
-		}
-		for _, svc := range serviceList {
-			config, err := common.ReadConvertToModelConfig(svc, namespace, common.DryRunStoredFilesDirectory)
-			if err != nil {
-				log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
-				continue
-			}
-			modelList = append(modelList, *config)
-		}
-		return modelList
-	}
-
+	// case when there is athenz domain sync
 	if serviceName == "" {
 		apList, err := csc.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), namespace)
 		if err != nil {
 			log.Errorf("Error listing the Authorization Policy resources in the namespace: %s", namespace)
 		}
+		// if namespace is enabled, meaning all services in the namespace are authz enabled, return the list directly
+		if p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
+			return apList
+		}
+		configList, err := common.ReadDirectoryConvertToModelConfig(namespace, common.DryRunStoredFilesDirectory)
+		apList = append(apList, configList...)
 		return apList
+	}
+
+	// case when there is single service sync
+	if !p.componentEnabledAuthzPolicy.IsEnabled(serviceName, namespace) {
+		config, err := common.ReadConvertToModelConfig(serviceName, namespace, common.DryRunStoredFilesDirectory)
+		if err != nil {
+			log.Errorf("unable to convert local yaml file into model config object, error: %s", err)
+			return []model.Config{}
+		}
+		return []model.Config{*config}
 	}
 	ap := csc.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), serviceName, namespace)
 	if ap != nil {
