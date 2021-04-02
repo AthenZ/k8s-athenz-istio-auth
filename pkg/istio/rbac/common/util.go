@@ -88,6 +88,7 @@ func (a *ApiHandler) Add(item *Item) error {
 }
 
 func (a *ApiHandler) Update(item *Item) error {
+	item.Resource.ResourceVersion = a.ConfigStoreCache.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), item.Resource.Name, item.Resource.Namespace).ResourceVersion
 	_, err := a.ConfigStoreCache.Update(item.Resource)
 	return err
 }
