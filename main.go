@@ -45,7 +45,7 @@ func main() {
 	// are not passed as a parameter in --ap-enabled-list
 	if *enableAuthzPolicyController {
 		// If the Authz Policy folder already exists remove the stale data
-		if _, err := os.Stat(common.DryRunStoredFilesDirectory); !os.IsNotExist(err) {
+		if _, err := os.Stat(common.DryRunStoredFilesDirectory); err == nil {
 			err := os.RemoveAll(common.DryRunStoredFilesDirectory)
 			if err != nil {
 				log.Panicf("Error when removing authz policy directory: %s", err.Error())

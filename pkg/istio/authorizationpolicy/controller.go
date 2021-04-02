@@ -399,24 +399,22 @@ func (c *Controller) cleanUpStaleAP() error {
 		nsSvcArr := strings.Split(currAP.Key(), "/")
 		serviceName := nsSvcArr[2]
 		serviceNamespace := nsSvcArr[1]
-
-		// Creating the Item to pass to the apiHandler
-		// with a delete event
 		key := serviceNamespace + "/" + serviceName
-		cbHandler := c.getCallbackHandler(key)
-
-		item := &common.Item{
-			Operation:       model.EventDelete,
-			Resource:        currAP,
-			CallbackHandler: cbHandler,
-		}
-
-		eHandler := &c.apiHandler
 
 		// Check if the Authorization Policy is enabled for the service through ap-enabled-list
-		if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
+		if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) && !c.checkOverrideAnnotation(currAP) {
+			// Creating the Item to pass to the apiHandler
+			// with a delete event
+			cbHandler := c.getCallbackHandler(key)
+
+			item := &common.Item{
+				Operation:       model.EventDelete,
+				Resource:        currAP,
+				CallbackHandler: cbHandler,
+			}
+
 			log.Infof("Deleting stale AP, namespace: %v service name: %v", serviceNamespace, serviceName)
-			err = eHandler.Delete(item)
+			err = c.apiHandler.Delete(item)
 			if err != nil {
 				return fmt.Errorf("Error while deleting the Authorization Policy: %v", err.Error())
 			}
