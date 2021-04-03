@@ -14,12 +14,11 @@ import (
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 
 	"strings"
 
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-	_ "istio.io/istio/pkg/config/schema/collections"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

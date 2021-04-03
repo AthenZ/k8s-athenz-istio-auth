@@ -14,7 +14,7 @@ import (
 
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 

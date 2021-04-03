@@ -26,8 +26,9 @@ require (
 	k8s.io/api v0.17.14
 	k8s.io/apiextensions-apiserver v0.17.14
 	k8s.io/apimachinery v0.17.14
-	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/kubernetes v1.20.5
+	k8s.io/client-go v0.17.14
+	k8s.io/kubernetes v0.17.14
+	github.com/kr/pty v1.1.5 // indirect
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
 
