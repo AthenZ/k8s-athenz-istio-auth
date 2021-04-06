@@ -118,13 +118,15 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.authzpolicyIndexInformer.Run(stopCh)
 	go c.resync(stopCh)
 
-	if c.configStoreCache.HasSynced() {
-		// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
-		// existing Authorization Policy associated to the service
-		err := c.cleanUpStaleAP()
-		if err != nil {
-			log.Errorf("Error while running cleanUpStaleAP: %v", err.Error())
-		}
+	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
+		log.Panicln("Timed out waiting for namespace cache to sync.")
+	}
+
+	// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
+	// existing Authorization Policy associated to the service
+	err := c.cleanUpStaleAP()
+	if err != nil {
+		log.Panicf("Error while running cleanUpStaleAP: %v", err.Error())
 	}
 
 	defer c.queue.ShutDown()
