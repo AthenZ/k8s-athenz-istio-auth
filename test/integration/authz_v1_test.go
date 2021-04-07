@@ -110,8 +110,8 @@ func TestCreateServiceRoleAndBinding(t *testing.T) {
 	cleanupRbac(t, r)
 }
 
-// 1.1 Create SR only if there are no role members for SRB creation
-func TestCreateServiceRoleAndBindingsWhenNoMemebersInRole(t *testing.T) {
+// 1.1 Create SR and SRB with role cert spiffe only if there are no role members
+func TestCreateServiceRoleAndBindingsWhenNoMembersInRole(t *testing.T) {
 	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
