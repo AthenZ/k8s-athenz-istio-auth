@@ -5,6 +5,10 @@ package authzpolicy
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -28,9 +32,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	fcache "k8s.io/client-go/tools/cache/testing"
 	"k8s.io/client-go/util/workqueue"
-	"sync"
-	"testing"
-	"time"
 )
 
 type Item struct {
@@ -153,7 +154,7 @@ func (cs *fakeConfigStore) Delete(typ resource.GroupVersionKind, name, namespace
 	return cs.ConfigStore.Delete(typ, name, namespace)
 }
 
-func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fake bool, stopCh <-chan struct{}) *Controller {
+func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fake bool, apEnabledList string, stopCh <-chan struct{}) *Controller {
 	c := &Controller{}
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 
@@ -189,15 +190,11 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 		panic(err)
 	}
 
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
-	go authzpolicyIndexInformer.Run(stopCh)
-	c.authzpolicyIndexInformer = authzpolicyIndexInformer
-
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.queue = queue
 
 	c.enableOriginJwtSubject = true
-	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy(apEnabledList)
 	if err != nil {
 		panic(err)
 	}
@@ -263,7 +260,7 @@ func TestSyncService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
 			switch action := tt.item.Operation; action {
 			case model.EventDelete:
 				c.configStoreCache.Create(*tt.existingAuthzPolicy)
@@ -272,7 +269,6 @@ func TestSyncService(t *testing.T) {
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
 				assert.Nil(t, err, "sync function should not return error")
-
 				genAuthzPolicy := c.configStoreCache.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), tt.inputService.Name, tt.inputService.Namespace)
 				if genAuthzPolicy != nil {
 					assert.Errorf(t, fmt.Errorf("authorization policy spec still exists in the cache"), "authorization policy should be deleted after delete action")
@@ -334,7 +330,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
-				c := newFakeController(onboardedAthenzDomain, onboardedService, true, stopCh)
+				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh)
 				_, err := c.configStoreCache.Create(*getExistingAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -342,7 +338,6 @@ func TestSyncAthenzDomain(t *testing.T) {
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
 				assert.Nil(t, err, "sync function should not return error")
-
 				// Updated Spec should be equal
 				genAuthzPolicy := c.configStoreCache.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), tt.expectedAuthzPolicy.Name, tt.expectedAuthzPolicy.Namespace)
 				// set creation timestamp and resource version for expected authz policy resource, which are generated on the fly
@@ -350,7 +345,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "updated authorization policy spec should be equal")
 			case model.EventDelete:
-				c := newFakeController(onboardedAthenzDomain, onboardedService, true, stopCh)
+				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh)
 				_, err := c.configStoreCache.Create(*getExpectedAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -367,7 +362,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
-				c := newFakeController(&adv1.AthenzDomain{}, onboardedService, true, stopCh)
+				c := newFakeController(&adv1.AthenzDomain{}, onboardedService, true, "*", stopCh)
 				err := c.adIndexInformer.GetStore().Add(onboardedAthenzDomain)
 				assert.Nil(t, err, "add athenz domain crd to cache should not return error")
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -433,7 +428,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
 				_, err := c.configStoreCache.Create(*tt.initAuthzPolicySpec)
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -448,7 +443,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventDelete:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
@@ -460,7 +455,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
@@ -495,6 +490,69 @@ func TestNewController(t *testing.T) {
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 	assert.Equal(t, common.DryRunHandler{}, c.dryRunHandler, "dryRun handler should be equal")
 	assert.Equal(t, apiHandler, c.apiHandler, "api handler should be equal")
+}
+
+func TestCleanUpStaleAP(t *testing.T) {
+	tests := []struct {
+		name                string
+		inputService        *v1.Service
+		inputAthenzDomain   *adv1.AthenzDomain
+		existingAuthzPolicy *model.Config
+		expectedAuthzPolicy *model.Config
+		apEnabledList       string
+	}{
+		{
+			name:                "delete all authorization policies as apEnabledList has a different namespace than onboarded namespace",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: nil,
+			apEnabledList:       "foobar/*",
+		},
+		{
+			name:                "existing authorization policy is not deleted as all namespaces are part of apEnabledList",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			apEnabledList:       "*",
+		},
+		{
+			name:                "existing authorization policy is not deleted as the same namespace as the existing service is part of apEnabledList",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			apEnabledList:       "test-namespace-onboarded/*",
+		},
+		{
+			name:                "existing authorization policy is not deleted as the override annotation is enabled even when not in the same namespace",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			apEnabledList:       "foobar/*",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, tt.apEnabledList, make(chan struct{}))
+			c.configStoreCache.Create(*tt.existingAuthzPolicy)
+			time.Sleep(100 * time.Millisecond)
+
+			c.cleanUpStaleAP()
+
+			genAuthzPolicy := c.configStoreCache.Get(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), tt.inputService.Name, tt.inputService.Namespace)
+
+			if genAuthzPolicy != nil {
+				tt.expectedAuthzPolicy.ConfigMeta.CreationTimestamp = genAuthzPolicy.ConfigMeta.CreationTimestamp
+				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
+			}
+
+			assert.Equal(t, tt.expectedAuthzPolicy, genAuthzPolicy, "expected and generated authorization policy spec should be the same")
+		})
+	}
 }
 
 func getExpectedAuthzPolicy() *model.Config {

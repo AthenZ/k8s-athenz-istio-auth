@@ -5,6 +5,12 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -17,11 +23,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"syscall"
-	"time"
 )
 
 func main() {
@@ -39,12 +40,23 @@ func main() {
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
+	// When enableAuthzPolicyController is set to true create a dry run folder which
+	// would contain the Authorization Policy resource for all the namespaces/services which
+	// are not passed as a parameter in --ap-enabled-list
 	if *enableAuthzPolicyController {
-		if _, err := os.Stat(common.DryRunStoredFilesDirectory); os.IsNotExist(err) {
-			err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0755)
+		// If the Authz Policy folder already exists remove the stale data
+		if _, err := os.Stat(common.DryRunStoredFilesDirectory); err == nil {
+			err := os.RemoveAll(common.DryRunStoredFilesDirectory)
 			if err != nil {
-				log.Panicf("Error when creating authz policy directory: %s", err.Error())
+				log.Panicf("Error when removing authz policy directory: %s", err.Error())
 			}
+		} else if !os.IsNotExist(err) {
+			log.Panicf("Error when checking for the presence of the dry run directory: %s", err.Error())
+		}
+
+		err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0755)
+		if err != nil {
+			log.Panicf("Error when creating authz policy directory: %s", err.Error())
 		}
 	}
 
@@ -57,7 +69,7 @@ func main() {
 		}
 	}
 
-	//Ledger for tracking config distribution, specify how long it can retain its previous state
+	// Ledger for tracking config distribution, specify how long it can retain its previous state
 	configLedger := ledger.Make(time.Hour)
 	istioClient, err := crdController.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger, "")
 	if err != nil {
@@ -96,6 +108,8 @@ func main() {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
 	}
 
+	// When enableAuthzPolicyController is set to true determine which services,
+	// namespaces or cluster to create Authorization Policies for
 	var componentsEnabledAuthzPolicy *common.ComponentEnabled
 	if *enableAuthzPolicyController {
 		componentsEnabledAuthzPolicy, err = common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)

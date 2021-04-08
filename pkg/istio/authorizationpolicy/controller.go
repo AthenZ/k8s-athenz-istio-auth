@@ -16,8 +16,8 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"istio.io/client-go/pkg/clientset/versioned"
-	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
+	"istio.io/istio/pkg/config/schema/collections"
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -36,7 +36,6 @@ type Controller struct {
 	configStoreCache            model.ConfigStoreCache
 	serviceIndexInformer        cache.SharedIndexInformer
 	adIndexInformer             cache.SharedIndexInformer
-	authzpolicyIndexInformer    cache.SharedIndexInformer
 	queue                       workqueue.RateLimitingInterface
 	rbacProvider                rbac.Provider
 	apResyncInterval            time.Duration
@@ -49,13 +48,10 @@ type Controller struct {
 func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
-
 	c := &Controller{
 		configStoreCache:            configStoreCache,
 		serviceIndexInformer:        serviceIndexInformer,
 		adIndexInformer:             adIndexInformer,
-		authzpolicyIndexInformer:    authzpolicyIndexInformer,
 		queue:                       queue,
 		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
 		apResyncInterval:            apResyncInterval,
@@ -114,8 +110,18 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	go c.authzpolicyIndexInformer.Run(stopCh)
 	go c.resync(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
+		log.Panicln("Timed out waiting for namespace cache to sync.")
+	}
+
+	// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
+	// existing Authorization Policy associated to the service
+	err := c.cleanUpStaleAP()
+	if err != nil {
+		log.Panicf("Error while running cleanUpStaleAP: %v", err.Error())
+	}
 
 	defer c.queue.ShutDown()
 	wait.Until(c.runWorker, 0, stopCh)
@@ -189,12 +195,14 @@ func (c *Controller) sync(key string) error {
 
 	signedDomain := athenzDomain.Spec.SignedDomain
 	domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
+
 	var serviceList []*corev1.Service
 	if serviceName != "" {
 		serviceObj, err := c.getSvcObj(athenz.DomainToNamespace(athenzDomainName) + "/" + serviceName)
 		if err != nil {
 			return fmt.Errorf("error getting service from cache: %s", err.Error())
 		}
+
 		if serviceObj != nil {
 			serviceList = append(serviceList, serviceObj)
 		}
@@ -267,10 +275,14 @@ func (c *Controller) processConfigChange(item *common.Item) error {
 	if item == nil {
 		return nil
 	}
+
 	var err error
 	var eHandler common.EventHandler
 	serviceName := item.Resource.ConfigMeta.Name
 	serviceNamespace := item.Resource.ConfigMeta.Namespace
+
+	// Depending on if the Authz Policy is enabled for the particular service
+	// create dry run files or actual Authz Policy resources
 	if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) {
 		eHandler = &c.dryRunHandler
 	} else {
@@ -368,4 +380,41 @@ func (c *Controller) checkAuthzEnabledAnnotation(serviceObj *corev1.Service) boo
 		}
 	}
 	return false
+}
+
+// cleanUpStaleAP deletes the existing Authorization Policy associated to the service which is switching back from
+// Authorization Policy Enabled back to SR/SRB
+func (c *Controller) cleanUpStaleAP() error {
+	// Fetch the Authorization Policies present across all the namespaces
+	currentAPList, err := c.configStoreCache.List(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), "")
+	if err != nil {
+		return fmt.Errorf("Error while fetching the Authorization Policy resources from cache : %v", err.Error())
+	}
+
+	for _, currAP := range currentAPList {
+		serviceName := currAP.Name
+		serviceNamespace := currAP.Namespace
+		key := serviceNamespace + "/" + serviceName
+
+		// Check if the Authorization Policy is enabled for the service through ap-enabled-list
+		if !c.componentEnabledAuthzPolicy.IsEnabled(serviceName, serviceNamespace) && !c.checkOverrideAnnotation(currAP) {
+			// Creating the Item to pass to the apiHandler
+			// with a delete event
+			cbHandler := c.getCallbackHandler(key)
+
+			item := &common.Item{
+				Operation:       model.EventDelete,
+				Resource:        currAP,
+				CallbackHandler: cbHandler,
+			}
+
+			log.Infof("Deleting stale AP, namespace: %v service name: %v", serviceNamespace, serviceName)
+			err = c.apiHandler.Delete(item)
+			if err != nil {
+				return fmt.Errorf("Error while deleting the Authorization Policy: %v", err.Error())
+			}
+		}
+	}
+
+	return nil
 }
