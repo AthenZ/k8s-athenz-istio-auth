@@ -6,18 +6,19 @@ package fixtures
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
-	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
-
 	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pilot/pkg/model"
-
+	"istio.io/istio/pkg/config/schema/collections"
 	"k8s.io/api/core/v1"
+
+	"strings"
+
+	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -239,14 +240,19 @@ func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
 
 		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
 		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
-		sr := common.NewConfig(model.ServiceRole.Type, ns, roleName, srSpec)
+		sr := common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, roleName, srSpec)
 		modelConfig = append(modelConfig, sr)
 
-		if len(signedDomain.Domain.Roles[i].RoleMembers) > 0 {
-			srbSpec.RoleRef.Name = sr.Name
-			srb := common.NewConfig(model.ServiceRoleBinding.Type, ns, roleName, srbSpec)
-			modelConfig = append(modelConfig, srb)
+		// Every Role has SRB with Spiffe URI
+		if len(signedDomain.Domain.Roles[i].RoleMembers) == 0 {
+			srbSpec.Subjects = []*v1alpha1.Subject{}
 		}
+		srbSpec.Subjects = append(srbSpec.Subjects, &v1alpha1.Subject{
+			User: fmt.Sprintf("%s/ra/%s", signedDomain.Domain.Name, sr.Name),
+		})
+		srbSpec.RoleRef.Name = sr.Name
+		srb := common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, roleName, srbSpec)
+		modelConfig = append(modelConfig, srb)
 	}
 
 	return &ExpectedRbac{

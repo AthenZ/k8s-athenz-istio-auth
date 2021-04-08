@@ -3,51 +3,60 @@ module github.com/yahoo/k8s-athenz-istio-auth/test/integration
 go 1.12
 
 require (
+	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
+	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/ardielle/ardielle-go v1.5.2
-	github.com/aws/aws-sdk-go v1.23.2 // indirect
-	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
+	github.com/armon/go-radix v1.0.0 // indirect
+	github.com/chai2010/gettext-go v0.0.0-20170215093142-bf70f2a70fb1 // indirect
+	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.15+incompatible
-	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
-	github.com/d2g/dhcp4client v1.0.0 // indirect
-	github.com/emicklei/go-restful-swagger12 v0.0.0-20170926063155-7524189396c6 // indirect
-	github.com/go-openapi/strfmt v0.19.2 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.9.5 // indirect
-	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/procfs v0.0.3 // indirect
-	github.com/robfig/cron v1.2.0 // indirect
-	github.com/stretchr/testify v1.3.0
-	github.com/vmware/govmomi v0.21.0 // indirect
-	github.com/xanzy/go-cloudstack v2.4.1+incompatible // indirect
-	github.com/yahoo/athenz v1.8.23
+	github.com/hashicorp/go-hclog v0.9.0 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
+	github.com/sirupsen/logrus v1.8.1
+	github.com/stretchr/testify v1.5.1
+	github.com/yahoo/athenz v1.9.30
 	github.com/yahoo/k8s-athenz-istio-auth v0.0.0-00010101000000-000000000000
-	github.com/yahoo/k8s-athenz-syncer v0.1.1
-	go.etcd.io/etcd v3.3.13+incompatible // indirect
-	gopkg.in/gcfg.v1 v1.2.3 // indirect
-	gopkg.in/warnings.v0 v0.1.2 // indirect
-	istio.io/api v0.0.0-20190906131201-ca4ba7013e1c
-	istio.io/istio v0.0.0-20190911205955-c2bd59595ce6
-	k8s.io/api v0.0.0-20190905160310-fb749d2f1064
-	k8s.io/apiextensions-apiserver v0.0.0-20190906235842-a644246473f1
-	k8s.io/apimachinery v0.0.0-20190831074630-461753078381
-	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/kubernetes v1.13.1
+	github.com/yahoo/k8s-athenz-syncer v0.1.7
+	go.etcd.io/etcd v3.3.25+incompatible
+	istio.io/api v0.0.0-20200513175333-ae3da0d240e3
+	istio.io/client-go v0.0.0-20200513180646-f8d9d8ff84e6
+	istio.io/istio v0.0.0-20200708165503-80f49905d910
+	istio.io/pkg v0.0.0-20200324191837-25e6bb9cf135
+	k8s.io/api v0.17.14
+	k8s.io/apiextensions-apiserver v0.17.14
+	k8s.io/apimachinery v0.17.14
+	k8s.io/client-go v0.17.14
+	k8s.io/kubernetes v0.17.14
+	github.com/kr/pty v1.1.5 // indirect
+	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
 
 replace (
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v21.4.0+incompatible
-	github.com/Azure/go-autorest => github.com/Azure/go-autorest v11.1.0+incompatible
-	github.com/gophercloud/gophercloud => github.com/gophercloud/gophercloud v0.0.0-20180330165814-781450b3c4fc
 	github.com/yahoo/k8s-athenz-istio-auth => /home/travis/gopath/src/github.com/yahoo/k8s-athenz-istio-auth
+	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.3
+	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	k8s.io/api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api
 	k8s.io/apiextensions-apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver
 	k8s.io/apimachinery => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
 	k8s.io/apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
+	k8s.io/cli-runtime => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
 	k8s.io/client-go => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
 	k8s.io/cloud-provider => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cloud-provider
 	k8s.io/cluster-bootstrap => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap
-	k8s.io/csi-api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/csi-api
+	k8s.io/code-generator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/code-generator
+	k8s.io/component-base => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/component-base
+	k8s.io/cri-api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cri-api
+	k8s.io/csi-translation-lib => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib
 	k8s.io/kube-aggregator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
+	k8s.io/kube-controller-manager => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager
 	k8s.io/kube-openapi => /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
+	k8s.io/kube-proxy => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-proxy
+	k8s.io/kube-scheduler => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler
+	k8s.io/kubectl => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kubectl
+	k8s.io/kubelet => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kubelet
 	k8s.io/kubernetes => /home/travis/gopath/src/k8s.io/kubernetes
+	k8s.io/legacy-cloud-providers => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers
+	k8s.io/metrics => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/metrics
+	k8s.io/sample-apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver
 )

@@ -33,22 +33,22 @@ const (
 func rolloutAndValidateRbac(t *testing.T, r *fixtures.ExpectedRbac, a action) {
 	switch a {
 	case create:
-		_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(r.AD)
+		_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(r.AD, v1.CreateOptions{})
 		assert.Nil(t, err, "athenz domain create error should be nil")
 	case update:
 		currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(r.AD.Name, v1.GetOptions{})
 		assert.Nil(t, err, "athenz domain get error should be nil")
 		r.AD.ResourceVersion = currentAD.ResourceVersion
-		_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(r.AD)
+		_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(r.AD, v1.UpdateOptions{})
 		assert.Nil(t, err, "athenz domain update error should be nil")
 	case delete:
-		err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
+		err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, v1.DeleteOptions{})
 		assert.Nil(t, err, "athenz domain delete error should be nil")
 	}
 
 	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
 		for _, curr := range r.ModelConfigs {
-			got := framework.Global.IstioClientset.Get(curr.Type, curr.Name, curr.Namespace)
+			got := framework.Global.IstioClientset.Get(curr.GroupVersionKind(), curr.Name, curr.Namespace)
 			if got == nil {
 				return false, nil
 			}
@@ -69,7 +69,7 @@ func rolloutAndValidateRbac(t *testing.T, r *fixtures.ExpectedRbac, a action) {
 	for _, modelConfig := range r.ModelConfigs {
 		_, exists := modelConfigTypes[modelConfig.Type]
 		if !exists {
-			list, err := framework.Global.IstioClientset.List(modelConfig.Type, namespace)
+			list, err := framework.Global.IstioClientset.List(modelConfig.GroupVersionKind(), namespace)
 			assert.Nil(t, err, "istio custom resource list error should be nil")
 			modelConfigTypes[modelConfig.Type] = true
 			for _, curr := range list {
@@ -79,24 +79,25 @@ func rolloutAndValidateRbac(t *testing.T, r *fixtures.ExpectedRbac, a action) {
 			}
 		}
 	}
+
 	assert.ElementsMatch(t, modelConfigs, r.ModelConfigs, "expected list must match the configs on the cluster")
 }
 
 // cleanupRbac will clean up the athenz domain and service role / service role binding objects on the cluster
 func cleanupRbac(t *testing.T, r *fixtures.ExpectedRbac) {
-	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, &v1.DeleteOptions{})
+	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(r.AD.Name, v1.DeleteOptions{})
 	assert.Nil(t, err, "athenz domain delete error should be nil")
 
 	modelConfigTypes := make(map[string]bool)
 	for _, modelConfig := range r.ModelConfigs {
 		modelConfigTypes[modelConfig.Type] = true
-		err := framework.Global.IstioClientset.Delete(modelConfig.Type, modelConfig.Name, modelConfig.Namespace)
+		err := framework.Global.IstioClientset.Delete(modelConfig.GroupVersionKind(), modelConfig.Name, modelConfig.Namespace)
 		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 
 	namespace := athenz.DomainToNamespace(r.AD.Name)
-	for modelConfigType := range modelConfigTypes {
-		list, err := framework.Global.IstioClientset.List(modelConfigType, namespace)
+	for _, modelConfigType := range r.ModelConfigs {
+		list, err := framework.Global.IstioClientset.List(modelConfigType.GroupVersionKind(), namespace)
 		assert.Nil(t, err, "istio custom resource list error should be nil")
 		assert.Empty(t, list, "all configs must be deleted, list not empty")
 	}
@@ -109,8 +110,8 @@ func TestCreateServiceRoleAndBinding(t *testing.T) {
 	cleanupRbac(t, r)
 }
 
-// 1.1 Create SR only if there are no role members for SRB creation
-func TestCreateServiceRoleOnly(t *testing.T) {
+// 1.1 Create SR and SRB with role cert spiffe only if there are no role members
+func TestCreateServiceRoleAndBindingsWhenNoMembersInRole(t *testing.T) {
 	o := &fixtures.OverrideRbac{
 		ModifyAD: func(signedDomain *zms.SignedDomain) {
 			signedDomain.Domain.Roles[0].RoleMembers = []*zms.RoleMember{}
@@ -119,9 +120,6 @@ func TestCreateServiceRoleOnly(t *testing.T) {
 	}
 	r := fixtures.GetExpectedRbac(o)
 	rolloutAndValidateRbac(t, r, create)
-	namespace := athenz.DomainToNamespace(r.AD.Name)
-	srb := framework.Global.IstioClientset.Get(model.ServiceRoleBinding.Type, "client-writer-role", namespace)
-	assert.Nil(t, srb, "service role binding should not exist")
 	cleanupRbac(t, r)
 }
 
@@ -352,7 +350,7 @@ func TestUpdateRoleName(t *testing.T) {
 	updatedR := fixtures.GetExpectedRbac(o)
 	rolloutAndValidateRbac(t, updatedR, update)
 	for _, config := range r.ModelConfigs {
-		c := framework.Global.IstioClientset.Get(config.Type, config.Name, config.Namespace)
+		c := framework.Global.IstioClientset.Get(config.GroupVersionKind(), config.Name, config.Namespace)
 		assert.Nil(t, c, "istio custom resource get should return nil")
 	}
 	cleanupRbac(t, updatedR)
@@ -460,7 +458,7 @@ func TestDeleteSRAndSRB(t *testing.T) {
 	rolloutAndValidateRbac(t, r, create)
 
 	for _, curr := range r.ModelConfigs {
-		err := framework.Global.IstioClientset.Delete(curr.Type, curr.Name, curr.Namespace)
+		err := framework.Global.IstioClientset.Delete(curr.GroupVersionKind(), curr.Name, curr.Namespace)
 		assert.Nil(t, err, "istio custom resource delete error should be nil")
 	}
 

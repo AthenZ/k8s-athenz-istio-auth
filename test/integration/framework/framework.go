@@ -11,21 +11,25 @@ import (
 	"os"
 	"time"
 
-	"github.com/coreos/etcd/embed"
+	versionedclient "istio.io/client-go/pkg/clientset/versioned"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
+	"istio.io/pkg/ledger"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
-	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
-
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/util/errors"
+	"go.etcd.io/etcd/embed"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
-
-	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
-	"istio.io/istio/pilot/pkg/model"
 )
 
 var Global *Framework
@@ -58,7 +62,7 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 	// TODO, remove the webhooks and api server certs
 	s.InsecureServing.BindAddress = net.ParseIP("127.0.0.1")
 	s.InsecureServing.BindPort = 8080
-	s.Etcd.StorageConfig.ServerList = []string{"http://127.0.0.1:2379"}
+	s.Etcd.StorageConfig.Transport.ServerList = []string{"http://127.0.0.1:2379"}
 	s.SecureServing.ServerCert.CertDirectory = certDir
 
 	completedOptions, err := app.Complete(s)
@@ -78,7 +82,17 @@ func runApiServer(certDir string) (*rest.Config, chan struct{}, error) {
 
 	restConfig := &rest.Config{}
 	restConfig.Host = "http://127.0.0.1:8080"
-	return restConfig, stopCh, server.PrepareRun().NonBlockingRun(stopCh)
+	preparedApiAggregator, err := server.PrepareRun()
+	if err != nil {
+		return nil, nil, err
+	}
+	go func() {
+		err = preparedApiAggregator.Run(stopCh)
+		if err != nil {
+			os.Exit(1)
+		}
+	}()
+	return restConfig, stopCh, nil
 }
 
 // Setup will run both etcd and api server together
@@ -122,25 +136,31 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := model.ConfigDescriptor{
-		model.ServiceRole,
-		model.ServiceRoleBinding,
-		model.ClusterRbacConfig,
-	}
-
-	istioClientset, err := crd.NewClient("", "", configDescriptor, "")
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
+	ledgerValue := ledger.Make(time.Hour)
+	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
 		return err
 	}
 
 	log.InitLogger("", "debug")
-	c := controller.NewController("svc.cluster.local", istioClientset, k8sClientset, athenzDomainClientset, time.Minute, time.Minute, true)
+	componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	if err != nil {
+		return err
+	}
+
+	istioClientSet, err := versionedclient.NewForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+
+	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, false, componentsEnabled)
 	go c.Run(stopCh)
 
 	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
-		IstioClientset:        istioClientset,
+		IstioClientset:        istioClient,
 		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
