@@ -190,10 +190,6 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 		panic(err)
 	}
 
-	authzpolicyIndexInformer := cache.NewSharedIndexInformer(source, &authz.AuthorizationPolicy{}, 0, nil)
-	go authzpolicyIndexInformer.Run(stopCh)
-	c.authzpolicyIndexInformer = authzpolicyIndexInformer
-
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	c.queue = queue
 
@@ -530,7 +526,7 @@ func TestCleanUpStaleAP(t *testing.T) {
 			apEnabledList:       "test-namespace-onboarded/*",
 		},
 		{
-			name:                "existing authorization policy is not deleted as the override annotation is enabled even when not the same namespace",
+			name:                "existing authorization policy is not deleted as the override annotation is enabled even when not in the same namespace",
 			inputService:        onboardedService,
 			inputAthenzDomain:   onboardedAthenzDomain,
 			existingAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),

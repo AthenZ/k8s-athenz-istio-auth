@@ -16,7 +16,6 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"istio.io/client-go/pkg/clientset/versioned"
-	istioCache "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +36,6 @@ type Controller struct {
 	configStoreCache            model.ConfigStoreCache
 	serviceIndexInformer        cache.SharedIndexInformer
 	adIndexInformer             cache.SharedIndexInformer
-	authzpolicyIndexInformer    cache.SharedIndexInformer
 	queue                       workqueue.RateLimitingInterface
 	rbacProvider                rbac.Provider
 	apResyncInterval            time.Duration
@@ -50,13 +48,10 @@ type Controller struct {
 func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-	authzpolicyIndexInformer := istioCache.NewAuthorizationPolicyInformer(istioClientSet, "", 0, cache.Indexers{})
-
 	c := &Controller{
 		configStoreCache:            configStoreCache,
 		serviceIndexInformer:        serviceIndexInformer,
 		adIndexInformer:             adIndexInformer,
-		authzpolicyIndexInformer:    authzpolicyIndexInformer,
 		queue:                       queue,
 		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
 		apResyncInterval:            apResyncInterval,
@@ -115,7 +110,6 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	go c.authzpolicyIndexInformer.Run(stopCh)
 	go c.resync(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
@@ -398,9 +392,8 @@ func (c *Controller) cleanUpStaleAP() error {
 	}
 
 	for _, currAP := range currentAPList {
-		nsSvcArr := strings.Split(currAP.Key(), "/")
-		serviceName := nsSvcArr[2]
-		serviceNamespace := nsSvcArr[1]
+		serviceName := currAP.Name
+		serviceNamespace := currAP.Namespace
 		key := serviceNamespace + "/" + serviceName
 
 		// Check if the Authorization Policy is enabled for the service through ap-enabled-list

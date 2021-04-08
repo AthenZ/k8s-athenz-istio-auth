@@ -50,6 +50,8 @@ func main() {
 			if err != nil {
 				log.Panicf("Error when removing authz policy directory: %s", err.Error())
 			}
+		} else if !os.IsNotExist(err) {
+			log.Panicf("Error when checking for the presence of the dry run directory: %s", err.Error())
 		}
 
 		err := os.MkdirAll(common.DryRunStoredFilesDirectory, 0755)
