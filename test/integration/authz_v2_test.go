@@ -235,7 +235,7 @@ func TestUpdateAuthorizationPolicyUpdatesAuthorizationPolicy(t *testing.T) {
 
 // Initial: Existing service with annotation, AP
 // Input Actions: delete athenz domain which matches service’s namespace
-// Output: AP deleted
+// Output: AP not deleted
 func TestDeleteAthenzDomainShouldDeleteAuthorizationPolicy(t *testing.T) {
 	// Initial set up
 	e := fixtures.GetBasicRbacV2Case(nil)
