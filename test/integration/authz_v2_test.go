@@ -167,7 +167,6 @@ func TestUpdatedAuthorizationPolicyRestoresOriginal(t *testing.T) {
 	assert.Nil(t, err, "Update to Authorization policy must not fail")
 
 	// Check that the original authorization policy is restored.
-	time.Sleep(2 * time.Second)
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, noop, noop)
 	cleanupAuthorizationRbac(t, e)
 }
@@ -185,8 +184,6 @@ func TestDeleteAuthorizationPolicyRestoresOriginal(t *testing.T) {
 	ap := e.AuthorizationPolicies[0]
 	err := framework.Global.IstioClientset.Delete(ap.GroupVersionKind(), ap.Name, ap.Namespace)
 	assert.Nil(t, err, "Delete of authorization policy should not fail")
-
-	time.Sleep(5 * time.Second)
 
 	// Verification and cleanup
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, noop, noop)
@@ -231,15 +228,13 @@ func TestUpdateAuthorizationPolicyUpdatesAuthorizationPolicy(t *testing.T) {
 // Initial: Existing service with annotation, AP
 // Input Actions: delete athenz domain which matches service’s namespace
 // Output: AP not deleted
-func TestDeleteAthenzDomainShouldDeleteAuthorizationPolicy(t *testing.T) {
+func TestDeleteAthenzDomainShouldNotDeleteAuthorizationPolicy(t *testing.T) {
 	// Initial set up
 	e := fixtures.GetBasicRbacV2Case(nil)
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
 
 	// Delete athenz Domain
 	applyAthenzDomain(t, e.AD, delete)
-
-	time.Sleep(2 * time.Second)
 
 	// Validate Athenz Domain has been removed
 	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
@@ -255,9 +250,7 @@ func TestDeleteAthenzDomainShouldDeleteAuthorizationPolicy(t *testing.T) {
 	})
 	assert.Nil(t, err, "Athenz domain should be removed without errors")
 
-	time.Sleep(30 * time.Second)
-
-	// Validate Authorization Policy has been removed
+	// Validate Authorization Policy has not been removed
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, noop, noop)
 
 	// Cleanup
@@ -274,8 +267,6 @@ func TestDeleteServiceShouldDeleteAuthorizationPolicy(t *testing.T) {
 
 	// Delete athenz Domain
 	applyServices(t, e.Services, delete)
-
-	time.Sleep(2 * time.Second)
 
 	// Validate Athenz Domain has been removed
 	namespace := e.Services[0].Namespace
@@ -297,8 +288,6 @@ func TestDeleteServiceShouldDeleteAuthorizationPolicy(t *testing.T) {
 	assert.Nil(t, err, "Authorization policy list not empty")
 
 	// Cleanup
-	// Service is already removed
-	// Only remove the athenz domain now
 	applyAthenzDomain(t, e.AD, delete)
 }
 
@@ -405,12 +394,6 @@ func TestUpdateAthenzWithDisabledRoleMemberDoesNotEffectAuthorizationPolicy(t *t
 
 	// Update Athenz domain
 	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
-
-	// Wait to ensure that domain update is picked up
-	time.Sleep(30 * time.Second)
-
-	// Validate Authorization policy
-	rolloutAndValidateAuthorizationPolicyScenario(t, modified, noop, noop)
 
 	// cleanup
 	cleanupAuthorizationRbac(t, modified)
