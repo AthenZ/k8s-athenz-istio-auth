@@ -463,4 +463,5 @@ func TestDeleteSRAndSRB(t *testing.T) {
 	}
 
 	rolloutAndValidateRbac(t, r, noop)
+	cleanupRbac(t, r)
 }

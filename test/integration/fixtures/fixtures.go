@@ -156,7 +156,6 @@ func getClusterRbacConfigCrd() *v1beta1.CustomResourceDefinition {
 	}
 }
 
-
 // getAuthorizationPolicyCrd returns the Authorization policy custom resource definition
 func getAuthorizationPolicyCrd() *v1beta1.CustomResourceDefinition {
 	return &v1beta1.CustomResourceDefinition{
@@ -189,7 +188,6 @@ func getAuthorizationPolicyCrd() *v1beta1.CustomResourceDefinition {
 		},
 	}
 }
-
 
 // CreateCrds creates the athenz domain, service role, service role binding, and
 // cluster rbac config custom resource definitions
@@ -455,19 +453,19 @@ func getDefaultService() *v1.Service {
 	}
 }
 
-type ExpectedV2Rbac struct{
-	AD                  *athenzdomain.AthenzDomain
-	Services            []*v1.Service
+type ExpectedV2Rbac struct {
+	AD                    *athenzdomain.AthenzDomain
+	Services              []*v1.Service
 	AuthorizationPolicies []*model.Config
 }
 
 type RbacV2Modifications struct {
-	ModifyAthenzDomain  []func(signedDomain *zms.SignedDomain)
-	ModifyServices [][]func(service *v1.Service)
+	ModifyAthenzDomain          []func(signedDomain *zms.SignedDomain)
+	ModifyServices              [][]func(service *v1.Service)
 	ModifyAuthorizationPolicies [][]func(policy *securityV1beta1.AuthorizationPolicy)
 }
 
-func getExpectedAuthorizationPolicy(serviceName string,modifications []func(*securityV1beta1.AuthorizationPolicy)) *securityV1beta1.AuthorizationPolicy {
+func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*securityV1beta1.AuthorizationPolicy)) *securityV1beta1.AuthorizationPolicy {
 	authPolicy := &securityV1beta1.AuthorizationPolicy{
 		Selector: &istioTypeV1beta1.WorkloadSelector{
 			MatchLabels: map[string]string{
@@ -510,14 +508,14 @@ func getExpectedAuthorizationPolicy(serviceName string,modifications []func(*sec
 		modifications = []func(policy *securityV1beta1.AuthorizationPolicy){}
 	}
 
-	for _, modify := range modifications{
+	for _, modify := range modifications {
 		modify(authPolicy)
 	}
 
 	return authPolicy
 }
 
-func GetDefaultService(serviceName string, modifications []func(service *v1.Service)) *v1.Service{
+func GetDefaultService(serviceName string, modifications []func(service *v1.Service)) *v1.Service {
 	defaultService := getDefaultService()
 	defaultService.Name = serviceName
 	if defaultService.Labels == nil {
@@ -534,7 +532,7 @@ func GetDefaultService(serviceName string, modifications []func(service *v1.Serv
 	return defaultService
 }
 
-func GetDefaultAthenzDomainForAuthorizationPolicies(athenzDomainModifications []func(signedDomain *zms.SignedDomain)) *athenzdomain.AthenzDomain{
+func GetDefaultAthenzDomainForAuthorizationPolicies(athenzDomainModifications []func(signedDomain *zms.SignedDomain)) *athenzdomain.AthenzDomain {
 	signedDomain := getDefaultSignedDomain()
 	if athenzDomainModifications != nil {
 		for _, f := range athenzDomainModifications {
@@ -563,20 +561,20 @@ func GetBasicRbacV2Case(modifications *RbacV2Modifications) *ExpectedV2Rbac {
 
 	defaultModifyServices := [][]func(service *v1.Service){
 		[]func(service *v1.Service){
-			func(service *v1.Service){},
+			func(service *v1.Service) {},
 		},
 	}
 
 	defaultModifyAuthorizationPolicies := [][]func(policy *securityV1beta1.AuthorizationPolicy){
 		[]func(policy *securityV1beta1.AuthorizationPolicy){
-			func(policy *securityV1beta1.AuthorizationPolicy){},
+			func(policy *securityV1beta1.AuthorizationPolicy) {},
 		},
 	}
 
 	if modifications == nil {
 		modifications = &RbacV2Modifications{
-			ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){},
-			ModifyServices: defaultModifyServices,
+			ModifyAthenzDomain:          []func(signedDomain *zms.SignedDomain){},
+			ModifyServices:              defaultModifyServices,
 			ModifyAuthorizationPolicies: defaultModifyAuthorizationPolicies,
 		}
 	}
@@ -589,7 +587,7 @@ func GetBasicRbacV2Case(modifications *RbacV2Modifications) *ExpectedV2Rbac {
 	if modifications.ModifyServices == nil {
 		modifications.ModifyServices = defaultModifyServices
 	}
-	for _, serviceModifications := range modifications.ModifyServices{
+	for _, serviceModifications := range modifications.ModifyServices {
 		services = append(services, GetDefaultService(serviceName, serviceModifications))
 	}
 
@@ -603,8 +601,8 @@ func GetBasicRbacV2Case(modifications *RbacV2Modifications) *ExpectedV2Rbac {
 	}
 
 	return &ExpectedV2Rbac{
-		AD:                  ad,
-		Services:            services,
+		AD:                    ad,
+		Services:              services,
 		AuthorizationPolicies: policies,
 	}
 }

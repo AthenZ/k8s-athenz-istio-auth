@@ -20,12 +20,8 @@ import (
 // rolloutAndValidateAuthorizationPolicyScenario will perform the specified actions for the Athenz Domain and k8s services
 // and then validate that the AuthroizationPolicy's Spec created is same as the expected
 func rolloutAndValidateAuthorizationPolicyScenario(t *testing.T, e *fixtures.ExpectedV2Rbac, athenzAction action, serviceAction action) {
-	// Add sleep to ensure domain and services are created
-	time.Sleep(time.Second  * 30)
 	applyAthenzDomain(t, e.AD, athenzAction)
 	applyServices(t, e.Services, serviceAction)
-	// Add sleep to ensure domain and services are created
-	time.Sleep(time.Second  * 30)
 	validateAuthorizationPolicy(t, e.AuthorizationPolicies)
 }
 
@@ -60,8 +56,7 @@ func deleteServiceObjects(t *testing.T, services []*v1.Service) {
 
 // cleanupAuthorizationRbac Deletes the Athenz domains and deletes the services
 func cleanupAuthorizationRbac(t *testing.T, e *fixtures.ExpectedV2Rbac) {
-	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(e.AD.Name, metav1.DeleteOptions{})
-	assert.Nil(t, err, "athenz domain delete error should be nil")
+	applyAthenzDomain(t, e.AD, delete)
 	deleteServiceObjects(t, e.Services)
 }
 
@@ -152,10 +147,10 @@ func TestUpdatedAuthorizationPolicyRestoresOriginal(t *testing.T) {
 	// Retrieve a modified authorization policy
 	modifiedResources := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(sginedDomain *zms.SignedDomain){},
-		ModifyServices: [][]func(service *v1.Service){},
+		ModifyServices:     [][]func(service *v1.Service){},
 		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
 			[]func(policy *v1beta1.AuthorizationPolicy){
-				func(policy *v1beta1.AuthorizationPolicy){
+				func(policy *v1beta1.AuthorizationPolicy) {
 					policy.Action = v1beta1.AuthorizationPolicy_DENY
 				},
 			},
@@ -164,7 +159,7 @@ func TestUpdatedAuthorizationPolicyRestoresOriginal(t *testing.T) {
 
 	// Update the Authorization policy with modified value
 	ap := modifiedResources.AuthorizationPolicies[0]
-	authorizationPolicy := framework.Global.IstioClientset.Get(ap.GroupVersionKind(),ap.Name, ap.Namespace)
+	authorizationPolicy := framework.Global.IstioClientset.Get(ap.GroupVersionKind(), ap.Name, ap.Namespace)
 	assert.NotNil(t, authorizationPolicy, "Already set authorization policy cannot be nil")
 	updatedValue := authorizationPolicy.DeepCopy()
 	updatedValue.Spec = ap.Spec
@@ -188,7 +183,7 @@ func TestDeleteAuthorizationPolicyRestoresOriginal(t *testing.T) {
 
 	// Delete the Authorization policy created
 	ap := e.AuthorizationPolicies[0]
-	err := framework.Global.IstioClientset.Delete(ap.GroupVersionKind(), ap.Name, ap.Namespace )
+	err := framework.Global.IstioClientset.Delete(ap.GroupVersionKind(), ap.Name, ap.Namespace)
 	assert.Nil(t, err, "Delete of authorization policy should not fail")
 
 	time.Sleep(5 * time.Second)
@@ -211,7 +206,7 @@ func TestUpdateAuthorizationPolicyUpdatesAuthorizationPolicy(t *testing.T) {
 	newUserName := "user.bar"
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
-			func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
 				signedDomain.Domain.Roles[0].Members = append(signedDomain.Domain.Roles[0].Members, zms.MemberName(newUserName))
 				signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, &zms.RoleMember{MemberName: zms.MemberName(newUserName)})
 			},
@@ -319,7 +314,7 @@ func TestRemoveAnnotationFromServiceShouldDeleteAuthorizationPolicy(t *testing.T
 	updatedValues := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyServices: [][]func(service *v1.Service){
 			{
-				func(service *v1.Service){
+				func(service *v1.Service) {
 					service.Annotations = make(map[string]string)
 				},
 			},
@@ -350,7 +345,7 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 	expiringTimestamp := rdl.NewTimestamp(value)
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
-			func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
 				newRoleMember := &zms.RoleMember{
 					MemberName: zms.MemberName(newUserName),
 					Expiration: &expiringTimestamp,
@@ -397,9 +392,9 @@ func TestUpdateAthenzWithDisabledRoleMemberDoesNotEffectAuthorizationPolicy(t *t
 	var disabled int32 = 1
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
-			func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
 				newRoleMember := &zms.RoleMember{
-					MemberName: zms.MemberName(newUserName),
+					MemberName:     zms.MemberName(newUserName),
 					SystemDisabled: &disabled,
 				}
 				signedDomain.Domain.Roles[0].Members = append(signedDomain.Domain.Roles[0].Members, zms.MemberName(newUserName))
