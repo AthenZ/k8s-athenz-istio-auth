@@ -6,16 +6,16 @@ package fixtures
 
 import (
 	"fmt"
-
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/api/rbac/v1alpha1"
+	securityV1beta1 "istio.io/api/security/v1beta1"
+	istioTypeV1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
 	"k8s.io/api/core/v1"
-
 	"strings"
 
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
@@ -156,6 +156,41 @@ func getClusterRbacConfigCrd() *v1beta1.CustomResourceDefinition {
 	}
 }
 
+
+// getAuthorizationPolicyCrd returns the Authorization policy custom resource definition
+func getAuthorizationPolicyCrd() *v1beta1.CustomResourceDefinition {
+	return &v1beta1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "authorizationpolicies.security.istio.io",
+		},
+		Spec: v1beta1.CustomResourceDefinitionSpec{
+			Group: "security.istio.io",
+			Names: v1beta1.CustomResourceDefinitionNames{
+				Plural:   "authorizationpolicies",
+				Singular: "authorizationpolicy",
+				Kind:     "AuthorizationPolicy",
+				Categories: []string{
+					"istio-io",
+					"security-istio-io",
+				},
+			},
+			Scope: v1beta1.NamespaceScoped,
+			Versions: []v1beta1.CustomResourceDefinitionVersion{
+				{
+					Name:    "v1beta1",
+					Served:  true,
+					Storage: true,
+				},
+			},
+		},
+	}
+}
+
+
 // CreateCrds creates the athenz domain, service role, service role binding, and
 // cluster rbac config custom resource definitions
 func CreateCrds(clientset *apiextensionsclient.Clientset) error {
@@ -163,7 +198,8 @@ func CreateCrds(clientset *apiextensionsclient.Clientset) error {
 	serviceRoleCrd := getServiceRoleCrd()
 	serviceRoleBindingCrd := getServiceRoleBindingCrd()
 	clusterRbacConfigCrd := getClusterRbacConfigCrd()
-	crds := []*v1beta1.CustomResourceDefinition{athenzDomainCrd, serviceRoleCrd, serviceRoleBindingCrd, clusterRbacConfigCrd}
+	authorizationPolicyCrd := getAuthorizationPolicyCrd()
+	crds := []*v1beta1.CustomResourceDefinition{athenzDomainCrd, serviceRoleCrd, serviceRoleBindingCrd, clusterRbacConfigCrd, authorizationPolicyCrd}
 
 	for _, crd := range crds {
 		_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
@@ -416,5 +452,159 @@ func getDefaultService() *v1.Service {
 				},
 			},
 		},
+	}
+}
+
+type ExpectedV2Rbac struct{
+	AD                  *athenzdomain.AthenzDomain
+	Services            []*v1.Service
+	AuthorizationPolicies []*model.Config
+}
+
+type RbacV2Modifications struct {
+	ModifyAthenzDomain  []func(signedDomain *zms.SignedDomain)
+	ModifyServices [][]func(service *v1.Service)
+	ModifyAuthorizationPolicies [][]func(policy *securityV1beta1.AuthorizationPolicy)
+}
+
+func getExpectedAuthorizationPolicy(serviceName string,modifications []func(*securityV1beta1.AuthorizationPolicy)) *securityV1beta1.AuthorizationPolicy {
+	authPolicy := &securityV1beta1.AuthorizationPolicy{
+		Selector: &istioTypeV1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{
+				"svc": serviceName,
+			},
+		},
+		Rules: []*securityV1beta1.Rule{
+			&securityV1beta1.Rule{
+				From: []*securityV1beta1.Rule_From{
+					&securityV1beta1.Rule_From{
+						Source: &securityV1beta1.Source{
+							Principals: []string{
+								"user/sa/foo",
+								"athenz.domain/ra/athenz.domain:role.client-writer-role",
+							},
+						},
+					},
+					&securityV1beta1.Rule_From{
+						Source: &securityV1beta1.Source{
+							RequestPrincipals: []string{
+								"athenz/user.foo",
+							},
+						},
+					},
+				},
+				To: []*securityV1beta1.Rule_To{
+					&securityV1beta1.Rule_To{
+						Operation: &securityV1beta1.Operation{
+							Methods: []string{
+								"PUT",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if modifications == nil {
+		modifications = []func(policy *securityV1beta1.AuthorizationPolicy){}
+	}
+
+	for _, modify := range modifications{
+		modify(authPolicy)
+	}
+
+	return authPolicy
+}
+
+func GetDefaultService(serviceName string, modifications []func(service *v1.Service)) *v1.Service{
+	defaultService := getDefaultService()
+	defaultService.Name = serviceName
+	if defaultService.Labels == nil {
+		defaultService.Labels = make(map[string]string)
+	}
+	defaultService.Labels["svc"] = defaultService.Name
+	if modifications == nil {
+		modifications = []func(service *v1.Service){}
+	}
+	for _, modify := range modifications {
+		modify(defaultService)
+	}
+
+	return defaultService
+}
+
+func GetDefaultAthenzDomainForAuthorizationPolicies(athenzDomainModifications []func(signedDomain *zms.SignedDomain)) *athenzdomain.AthenzDomain{
+	signedDomain := getDefaultSignedDomain()
+	if athenzDomainModifications != nil {
+		for _, f := range athenzDomainModifications {
+			f(&signedDomain)
+		}
+	}
+	domainName := string(signedDomain.Domain.Name)
+	return &athenzdomain.AthenzDomain{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: domainName,
+		},
+		Spec: athenzdomain.AthenzDomainSpec{
+			SignedDomain: signedDomain,
+		},
+	}
+}
+
+func GetAuthorizationPolicyModelConfig(namespace, name string, apSpec *securityV1beta1.AuthorizationPolicy) *model.Config {
+	response := common.NewConfig(collections.IstioSecurityV1Beta1Authorizationpolicies, namespace, name, apSpec)
+	return &response
+}
+
+func GetBasicRbacV2Case(modifications *RbacV2Modifications) *ExpectedV2Rbac {
+	serviceName := "my-service-name"
+	namespace := "athenz-domain"
+
+	defaultModifyServices := [][]func(service *v1.Service){
+		[]func(service *v1.Service){
+			func(service *v1.Service){},
+		},
+	}
+
+	defaultModifyAuthorizationPolicies := [][]func(policy *securityV1beta1.AuthorizationPolicy){
+		[]func(policy *securityV1beta1.AuthorizationPolicy){
+			func(policy *securityV1beta1.AuthorizationPolicy){},
+		},
+	}
+
+	if modifications == nil {
+		modifications = &RbacV2Modifications{
+			ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){},
+			ModifyServices: defaultModifyServices,
+			ModifyAuthorizationPolicies: defaultModifyAuthorizationPolicies,
+		}
+	}
+
+	// Create Athenz Domain
+	ad := GetDefaultAthenzDomainForAuthorizationPolicies(modifications.ModifyAthenzDomain)
+
+	// Create Kubernetes Services
+	services := []*v1.Service{}
+	if modifications.ModifyServices == nil {
+		modifications.ModifyServices = defaultModifyServices
+	}
+	for _, serviceModifications := range modifications.ModifyServices{
+		services = append(services, GetDefaultService(serviceName, serviceModifications))
+	}
+
+	// Create Authorization Policies
+	policies := []*model.Config{}
+	if modifications.ModifyAuthorizationPolicies == nil {
+		modifications.ModifyAuthorizationPolicies = defaultModifyAuthorizationPolicies
+	}
+	for _, policyModifications := range modifications.ModifyAuthorizationPolicies {
+		policies = append(policies, GetAuthorizationPolicyModelConfig(namespace, serviceName, getExpectedAuthorizationPolicy(serviceName, policyModifications)))
+	}
+
+	return &ExpectedV2Rbac{
+		AD:                  ad,
+		Services:            services,
+		AuthorizationPolicies: policies,
 	}
 }
