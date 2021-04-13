@@ -84,6 +84,10 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				continue
 			}
 
+			if svc == "*" {
+				svc = ".*"
+			}
+
 			// Drop the query parameters from the HTTP path in the assertions due to the difference
 			// in the RBAC Envoy permissions config created by Authorization Policy and ServiceRole/ServiceRoleBindings.
 			// Which in case of,
