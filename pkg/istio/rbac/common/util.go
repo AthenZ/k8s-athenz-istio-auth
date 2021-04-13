@@ -232,11 +232,7 @@ func ParseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 				return "", "", fmt.Errorf("resource: %s does not belong to the Athenz domain: %s", resource, domainName)
 			}
 		case "svc":
-			if match == "*" {
-				svc = ".*"
-			} else {
-				svc = match
-			}
+			svc = match
 		case "path":
 			path = match
 		}
