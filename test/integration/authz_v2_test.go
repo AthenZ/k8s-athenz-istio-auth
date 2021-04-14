@@ -33,7 +33,7 @@ func createServiceObjects(t *testing.T, services []*v1.Service) {
 	}
 }
 
-// updateServiceObjects - Updates the list of Kubernetes serivce objects as passed in
+// updateServiceObjects - Updates the list of Kubernetes service objects as passed in
 func updateServiceObjects(t *testing.T, services []*v1.Service) {
 	for _, service := range services {
 		currentService, err := framework.Global.K8sClientset.CoreV1().Services(service.Namespace).Get(service.Name, metav1.GetOptions{})
@@ -51,7 +51,6 @@ func deleteServiceObjects(t *testing.T, services []*v1.Service) {
 		err := framework.Global.K8sClientset.CoreV1().Services(service.Namespace).Delete(service.Name, &metav1.DeleteOptions{})
 		assert.Nil(t, err, "service delete error should be nil")
 	}
-	services = []*v1.Service{}
 }
 
 // cleanupAuthorizationRbac Deletes the Athenz domains and deletes the services
@@ -146,7 +145,7 @@ func TestUpdatedAuthorizationPolicyRestoresOriginal(t *testing.T) {
 
 	// Retrieve a modified authorization policy
 	modifiedResources := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
-		ModifyAthenzDomain: []func(sginedDomain *zms.SignedDomain){},
+		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){},
 		ModifyServices:     [][]func(service *v1.Service){},
 		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
 			[]func(policy *v1beta1.AuthorizationPolicy){
@@ -265,7 +264,7 @@ func TestDeleteServiceShouldDeleteAuthorizationPolicy(t *testing.T) {
 	e := fixtures.GetBasicRbacV2Case(nil)
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
 
-	// Delete athenz Domain
+	// Delete services
 	applyServices(t, e.Services, delete)
 
 	// Validate Athenz Domain has been removed
