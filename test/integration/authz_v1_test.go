@@ -105,7 +105,6 @@ func cleanupRbac(t *testing.T, r *fixtures.ExpectedRbac) {
 
 // 1.0 Create SR / SRB with valid AD
 func TestCreateServiceRoleAndBinding(t *testing.T) {
-	assert.NotNil(t, nil, "Change to test out build failures")
 	r := fixtures.GetExpectedRbac(nil)
 	rolloutAndValidateRbac(t, r, create)
 	cleanupRbac(t, r)
