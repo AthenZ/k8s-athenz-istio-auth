@@ -125,7 +125,7 @@ func validateAuthorizationPolicy(t *testing.T, authorizationPolicies []*model.Co
 
 // verifyAuthorizationPolicyIsRemoved - makes sure that AuthorizationPolicy with namespace is not present.
 func verifyAuthorizationPolicyIsRemoved(t *testing.T, authPolicy *model.Config) {
-	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
+	err := wait.PollImmediate(time.Second, time.Second*10, func() (bool, error) {
 		authPolicyList, err := framework.Global.IstioClientset.List(authPolicy.GroupVersionKind(), authPolicy.Namespace)
 		if err != nil {
 			return false, err
@@ -250,13 +250,17 @@ func TestUpdateAthenzDomainIgnoresAuthorizationPolicyWithOverrideAnnotation(t *t
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
 
 	// Update Authorization policy with override Annotation
-	updatedAuthorizationPolicy := e.AuthorizationPolicies[0].DeepCopy()
+	policy := e.AuthorizationPolicies[0]
+	authPolicy := framework.Global.IstioClientset.Get(policy.GroupVersionKind(), policy.Name, policy.Namespace)
+	assert.NotNil(t, authPolicy, "Auth policy retrieved should not be nil")
+	updatedAuthorizationPolicy := authPolicy.DeepCopy()
 	if updatedAuthorizationPolicy.Annotations == nil || len(updatedAuthorizationPolicy.Annotations) == 0 {
 		updatedAuthorizationPolicy.Annotations = make(map[string]string)
 	}
 	updatedAuthorizationPolicy.Annotations["overrideAuthzPolicy"] = "true"
-	_, err := framework.Global.IstioClientset.Update(updatedAuthorizationPolicy)
-	assert.NotNil(t, err, "Authorization policy update should not fail")
+	value, err := framework.Global.IstioClientset.Update(updatedAuthorizationPolicy)
+	assert.Nil(t, err, "Authorization policy update should not fail")
+	assert.NotNil(t, value, "Authorization policy update should not fail")
 
 	// Get updated fixtures
 	newUserName := "user.bar"
@@ -269,8 +273,10 @@ func TestUpdateAthenzDomainIgnoresAuthorizationPolicyWithOverrideAnnotation(t *t
 		},
 	})
 
+	applyAthenzDomain(t, modified.AD, update)
+
 	// Validate that Authorization policy did not change
-	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
+	rolloutAndValidateAuthorizationPolicyScenario(t, modified, noop, noop)
 	cleanupAuthorizationRbac(t, modified)
 }
 
@@ -317,7 +323,7 @@ func TestDeleteServiceShouldDeleteAuthorizationPolicy(t *testing.T) {
 	// Delete services
 	applyServices(t, e.Services, delete)
 
-	// Validate Athenz Domain has been removed
+	// Validate service has been removed
 	namespace := e.Services[0].Namespace
 	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
 		servicesList, err := framework.Global.K8sClientset.CoreV1().Services(namespace).List(metav1.ListOptions{})
@@ -330,11 +336,10 @@ func TestDeleteServiceShouldDeleteAuthorizationPolicy(t *testing.T) {
 		}
 		return true, nil
 	})
+	assert.Nil(t, err, "Service should be deleted")
 
 	// Validate Authorization Policy has been removed
 	verifyAuthorizationPolicyIsRemoved(t, e.AuthorizationPolicies[0])
-
-	assert.Nil(t, err, "Authorization policy list not empty")
 
 	// Cleanup
 	applyAthenzDomain(t, e.AD, delete)
@@ -379,7 +384,7 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 	// Update Athenz Domain with an expiring member
 	// Get updated fixtures
 	newUserName := "user.bar"
-	value := time.Now().Add(time.Second * time.Duration(2))
+	value := time.Now().Add(time.Second * time.Duration(30))
 	expiringTimestamp := rdl.NewTimestamp(value)
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
@@ -407,6 +412,8 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 
 	// Rollout the modified Athenz domain and validate Authorization policy
 	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
+
+	time.Sleep(40 * time.Second)
 
 	// Now the role member should have been expired
 	// So validate that the user has been removed from the Authorization policy
