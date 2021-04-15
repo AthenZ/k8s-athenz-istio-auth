@@ -125,7 +125,7 @@ func validateAuthorizationPolicy(t *testing.T, authorizationPolicies []*model.Co
 
 // verifyAuthorizationPolicyIsRemoved - makes sure that AuthorizationPolicy with namespace is not present.
 func verifyAuthorizationPolicyIsRemoved(t *testing.T, authPolicy *model.Config) {
-	err := wait.PollImmediate(time.Second, time.Second*10, func() (bool, error) {
+	err := wait.PollImmediate(time.Second, time.Second*5, func() (bool, error) {
 		authPolicyList, err := framework.Global.IstioClientset.List(authPolicy.GroupVersionKind(), authPolicy.Namespace)
 		if err != nil {
 			return false, err
@@ -205,7 +205,7 @@ func TestDeleteAuthorizationPolicyRestoresOriginal(t *testing.T) {
 	cleanupAuthorizationRbac(t, e)
 }
 
-// Update AP
+// Update AD
 // Initial: Existing service with annotation, AP
 // Input Actions: update athenz domain with service related role, or policies associated to the role
 // Output: AP updated
@@ -240,7 +240,7 @@ func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 	cleanupAuthorizationRbac(t, modified)
 }
 
-// Update AP
+// Update AD
 // Initial: Existing service with annotation, AP
 // Input Actions: update athenz domain with service related role, or policies associated to the role
 // Output: AP updated
@@ -276,7 +276,7 @@ func TestUpdateAthenzDomainIgnoresAuthorizationPolicyWithOverrideAnnotation(t *t
 	applyAthenzDomain(t, modified.AD, update)
 
 	// Validate that Authorization policy did not change
-	rolloutAndValidateAuthorizationPolicyScenario(t, modified, noop, noop)
+	rolloutAndValidateAuthorizationPolicyScenario(t, e, noop, noop)
 	cleanupAuthorizationRbac(t, modified)
 }
 
@@ -412,8 +412,7 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 
 	// Rollout the modified Athenz domain and validate Authorization policy
 	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
-
-	time.Sleep(40 * time.Second)
+	time.Sleep(time.Minute * 1)
 
 	// Now the role member should have been expired
 	// So validate that the user has been removed from the Authorization policy
