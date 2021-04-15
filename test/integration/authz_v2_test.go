@@ -57,6 +57,10 @@ func deleteServiceObjects(t *testing.T, services []*v1.Service) {
 // cleanupAuthorizationRbac Deletes the Athenz domains and deletes the services
 func cleanupAuthorizationRbac(t *testing.T, e *fixtures.ExpectedV2Rbac) {
 	applyAthenzDomain(t, e.AD, delete)
+	for _, ap := range e.AuthorizationPolicies {
+		err := framework.Global.IstioClientset.Delete(ap.GroupVersionKind(), ap.Name, ap.Namespace)
+		assert.Nil(t, err, "Delete of Authorization policy should not fail")
+	}
 	deleteServiceObjects(t, e.Services)
 }
 
@@ -370,7 +374,8 @@ func TestRemoveAnnotationFromServiceShouldDeleteAuthorizationPolicy(t *testing.T
 	verifyAuthorizationPolicyIsRemoved(t, e.AuthorizationPolicies[0])
 
 	// Cleanup resources
-	cleanupAuthorizationRbac(t, e)
+	applyAthenzDomain(t, e.AD, delete)
+	applyServices(t, e.Services, delete)
 }
 
 // Initial: Existing service with annotation, AP
