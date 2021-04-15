@@ -1,6 +1,10 @@
 package integration
 
 import (
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -9,12 +13,9 @@ import (
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"istio.io/api/security/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"reflect"
-	"testing"
-	"time"
 )
 
 // rolloutAndValidateAuthorizationPolicyScenario will perform the specified actions for the Athenz Domain and k8s services
@@ -63,18 +64,33 @@ func cleanupAuthorizationRbac(t *testing.T, e *fixtures.ExpectedV2Rbac) {
 func applyAthenzDomain(t *testing.T, athenzDomain *athenzdomain.AthenzDomain, a action) {
 	switch a {
 	case create:
-		_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(athenzDomain, metav1.CreateOptions{})
-		assert.Nil(t, err, "athenz domain create error should be nil")
+		createAthenzDomain(t, athenzDomain)
 	case update:
-		currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(athenzDomain.Name, metav1.GetOptions{})
-		assert.Nil(t, err, "athenz domain get error should be nil")
-		athenzDomain.ResourceVersion = currentAD.ResourceVersion
-		_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(athenzDomain, metav1.UpdateOptions{})
-		assert.Nil(t, err, "athenz domain update error should be nil")
+		updateAthenzDomain(t, athenzDomain)
 	case delete:
-		err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(athenzDomain.Name, metav1.DeleteOptions{})
-		assert.Nil(t, err, "athenz domain delete error should be nil")
+		deleteAthenzDomain(t, athenzDomain)
 	}
+}
+
+// createAthenzDomain created athenz domain object
+func createAthenzDomain(t *testing.T, athenzDomain *athenzdomain.AthenzDomain) {
+	_, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Create(athenzDomain, metav1.CreateOptions{})
+	assert.Nil(t, err, "athenz domain create error should be nil")
+}
+
+// updateAthenzDomain updates existing athenz domain object
+func updateAthenzDomain(t *testing.T, athenzDomain *athenzdomain.AthenzDomain) {
+	currentAD, err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Get(athenzDomain.Name, metav1.GetOptions{})
+	assert.Nil(t, err, "athenz domain get error should be nil")
+	athenzDomain.ResourceVersion = currentAD.ResourceVersion
+	_, err = framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Update(athenzDomain, metav1.UpdateOptions{})
+	assert.Nil(t, err, "athenz domain update error should be nil")
+}
+
+// deleteAthenzDomain deletes athenz domain object
+func deleteAthenzDomain(t *testing.T, athenzDomain *athenzdomain.AthenzDomain) {
+	err := framework.Global.AthenzDomainClientset.AthenzV1().AthenzDomains().Delete(athenzDomain.Name, metav1.DeleteOptions{})
+	assert.Nil(t, err, "athenz domain delete error should be nil")
 }
 
 // applyServices Based on the action specified creates, updates or deletes services
@@ -193,7 +209,7 @@ func TestDeleteAuthorizationPolicyRestoresOriginal(t *testing.T) {
 // Initial: Existing service with annotation, AP
 // Input Actions: update athenz domain with service related role, or policies associated to the role
 // Output: AP updated
-func TestUpdateAuthorizationPolicyUpdatesAuthorizationPolicy(t *testing.T) {
+func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 	// Initial set up
 	e := fixtures.GetBasicRbacV2Case(nil)
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
@@ -220,6 +236,40 @@ func TestUpdateAuthorizationPolicyUpdatesAuthorizationPolicy(t *testing.T) {
 		},
 	})
 
+	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
+	cleanupAuthorizationRbac(t, modified)
+}
+
+// Update AP
+// Initial: Existing service with annotation, AP
+// Input Actions: update athenz domain with service related role, or policies associated to the role
+// Output: AP updated
+func TestUpdateAthenzDomainIgnoresAuthorizationPolicyWithOverrideAnnotation(t *testing.T) {
+	// Initial set up
+	e := fixtures.GetBasicRbacV2Case(nil)
+	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
+
+	// Update Authorization policy with override Annotation
+	updatedAuthorizationPolicy := e.AuthorizationPolicies[0].DeepCopy()
+	if updatedAuthorizationPolicy.Annotations == nil || len(updatedAuthorizationPolicy.Annotations) == 0 {
+		updatedAuthorizationPolicy.Annotations = make(map[string]string)
+	}
+	updatedAuthorizationPolicy.Annotations["overrideAuthzPolicy"] = "true"
+	_, err := framework.Global.IstioClientset.Update(updatedAuthorizationPolicy)
+	assert.NotNil(t, err, "Authorization policy update should not fail")
+
+	// Get updated fixtures
+	newUserName := "user.bar"
+	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
+		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
+				signedDomain.Domain.Roles[0].Members = append(signedDomain.Domain.Roles[0].Members, zms.MemberName(newUserName))
+				signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, &zms.RoleMember{MemberName: zms.MemberName(newUserName)})
+			},
+		},
+	})
+
+	// Validate that Authorization policy did not change
 	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
 	cleanupAuthorizationRbac(t, modified)
 }
@@ -329,7 +379,7 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 	// Update Athenz Domain with an expiring member
 	// Get updated fixtures
 	newUserName := "user.bar"
-	value := time.Now().Add(time.Second * time.Duration(30))
+	value := time.Now().Add(time.Second * time.Duration(2))
 	expiringTimestamp := rdl.NewTimestamp(value)
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
@@ -357,9 +407,6 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 
 	// Rollout the modified Athenz domain and validate Authorization policy
 	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
-
-	// Wait for some time to ensure that the member expires
-	time.Sleep(1 * time.Minute)
 
 	// Now the role member should have been expired
 	// So validate that the user has been removed from the Authorization policy
