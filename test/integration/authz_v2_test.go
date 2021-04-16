@@ -246,7 +246,7 @@ func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 
 // Update AD
 // Initial: Existing service with annotation, AP
-// Input Actions: update AP with overrideAuthzPolicy, update Athenz domain with new Role Members
+// Input Actions: update AP with overrideAuthzPolicy annotation set, update Athenz domain with new Role Members
 // Output: AP is update(does not sync with AD)
 func TestUpdateAthenzDomainIgnoresAuthorizationPolicyWithOverrideAnnotation(t *testing.T) {
 	// Initial set up
