@@ -136,7 +136,7 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings)
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
 	ledgerValue := ledger.Make(time.Hour)
 	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
@@ -154,7 +154,7 @@ func Setup() error {
 		return err
 	}
 
-	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, false, componentsEnabled)
+	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled)
 	go c.Run(stopCh)
 
 	Global = &Framework{
