@@ -125,7 +125,7 @@ func getMemberExpiry(member interface{}) *rdl.Timestamp {
 		return roleMember.Expiration
 	}
 
-	return &rdl.Timestamp{Time: time.Time{}}
+	return nil
 }
 
 // getMemberSystemDisabled computes is the system disabled flag
