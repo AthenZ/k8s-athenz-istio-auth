@@ -244,6 +244,11 @@ func TestGetMemberName(t *testing.T) {
 			},
 			expectedName: "user.somename",
 		},
+		{
+			test:         "invalid group member",
+			member:       nil,
+			expectedName: "",
+		},
 	}
 
 	for _, c := range cases {
@@ -279,6 +284,11 @@ func TestGetMemberExpiry(t *testing.T) {
 			},
 			expectedExpiration: &timestamp,
 		},
+		{
+			test:               "invalid group member",
+			member:             nil,
+			expectedExpiration: nil,
+		},
 	}
 
 	for _, c := range cases {
@@ -309,6 +319,11 @@ func TestGetMemberSystemDisabled(t *testing.T) {
 				SystemDisabled: &isNotSystemDisabled,
 			},
 			expectedSystemDisabled: &isNotSystemDisabled,
+		},
+		{
+			test:                   "invalid group member",
+			member:                 nil,
+			expectedSystemDisabled: nil,
 		},
 	}
 

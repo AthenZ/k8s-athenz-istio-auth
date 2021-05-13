@@ -289,7 +289,7 @@ func ParseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 // role member
 func CheckAthenzSystemDisabled(member interface{}) (bool, error) {
 	if member == nil {
-		return false, fmt.Errorf("got an empty role Member: %s, skipping", GetMemberName(member))
+		return false, fmt.Errorf("got an empty role Member, skipping")
 	}
 
 	systemDisabled := getMemberSystemDisabled(member)
@@ -304,7 +304,7 @@ func CheckAthenzSystemDisabled(member interface{}) (bool, error) {
 // checks if expiration date surpasses current time
 func CheckAthenzMemberExpiry(member interface{}) (bool, error) {
 	if member == nil {
-		return false, fmt.Errorf("got an empty role Member: %s, skipping", GetMemberName(member))
+		return false, fmt.Errorf("got an empty role Member, skipping")
 	}
 
 	expiration := getMemberExpiry(member)
