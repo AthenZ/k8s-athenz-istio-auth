@@ -33,7 +33,7 @@ which are specified in the service role.
 - **Cluster RBAC Config** - Specifies the list of services which are onboarded onto the
 Istio RBAC feature.
 
-More information on how RBAC works in Istio can be found on their official website
+More information  on how RBAC works in Istio can be found on their official website
 [here](https://istio.io/docs/concepts/security/#authorization).
 
 ## Architecture
