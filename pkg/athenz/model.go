@@ -26,13 +26,17 @@ type RoleAssertions map[zms.ResourceName][]*zms.Assertion
 // map of Role:Members for an Athenz domain
 type RoleMembers map[zms.ResourceName][]*zms.RoleMember
 
+// map of Group:GroupMembers for an Athenz domain
+type GroupMembers map[zms.MemberName][]*zms.GroupMember
+
 // RBAC object to hold the policies for an Athenz domain
 type Model struct {
-	Name      zms.DomainName `json:"name"`
-	Namespace string         `json:"namespace"`
-	Roles     Roles          `json:"roles,omitempty"`
-	Rules     RoleAssertions `json:"rules,omitempty"`
-	Members   RoleMembers    `json:"members,omitempty"`
+	Name         zms.DomainName `json:"name"`
+	Namespace    string         `json:"namespace"`
+	Roles        Roles          `json:"roles,omitempty"`
+	Rules        RoleAssertions `json:"rules,omitempty"`
+	Members      RoleMembers    `json:"members,omitempty"`
+	GroupMembers GroupMembers   `json:"groups,omitempty"`
 }
 
 // getRolesForDomain returns the role names list in the same order as defined on the Athenz domain
@@ -109,6 +113,25 @@ func getMembersForRole(domain *zms.DomainData, crCache *cache.SharedIndexInforme
 	return roleMembers
 }
 
+// getMembersForGroup returns the members for each group in an Athenz domain
+func getMembersForGroup(domain *zms.DomainData) GroupMembers {
+	// groupMembers creates a map where the key in the group name
+	// and the value in the list of members in that group
+	groupMembers := make(GroupMembers)
+
+	if domain == nil || domain.Groups == nil {
+		return groupMembers
+	}
+
+	groups := domain.Groups
+	for _, group := range groups {
+		groupName := zms.MemberName(group.Name)
+		groupMembers[groupName] = group.GroupMembers
+	}
+
+	return groupMembers
+}
+
 // ConvertAthenzPoliciesIntoRbacModel transforms the given Athenz Domain structure into role-centric policies and members
 func ConvertAthenzPoliciesIntoRbacModel(domain *zms.DomainData, crCache *cache.SharedIndexInformer) Model {
 	var domainName zms.DomainName
@@ -116,11 +139,12 @@ func ConvertAthenzPoliciesIntoRbacModel(domain *zms.DomainData, crCache *cache.S
 		domainName = domain.Name
 	}
 	return Model{
-		Name:      domainName,
-		Namespace: DomainToNamespace(string(domainName)),
-		Roles:     getRolesForDomain(domain),
-		Rules:     getRulesForDomain(domain),
-		Members:   getMembersForRole(domain, crCache),
+		Name:         domainName,
+		Namespace:    DomainToNamespace(string(domainName)),
+		Roles:        getRolesForDomain(domain),
+		Rules:        getRulesForDomain(domain),
+		Members:      getMembersForRole(domain, crCache),
+		GroupMembers: getMembersForGroup(domain),
 	}
 }
 

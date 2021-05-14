@@ -5,6 +5,10 @@ package common
 
 import (
 	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/assert"
@@ -15,9 +19,6 @@ import (
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
-	"os"
-	"testing"
-	"time"
 )
 
 var (
@@ -68,7 +69,7 @@ func TestMemberToSpiffe(t *testing.T) {
 
 	cases := []struct {
 		test           string
-		member         *zms.RoleMember
+		member         interface{}
 		expectedMember string
 		expectedErr    error
 	}{
@@ -110,6 +111,38 @@ func TestMemberToSpiffe(t *testing.T) {
 			expectedMember: "",
 			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
 		},
+		{
+			test: "valid service member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("client.some-domain.dep-svcA"),
+			},
+			expectedMember: "client.some-domain/sa/dep-svcA",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid user member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.somename"),
+			},
+			expectedMember: "user/sa/somename",
+			expectedErr:    nil,
+		},
+		{
+			test: "valid wildcard member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.*"),
+			},
+			expectedMember: "*",
+			expectedErr:    nil,
+		},
+		{
+			test: "invalid member",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("not-a-valid-principal"),
+			},
+			expectedMember: "",
+			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
+		},
 	}
 
 	for _, c := range cases {
@@ -123,7 +156,7 @@ func TestMemberToOriginJwtSubject(t *testing.T) {
 
 	cases := []struct {
 		test                  string
-		member                *zms.RoleMember
+		member                interface{}
 		expectedOriginJwtName string
 		expectedErr           error
 	}{
@@ -157,12 +190,146 @@ func TestMemberToOriginJwtSubject(t *testing.T) {
 			expectedOriginJwtName: "*",
 			expectedErr:           nil,
 		},
+		{
+			test: "valid service member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("client.some-domain.dep-svcA"),
+			},
+			expectedOriginJwtName: AthenzJwtPrefix + "client.some-domain.dep-svcA",
+			expectedErr:           nil,
+		},
+		{
+			test: "valid user member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.somename"),
+			},
+			expectedOriginJwtName: AthenzJwtPrefix + "user.somename",
+			expectedErr:           nil,
+		},
+		{
+			test: "valid wildcard member in group",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.*"),
+			},
+			expectedOriginJwtName: "*",
+			expectedErr:           nil,
+		},
 	}
 
 	for _, c := range cases {
 		gotOriginJwtName, gotErr := MemberToOriginJwtSubject(c.member)
 		assert.Equal(t, c.expectedOriginJwtName, gotOriginJwtName, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestGetMemberName(t *testing.T) {
+
+	cases := []struct {
+		test         string
+		member       interface{}
+		expectedName string
+	}{
+		{
+			test: "valid role member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
+			},
+			expectedName: "client.some-domain.dep-svcA",
+		},
+		{
+			test: "valid group member",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.somename"),
+			},
+			expectedName: "user.somename",
+		},
+		{
+			test:         "invalid group member",
+			member:       nil,
+			expectedName: "",
+		},
+	}
+
+	for _, c := range cases {
+		memberName := GetMemberName(c.member)
+		assert.Equal(t, c.expectedName, memberName, c.test)
+	}
+}
+
+func TestGetMemberExpiry(t *testing.T) {
+	timestamp, err := rdl.TimestampParse("2001-01-25T03:32:15.245Z")
+	if err != nil {
+		panic(err)
+	}
+
+	cases := []struct {
+		test               string
+		member             interface{}
+		expectedExpiration *rdl.Timestamp
+	}{
+		{
+			test: "valid role member",
+			member: &zms.RoleMember{
+				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
+				Expiration: &timestamp,
+			},
+			expectedExpiration: &timestamp,
+		},
+		{
+			test: "valid group member",
+			member: &zms.GroupMember{
+				MemberName: zms.GroupMemberName("user.somename"),
+				Expiration: &timestamp,
+			},
+			expectedExpiration: &timestamp,
+		},
+		{
+			test:               "invalid group member",
+			member:             nil,
+			expectedExpiration: nil,
+		},
+	}
+
+	for _, c := range cases {
+		expiry := getMemberExpiry(c.member)
+		assert.Equal(t, c.expectedExpiration, expiry, c.test)
+	}
+}
+
+func TestGetMemberSystemDisabled(t *testing.T) {
+
+	cases := []struct {
+		test                   string
+		member                 interface{}
+		expectedSystemDisabled *int32
+	}{
+		{
+			test: "valid role member",
+			member: &zms.RoleMember{
+				MemberName:     zms.MemberName("client.some-domain.dep-svcA"),
+				SystemDisabled: &isSystemDisabled,
+			},
+			expectedSystemDisabled: &isSystemDisabled,
+		},
+		{
+			test: "valid group member",
+			member: &zms.GroupMember{
+				MemberName:     zms.GroupMemberName("user.somename"),
+				SystemDisabled: &isNotSystemDisabled,
+			},
+			expectedSystemDisabled: &isNotSystemDisabled,
+		},
+		{
+			test:                   "invalid group member",
+			member:                 nil,
+			expectedSystemDisabled: nil,
+		},
+	}
+
+	for _, c := range cases {
+		systemDisabled := getMemberSystemDisabled(c.member)
+		assert.Equal(t, c.expectedSystemDisabled, systemDisabled, c.test)
 	}
 }
 

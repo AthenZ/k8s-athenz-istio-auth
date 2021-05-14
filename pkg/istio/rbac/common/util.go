@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/ghodss/yaml"
 	"github.com/gogo/protobuf/proto"
 	"github.com/yahoo/athenz/clients/go/zms"
@@ -99,15 +100,57 @@ func (a *ApiHandler) Delete(item *Item) error {
 	return err
 }
 
-// CheckIfMemberIsAllUsersFromDomain returns namespace for Athenz domain when role member is of form '<athenz-domain>.*'.
-// Example: domain.sub-domain.* -> domain-sub--domain
-func CheckIfMemberIsAllUsersFromDomain(member *zms.RoleMember, domainName zms.DomainName) (string, error) {
+// GetMemberName computes the name of the member based on if the
+// type of the member is *zms.GroupMember or *zms.RoleMember
+func GetMemberName(member interface{}) string {
+	if groupMember, ok := member.(*zms.GroupMember); ok {
+		return string(groupMember.MemberName)
+	}
 
+	if roleMember, ok := member.(*zms.RoleMember); ok {
+		return string(roleMember.MemberName)
+	}
+
+	return ""
+}
+
+// getMemberExpiry computes the expiry of the member based on if the
+// type of the member is *zms.GroupMember or *zms.RoleMember
+func getMemberExpiry(member interface{}) *rdl.Timestamp {
+	if groupMember, ok := member.(*zms.GroupMember); ok {
+		return groupMember.Expiration
+	}
+
+	if roleMember, ok := member.(*zms.RoleMember); ok {
+		return roleMember.Expiration
+	}
+
+	return nil
+}
+
+// getMemberSystemDisabled computes is the system disabled flag
+// is enabled for a member based on if the type of the member
+// is *zms.GroupMember or *zms.RoleMember
+func getMemberSystemDisabled(member interface{}) *int32 {
+	if groupMember, ok := member.(*zms.GroupMember); ok {
+		return groupMember.SystemDisabled
+	}
+
+	if roleMember, ok := member.(*zms.RoleMember); ok {
+		return roleMember.SystemDisabled
+	}
+
+	return nil
+}
+
+// CheckIfMemberIsAllUsersFromDomain returns namespace for Athenz domain when role/group member is of form '<athenz-domain>.*'.
+// Example: domain.sub-domain.* -> domain-sub--domain
+func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.DomainName) (string, error) {
 	if member == nil {
 		return "", fmt.Errorf("member is nil")
 	}
 
-	memberStr := string(member.MemberName)
+	memberStr := GetMemberName(member)
 
 	// if member name is of the form '<athenz-domain>.*', return namespace
 	if strings.HasPrefix(memberStr, "unix.") || strings.HasPrefix(memberStr, "user.") || !strings.HasSuffix(memberStr, ".*") {
@@ -117,15 +160,14 @@ func CheckIfMemberIsAllUsersFromDomain(member *zms.RoleMember, domainName zms.Do
 	return athenz.DomainToNamespace(memberStr[0 : len(memberStr)-2]), nil
 }
 
-// MemberToSpiffe parses the Athenz role member into a SPIFFE compliant name.
+// MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member *zms.RoleMember) (string, error) {
-
+func MemberToSpiffe(member interface{}) (string, error) {
 	if member == nil {
 		return "", fmt.Errorf("member is nil")
 	}
 
-	memberStr := string(member.MemberName)
+	memberStr := GetMemberName(member)
 
 	// special condition: if member == 'user.*', return '*'
 	if memberStr == allUsers {
@@ -135,15 +177,14 @@ func MemberToSpiffe(member *zms.RoleMember) (string, error) {
 	return PrincipalToSpiffe(memberStr)
 }
 
-// MemberToOriginSubject parses the Athenz role member into the request.auth.principal
+// MemberToOriginSubject parses the Athenz role/group member into the request.auth.principal
 // jwt format. Example: athenz/example.domain.service
-func MemberToOriginJwtSubject(member *zms.RoleMember) (string, error) {
-
+func MemberToOriginJwtSubject(member interface{}) (string, error) {
 	if member == nil {
 		return "", fmt.Errorf("member is nil")
 	}
 
-	memberStr := string(member.MemberName)
+	memberStr := GetMemberName(member)
 
 	// special condition: if member == 'user.*', return '*'
 	if memberStr == allUsers {
@@ -246,25 +287,31 @@ func ParseAssertionResource(domainName zms.DomainName, assertion *zms.Assertion)
 
 // CheckAthenzSystemDisabled checks if athenz domain is systematically disabled, if so, controller skips processing current
 // role member
-func CheckAthenzSystemDisabled(roleMember *zms.RoleMember) (bool, error) {
-	if roleMember == nil {
-		return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)
+func CheckAthenzSystemDisabled(member interface{}) (bool, error) {
+	if member == nil {
+		return false, fmt.Errorf("got an empty role Member, skipping")
 	}
-	if roleMember.SystemDisabled != nil && *roleMember.SystemDisabled != 0 {
-		return false, fmt.Errorf("member %s is system disabled", roleMember.MemberName)
+
+	systemDisabled := getMemberSystemDisabled(member)
+
+	if systemDisabled != nil && *systemDisabled != 0 {
+		return false, fmt.Errorf("member %s is system disabled", GetMemberName(member))
 	}
 	return true, nil
 }
 
 // CheckAthenzMemberExpiry checks if Expiration field (timezone UTC) is set in the roleMember object, and then
 // checks if expiration date surpasses current time
-func CheckAthenzMemberExpiry(roleMember *zms.RoleMember) (bool, error) {
-	if roleMember == nil {
-		return false, fmt.Errorf("got an empty role Member: %s, skipping", roleMember.MemberName)
+func CheckAthenzMemberExpiry(member interface{}) (bool, error) {
+	if member == nil {
+		return false, fmt.Errorf("got an empty role Member, skipping")
 	}
+
+	expiration := getMemberExpiry(member)
+
 	// check if roleMember has expiration field set
-	if roleMember.Expiration != nil && roleMember.Expiration.Before(time.Now()) {
-		return false, fmt.Errorf("member %s is expired", roleMember.MemberName)
+	if expiration != nil && expiration.Before(time.Now()) {
+		return false, fmt.Errorf("member %s is expired", GetMemberName(member))
 	}
 	return true, nil
 }
