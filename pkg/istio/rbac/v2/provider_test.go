@@ -29,6 +29,8 @@ const (
 	username                   = "user.name"
 	wildcardUsername           = "user.*"
 	wildcardAllUsersFromDomain = "test-domain.namespace2.*"
+	usernameOneInGroup         = "user.groupOneuser"
+	usernameTwoInGroup         = "user.groupTwouser"
 )
 
 var (
@@ -216,6 +218,7 @@ func getExpectedAuthzPolicy() []model.Config {
 						Source: &v1beta1.Source{
 							Principals: []string{
 								"*",
+								"user/sa/groupOneuser",
 								"test.namespace/ra/test.namespace:role.productpage-reader",
 							},
 						},
@@ -231,6 +234,7 @@ func getExpectedAuthzPolicy() []model.Config {
 						Source: &v1beta1.Source{
 							RequestPrincipals: []string{
 								"*",
+								"athenz/user.groupOneuser",
 							},
 						},
 					},
@@ -251,6 +255,7 @@ func getExpectedAuthzPolicy() []model.Config {
 						Source: &v1beta1.Source{
 							Principals: []string{
 								"user/sa/name",
+								"user/sa/groupTwouser",
 								"test.namespace/ra/test.namespace:role.productpage-writer",
 							},
 						},
@@ -259,6 +264,7 @@ func getExpectedAuthzPolicy() []model.Config {
 						Source: &v1beta1.Source{
 							RequestPrincipals: []string{
 								"athenz/user.name",
+								"athenz/user.groupTwouser",
 							},
 						},
 					},
@@ -380,6 +386,9 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 						{
 							MemberName: wildcardAllUsersFromDomain,
 						},
+						{
+							MemberName: domainName + ":group.one",
+						},
 					},
 				},
 				{
@@ -388,6 +397,29 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 					RoleMembers: []*zms.RoleMember{
 						{
 							MemberName: username,
+						},
+						{
+							MemberName: domainName + ":group.two",
+						},
+					},
+				},
+			},
+			Groups: []*zms.Group{
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":group.one",
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: usernameOneInGroup,
+						},
+					},
+				},
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":group.two",
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: usernameTwoInGroup,
 						},
 					},
 				},

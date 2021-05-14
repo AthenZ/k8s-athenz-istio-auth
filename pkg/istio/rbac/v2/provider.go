@@ -146,8 +146,27 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		from_namespace := &v1beta1.Rule_From{
 			Source: &v1beta1.Source{},
 		}
+
 		// role name should match zms resource name
 		for _, roleMember := range athenzModel.Members[role] {
+			var members []interface{}
+			roleflag := false
+
+			// Check to see in the roleMember is a group in Athenz
+			// - If is a group add all the members of the group to the
+			// member array.
+			// - If not add only the original roleMember
+			if _, ok := athenzModel.GroupMembers[roleMember.MemberName]; ok {
+				for _, groupMember := range athenzModel.GroupMembers[roleMember.MemberName] {
+					members = append(members, groupMember)
+				}
+			} else {
+				members = append(members, roleMember)
+				roleflag = true
+			}
+
+			// In both the cases - Role and Groups Members first check the
+			// if the role has not yet expired or the role is not system disabled
 			res, err := common.CheckAthenzMemberExpiry(roleMember)
 			if err != nil {
 				log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", roleMember.MemberName, err)
@@ -157,6 +176,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
+
 			res, err = common.CheckAthenzSystemDisabled(roleMember)
 			if err != nil {
 				log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", roleMember.MemberName, err)
@@ -166,28 +186,57 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				log.Infoln("member expired, skip adding member to authz policy resource, member: ", roleMember.MemberName)
 				continue
 			}
-			namespace, err := common.CheckIfMemberIsAllUsersFromDomain(roleMember, athenzModel.Name)
-			if err != nil {
-				log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
-				continue
-			}
-			if namespace != "" {
-				from_namespace.Source.Namespaces = append(from_namespace.Source.Namespaces, namespace)
-				continue
-			}
-			spiffeName, err := common.MemberToSpiffe(roleMember)
-			if err != nil {
-				log.Errorln("error converting role member to spiffeName: ", err.Error())
-				continue
-			}
-			from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
-			if p.enableOriginJwtSubject {
-				originJwtName, err := common.MemberToOriginJwtSubject(roleMember)
+
+			for _, member := range members {
+				// This is only done for Group Members to check the expiry and system disabled
+				// at a Group Member level after doing a check for the entire role
+				if !roleflag {
+					res, err := common.CheckAthenzMemberExpiry(member)
+					if err != nil {
+						log.Errorf("error when checking athenz member expiration date, skipping current member: %s, error: %s", common.GetMemberName(member), err)
+						continue
+					}
+					if !res {
+						log.Infoln("member expired, skip adding member to authz policy resource, member: ", common.GetMemberName(member))
+						continue
+					}
+
+					res, err = common.CheckAthenzSystemDisabled(member)
+					if err != nil {
+						log.Errorf("error when checking athenz member system disabled, skipping current member: %s, error: %s", common.GetMemberName(member), err)
+						continue
+					}
+					if !res {
+						log.Infoln("member expired, skip adding member to authz policy resource, member: ", common.GetMemberName(member))
+						continue
+					}
+				}
+
+				namespace, err := common.CheckIfMemberIsAllUsersFromDomain(member, athenzModel.Name)
 				if err != nil {
-					log.Errorln(err.Error())
+					log.Errorln("error checking if role member is all users in an Athenz domain: ", err.Error())
 					continue
 				}
-				from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+				if namespace != "" {
+					from_namespace.Source.Namespaces = append(from_namespace.Source.Namespaces, namespace)
+					continue
+				}
+
+				spiffeName, err := common.MemberToSpiffe(member)
+				if err != nil {
+					log.Errorln("error converting role member to spiffeName: ", err.Error())
+					continue
+				}
+
+				from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+				if p.enableOriginJwtSubject {
+					originJwtName, err := common.MemberToOriginJwtSubject(member)
+					if err != nil {
+						log.Errorln(err.Error())
+						continue
+					}
+					from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+				}
 			}
 		}
 		//add role spiffe for role certificate
