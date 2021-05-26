@@ -24,41 +24,17 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       
-      - name: go vet
-        run: cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth
-
-      - name: Basic build
-        run: go build -v -race ./...
-
-      - name: Run tests on linux
-        run: go test ./...
-     
-      - name: Run tests with race detector
-        run: diff -u <(echo -n) <(gofmt -d .)
-
-      - name: Upload coverage to Codecov  
-        run: go vet ./...
-
-      - name: Upload coverage to Codecov  
-        run: go test -v -race ./...
-      
-      - name: Upload coverage to Codecov  
-        run: cd $GOPATH/src; mkdir k8s.io; cd k8s.io
-
-      - name: Upload coverage to Codecov  
-        run: git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.17
-      
-      - name: Upload coverage to Codecov  
-        run: GO111MODULE=auto make WHAT=cmd/kube-apiserver
-      
-      - name: Upload coverage to Codecov  
-        run: cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
-    
-      - name: Upload coverage to Codecov  
-        run: cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
-      
-      - name: Upload coverage to Codecov  
-        run: cd $GOPATH/src/github.com/yahoo/k8s-athenz-istio-auth/test/integration; go test -v ./...
+      - run: |
+         go build -v -race ./...
+         go test ./...
+         diff -u <(echo -n) <(gofmt -d .)
+         go vet ./...
+         go test -v -race ./...
+         mkdir k8s.io; cd k8s.io
+         git clone https://github.com/kubernetes/kubernetes.git; cd kubernetes; git checkout release-1.17
+         GO111MODULE=auto make WHAT=cmd/kube-apiserver
+         cd /home/runner/work/k8s-athenz-istio-auth/k8s-athenz-istio-auth/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
+         cd /home/runner/work/k8s-athenz-istio-auth/k8s-athenz-istio-auth/test/integration; go test -v ./...
       
 
       
