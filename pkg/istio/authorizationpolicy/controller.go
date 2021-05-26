@@ -233,7 +233,7 @@ func (c *Controller) sync(key string) error {
 		if !c.checkAuthzEnabledAnnotation(service) {
 			continue
 		}
-		desiredCR := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, service.Name, service.Labels["svc"])
+		desiredCR := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, service.Name, service.Labels["svc"], service.Labels["app"])
 		// append to desiredCRs array
 		desiredCRs = append(desiredCRs, desiredCR...)
 	}

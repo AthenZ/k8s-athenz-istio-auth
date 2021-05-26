@@ -27,7 +27,7 @@ import (
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/istio/pkg/config/schema/resource"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	fcache "k8s.io/client-go/tools/cache/testing"
@@ -55,6 +55,7 @@ var (
 				authzEnabledAnnotation: "true",
 			},
 			Labels: map[string]string{
+				"app": "productpage",
 				"svc": "productpage",
 			},
 		},
@@ -68,6 +69,7 @@ var (
 				authzEnabledAnnotation: "true",
 			},
 			Labels: map[string]string{
+				"app": "productpage",
 				"svc": "productpage",
 			},
 		},
@@ -81,6 +83,7 @@ var (
 				authzEnabledAnnotation: "false",
 			},
 			Labels: map[string]string{
+				"app": "productpage",
 				"svc": "productpage",
 			},
 		},
@@ -572,7 +575,7 @@ func getExpectedAuthzPolicy() *model.Config {
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
 		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
+			MatchLabels: map[string]string{"app": "productpage"},
 		},
 		Rules: []*v1beta1.Rule{
 			{
@@ -781,7 +784,7 @@ func getExistingAuthzPolicy() *model.Config {
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
 		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
+			MatchLabels: map[string]string{"app": "productpage"},
 		},
 		Rules: []*v1beta1.Rule{
 			{
@@ -831,7 +834,7 @@ func getModifiedAuthzPolicy() *authz.AuthorizationPolicy {
 		},
 		Spec: v1beta1.AuthorizationPolicy{
 			Selector: &workloadv1beta1.WorkloadSelector{
-				MatchLabels: map[string]string{"svc": "productpage"},
+				MatchLabels: map[string]string{"app": "productpage"},
 			},
 			Rules: []*v1beta1.Rule{
 				{
@@ -893,7 +896,7 @@ func getExpectedEmptyAuthzPolicy() *model.Config {
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
 		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
+			MatchLabels: map[string]string{"app": "productpage"},
 		},
 	}
 	return out

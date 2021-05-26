@@ -127,7 +127,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
 			assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
 			p := NewProvider(componentsEnabledAuthzPolicy, true)
-			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["app"])
+			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["app"], labels["app"])
 			configSpec := (convertedAuthzPolicy[0].Spec).(*v1beta1.AuthorizationPolicy)
 			sort.Slice(configSpec.Rules, func(i, j int) bool {
 				return configSpec.Rules[i].To[0].Operation.Methods[0] < configSpec.Rules[j].To[0].Operation.Methods[0]
@@ -156,7 +156,7 @@ func getExpectedEmptyAuthzPolicy() []model.Config {
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
 		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
+			MatchLabels: map[string]string{"app": "productpage"},
 		},
 	}
 	return []model.Config{out}
@@ -209,7 +209,7 @@ func getExpectedAuthzPolicy() []model.Config {
 	}
 	out.Spec = &v1beta1.AuthorizationPolicy{
 		Selector: &workloadv1beta1.WorkloadSelector{
-			MatchLabels: map[string]string{"svc": "productpage"},
+			MatchLabels: map[string]string{"app": "productpage"},
 		},
 		Rules: []*v1beta1.Rule{
 			{
