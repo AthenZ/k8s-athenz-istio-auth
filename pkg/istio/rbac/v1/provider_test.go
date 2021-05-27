@@ -758,7 +758,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.test, func(t *testing.T) {
 			p := NewProvider(c.enableOriginJwtSubject)
-			gotConfigs := p.ConvertAthenzModelIntoIstioRbac(c.model, "", "")
+			gotConfigs := p.ConvertAthenzModelIntoIstioRbac(c.model, "", "", "")
 			assert.EqualValues(t, c.expectedConfigs, gotConfigs, c.test)
 		})
 	}

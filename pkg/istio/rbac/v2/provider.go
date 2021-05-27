@@ -38,7 +38,7 @@ var queryRegex = regexp.MustCompile(`.*\?.*`)
 
 // ConvertAthenzModelIntoIstioRbac converts the Athenz RBAC model into Istio Authorization V1Beta1 specific
 // RBAC custom resource (AuthorizationPolicy)
-func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceName string, svcLabel string) []model.Config {
+func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceName string, svcLabel, appLabel string) []model.Config {
 	// authz policy is created per service. each rule is created by each role, and form the rules under
 	// this authz policy.
 	var out model.Config
@@ -58,7 +58,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 	spec := &v1beta1.AuthorizationPolicy{}
 
 	spec.Selector = &workloadv1beta1.WorkloadSelector{
-		MatchLabels: map[string]string{"svc": svcLabel},
+		MatchLabels: map[string]string{"app": appLabel},
 	}
 
 	// sort athenzModel.Rules map based on alphabetical order of key's name (role's name)
