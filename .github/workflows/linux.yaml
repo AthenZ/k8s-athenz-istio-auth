@@ -24,8 +24,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       
-      - run: |
-        ls -la $GOPATH
+      - run: ls -la $GOPATH
         #  go build -v -race ./...
         #  go test ./...
         #  diff -u <(echo -n) <(gofmt -d .)
