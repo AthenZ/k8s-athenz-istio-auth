@@ -35,6 +35,3 @@ jobs:
          GO111MODULE=auto make WHAT=cmd/kube-apiserver
          cd /home/runner/work/k8s-athenz-istio-auth/k8s-athenz-istio-auth/k8s.io/kubernetes/vendor/k8s.io/kube-openapi; go mod init
          cd /home/runner/work/k8s-athenz-istio-auth/k8s-athenz-istio-auth/test/integration; go test -v ./...
-      
-
-      
