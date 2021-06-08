@@ -584,7 +584,7 @@ func getExpectedAuthzPolicy() *model.Config {
 						Source: &v1beta1.Source{
 							Principals: []string{
 								"*",
-								"test.namespace.onboarded/ra/test.namespace.onboarded:role.productpage-reader",
+								"test.namespace.onboarded/ra/productpage-reader",
 							},
 						},
 					},
@@ -804,7 +804,7 @@ func getExistingAuthzPolicy() *model.Config {
 						Source: &v1beta1.Source{
 							Principals: []string{
 								"*",
-								"test.namespace.onboarded/ra/test.namespace.onboarded:role.random-reader",
+								"test.namespace.onboarded/ra/random-reader",
 							},
 						},
 					},
@@ -854,7 +854,7 @@ func getModifiedAuthzPolicy() *authz.AuthorizationPolicy {
 							Source: &v1beta1.Source{
 								Principals: []string{
 									"*",
-									"test.namespace.onboarded/ra/test.namespace.onboarded:role.random-reader",
+									"test.namespace.onboarded/ra/random-reader",
 								},
 							},
 						},

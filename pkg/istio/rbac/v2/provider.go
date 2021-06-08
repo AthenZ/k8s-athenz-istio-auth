@@ -239,8 +239,16 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				}
 			}
 		}
+
+		// Extract only the role name from the <domain>:role.<roleName> format
+		roleName, err := common.ParseRoleFQDN(athenzModel.Name, string(role))
+		if err != nil {
+			log.Debugln(err.Error())
+			continue
+		}
+
 		//add role spiffe for role certificate
-		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
+		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleName))
 		if err != nil {
 			log.Errorln("error when convert role to spiffe name: ", err.Error())
 			continue
