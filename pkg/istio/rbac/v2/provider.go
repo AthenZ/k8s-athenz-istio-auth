@@ -239,8 +239,10 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 				}
 			}
 		}
+
+		roleArr := strings.Split(string(role), ":")
 		//add role spiffe for role certificate
-		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(role))
+		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleArr[1]))
 		if err != nil {
 			log.Errorln("error when convert role to spiffe name: ", err.Error())
 			continue
