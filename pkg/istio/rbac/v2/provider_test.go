@@ -174,7 +174,7 @@ func getExpectedAuthzPolicyWithRole() []model.Config {
 				{
 					Source: &v1beta1.Source{
 						Principals: []string{
-							"test.namespace/ra/role.onboarded-service-access",
+							"test.namespace/ra/onboarded-service-access",
 						},
 					},
 				},
@@ -221,7 +221,7 @@ func getExpectedAuthzPolicy() []model.Config {
 							Principals: []string{
 								"*",
 								"user/sa/groupOneuser",
-								"test.namespace/ra/role.productpage-reader",
+								"test.namespace/ra/productpage-reader",
 							},
 						},
 					},
@@ -258,7 +258,7 @@ func getExpectedAuthzPolicy() []model.Config {
 							Principals: []string{
 								"user/sa/name",
 								"user/sa/groupTwouser",
-								"test.namespace/ra/role.productpage-writer",
+								"test.namespace/ra/productpage-writer",
 							},
 						},
 					},
