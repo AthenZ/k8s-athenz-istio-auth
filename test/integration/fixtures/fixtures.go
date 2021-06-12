@@ -340,6 +340,26 @@ func getDefaultSignedDomain() zms.SignedDomain {
 					},
 				},
 			},
+			Groups: []*zms.Group{
+				{
+					Modified: &timestamp,
+					Name:     zms.ResourceName(domainName + ":group.one"),
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: "user.groupOneuser",
+						},
+					},
+				},
+				{
+					Modified: &timestamp,
+					Name:     zms.ResourceName(domainName + ":group.two"),
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: "user.groupTwouser",
+						},
+					},
+				},
+			},
 			Services: []*zms.ServiceIdentity{},
 			Entities: []*zms.Entity{},
 		},
@@ -479,6 +499,8 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 						Source: &securityV1beta1.Source{
 							Principals: []string{
 								"user/sa/foo",
+								"user/sa/groupOneuser",
+								"user/sa/groupTwouser",
 								"athenz.domain/ra/athenz.domain:role.client-writer-role",
 							},
 						},
@@ -486,6 +508,8 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 					&securityV1beta1.Rule_From{
 						Source: &securityV1beta1.Source{
 							RequestPrincipals: []string{
+								"athenz/groupOneuser",
+								"athenz/groupTwouser",
 								"athenz/user.foo",
 							},
 						},
