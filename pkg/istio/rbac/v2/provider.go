@@ -24,12 +24,14 @@ import (
 type v2 struct {
 	componentEnabledAuthzPolicy *common.ComponentEnabled
 	enableOriginJwtSubject      bool
+	combinationPolicyTag        string
 }
 
-func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool, combinationPolicyTag string) rbac.Provider {
 	return &v2{
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
+		combinationPolicyTag:        combinationPolicyTag,
 	}
 }
 
@@ -76,6 +78,18 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		role := zms.ResourceName(roleKey)
 		assertions := athenzModel.Rules[role]
 		rule := &v1beta1.Rule{}
+
+		var proxyPrincipalsList []zms.CompoundName
+		combinationPolicyFlag := false
+		// Conditions to check if the particular role has opted in for Combination Policy
+		// Check if the roles contains tags && Check if one of the role in proxy-principals
+		if athenzModel.RoleTags[role] != nil && athenzModel.RoleTags[role][zms.CompoundName(p.combinationPolicyTag)] != nil {
+			// If conditions are met set combinationPolicyFlag to true and proxyPrincipalsList contains
+			// all the Authorized proxy principals
+			combinationPolicyFlag = true
+			proxyPrincipalsList = athenzModel.RoleTags[role][zms.CompoundName(p.combinationPolicyTag)].List
+		}
+
 		for _, assert := range assertions {
 			// form rule_to array by appending matching assertions.
 			// assert.Resource contains the svc information that needs to parse and match
@@ -137,10 +151,19 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		if rule.To == nil {
 			continue
 		}
+
 		from_principal := &v1beta1.Rule_From{
 			Source: &v1beta1.Source{},
 		}
 		from_requestPrincipal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+
+		// Used if role has opted for combination policies
+		from_principalAndRequestPrincipal := &v1beta1.Rule_From{
+			Source: &v1beta1.Source{},
+		}
+		from_principalAndNotRequestPrincipal := &v1beta1.Rule_From{
 			Source: &v1beta1.Source{},
 		}
 		from_namespace := &v1beta1.Rule_From{
@@ -228,14 +251,27 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 					continue
 				}
 
-				from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
-				if p.enableOriginJwtSubject {
-					originJwtName, err := common.MemberToOriginJwtSubject(member)
-					if err != nil {
-						log.Errorln(err.Error())
-						continue
+				if combinationPolicyFlag {
+					from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, spiffeName)
+					from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, spiffeName)
+					if p.enableOriginJwtSubject {
+						originJwtName, err := common.MemberToOriginJwtSubject(member)
+						if err != nil {
+							log.Errorln(err.Error())
+							continue
+						}
+						from_principalAndRequestPrincipal.Source.RequestPrincipals = append(from_principalAndRequestPrincipal.Source.RequestPrincipals, originJwtName)
 					}
-					from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+				} else {
+					from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+					if p.enableOriginJwtSubject {
+						originJwtName, err := common.MemberToOriginJwtSubject(member)
+						if err != nil {
+							log.Errorln(err.Error())
+							continue
+						}
+						from_requestPrincipal.Source.RequestPrincipals = append(from_requestPrincipal.Source.RequestPrincipals, originJwtName)
+					}
 				}
 			}
 		}
@@ -253,13 +289,44 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			log.Errorln("error when convert role to spiffe name: ", err.Error())
 			continue
 		}
-		from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
-		rule.From = append(rule.From, from_principal)
-		if len(from_namespace.Source.Namespaces) > 0 {
-			rule.From = append(rule.From, from_namespace)
+		if combinationPolicyFlag {
+			from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, roleSpiffeName)
+			from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, roleSpiffeName)
+			for _, proxyPrincipal := range proxyPrincipalsList {
+				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal)
+				if err != nil {
+					log.Errorln("error converting role member to spiffeName: ", err.Error())
+					continue
+				}
+				if p.enableOriginJwtSubject {
+					originJwtName, err := common.MemberToOriginJwtSubject(proxyPrincipal)
+					if err != nil {
+						log.Errorln(err.Error())
+						continue
+					}
+					from_principalAndRequestPrincipal.Source.RequestPrincipals = append(from_principalAndRequestPrincipal.Source.RequestPrincipals, originJwtName)
+				}
+				from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, proxySpiffeName)
+			}
+			from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals = append(from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals, "*")
+		} else {
+			from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
 		}
-		if p.enableOriginJwtSubject && len(from_requestPrincipal.Source.RequestPrincipals) > 0 {
-			rule.From = append(rule.From, from_requestPrincipal)
+
+		if combinationPolicyFlag {
+			rule.From = append(rule.From, from_principalAndRequestPrincipal)
+			rule.From = append(rule.From, from_principalAndNotRequestPrincipal)
+			if len(from_namespace.Source.Namespaces) > 0 {
+				rule.From = append(rule.From, from_namespace)
+			}
+		} else {
+			rule.From = append(rule.From, from_principal)
+			if len(from_namespace.Source.Namespaces) > 0 {
+				rule.From = append(rule.From, from_namespace)
+			}
+			if p.enableOriginJwtSubject && len(from_requestPrincipal.Source.RequestPrincipals) > 0 {
+				rule.From = append(rule.From, from_requestPrincipal)
+			}
 		}
 		rules = append(rules, rule)
 	}

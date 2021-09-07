@@ -26,6 +26,8 @@ type RoleAssertions map[zms.ResourceName][]*zms.Assertion
 // map of Role:Members for an Athenz domain
 type RoleMembers map[zms.ResourceName][]*zms.RoleMember
 
+type RoleTags map[zms.ResourceName]map[zms.CompoundName]*zms.StringList
+
 // map of Group:GroupMembers for an Athenz domain
 type GroupMembers map[zms.MemberName][]*zms.GroupMember
 
@@ -37,6 +39,7 @@ type Model struct {
 	Rules        RoleAssertions `json:"rules,omitempty"`
 	Members      RoleMembers    `json:"members,omitempty"`
 	GroupMembers GroupMembers   `json:"groups,omitempty"`
+	RoleTags     RoleTags       `json:"roletags,omitempty"`
 }
 
 // getRolesForDomain returns the role names list in the same order as defined on the Athenz domain
@@ -113,6 +116,25 @@ func getMembersForRole(domain *zms.DomainData, crCache *cache.SharedIndexInforme
 	return roleMembers
 }
 
+// getTagsForRole returns the tags for each role in an Athenz domain
+func getTagsForRole(domain *zms.DomainData) RoleTags {
+	roleTags := make(RoleTags)
+
+	if domain == nil || domain.Roles == nil {
+		return roleTags
+	}
+
+	roles := domain.Roles
+	for _, role := range roles {
+		roleName := zms.ResourceName(role.Name)
+		if role.Tags != nil {
+			roleTags[roleName] = role.Tags
+		}
+	}
+
+	return roleTags
+}
+
 // getMembersForGroup returns the members for each group in an Athenz domain
 func getMembersForGroup(domain *zms.DomainData) GroupMembers {
 	// groupMembers creates a map where the key in the group name
@@ -145,6 +167,7 @@ func ConvertAthenzPoliciesIntoRbacModel(domain *zms.DomainData, crCache *cache.S
 		Rules:        getRulesForDomain(domain),
 		Members:      getMembersForRole(domain, crCache),
 		GroupMembers: getMembersForGroup(domain),
+		RoleTags:     getTagsForRole(domain),
 	}
 }
 

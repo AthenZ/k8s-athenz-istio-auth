@@ -5,11 +5,12 @@ package onboarding
 
 import (
 	"errors"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
-	"istio.io/istio/pkg/config/schema/collections"
 	"time"
 
-	"k8s.io/api/core/v1"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
+	"istio.io/istio/pkg/config/schema/collections"
+
+	v1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"

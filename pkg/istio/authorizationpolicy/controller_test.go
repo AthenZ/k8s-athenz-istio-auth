@@ -202,7 +202,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 		panic(err)
 	}
 	c.componentEnabledAuthzPolicy = componentsEnabledAuthzPolicy
-	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject)
+	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject, "proxy-principals")
 	c.dryRunHandler = common.DryRunHandler{}
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
@@ -486,7 +486,7 @@ func TestNewController(t *testing.T) {
 	apiHandler := common.ApiHandler{
 		ConfigStoreCache: configStoreCache,
 	}
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{})
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{}, "proxy-principals")
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")

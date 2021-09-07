@@ -103,12 +103,17 @@ func (a *ApiHandler) Delete(item *Item) error {
 // GetMemberName computes the name of the member based on if the
 // type of the member is *zms.GroupMember or *zms.RoleMember
 func GetMemberName(member interface{}) string {
+
 	if groupMember, ok := member.(*zms.GroupMember); ok {
 		return string(groupMember.MemberName)
 	}
 
 	if roleMember, ok := member.(*zms.RoleMember); ok {
 		return string(roleMember.MemberName)
+	}
+
+	if proxyPrincipalMember, ok := member.(zms.CompoundName); ok {
+		return string(proxyPrincipalMember)
 	}
 
 	return ""
