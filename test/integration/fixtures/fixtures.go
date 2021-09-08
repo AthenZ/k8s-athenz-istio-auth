@@ -469,7 +469,7 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 	authPolicy := &securityV1beta1.AuthorizationPolicy{
 		Selector: &istioTypeV1beta1.WorkloadSelector{
 			MatchLabels: map[string]string{
-				"svc": serviceName,
+				"app": serviceName,
 			},
 		},
 		Rules: []*securityV1beta1.Rule{
@@ -521,6 +521,7 @@ func GetDefaultService(serviceName string, modifications []func(service *v1.Serv
 	if defaultService.Labels == nil {
 		defaultService.Labels = make(map[string]string)
 	}
+	defaultService.Labels["app"] = defaultService.Name
 	defaultService.Labels["svc"] = defaultService.Name
 	if modifications == nil {
 		modifications = []func(service *v1.Service){}
