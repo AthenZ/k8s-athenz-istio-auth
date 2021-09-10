@@ -43,9 +43,10 @@ type Controller struct {
 	componentEnabledAuthzPolicy *common.ComponentEnabled
 	dryRunHandler               common.DryRunHandler
 	apiHandler                  common.ApiHandler
+	combinationPolicyTag        string
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -53,7 +54,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		serviceIndexInformer:        serviceIndexInformer,
 		adIndexInformer:             adIndexInformer,
 		queue:                       queue,
-		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject),
+		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject, combinationPolicyTag),
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,

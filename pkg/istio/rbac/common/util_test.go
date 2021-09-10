@@ -245,6 +245,11 @@ func TestGetMemberName(t *testing.T) {
 			expectedName: "user.somename",
 		},
 		{
+			test:         "valid tag value",
+			member:       zms.CompoundName("user.somename"),
+			expectedName: "user.somename",
+		},
+		{
 			test:         "invalid group member",
 			member:       nil,
 			expectedName: "",

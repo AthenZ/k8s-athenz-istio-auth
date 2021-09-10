@@ -118,6 +118,12 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			inputService:        onboardedService,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 		},
+		{
+			name:                "should create expected authz policy spec for combination policy",
+			inputAthenzDomain:   getFakeOnboardedDomainCombinationPolicy(),
+			inputService:        onboardedService,
+			expectedAuthzPolicy: getExpectedAuthzPolicyCombinationPolicy(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -128,7 +134,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(tt.inputAthenzDomain.Domain, &fakeAthenzInformer)
 			componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
 			assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
-			p := NewProvider(componentsEnabledAuthzPolicy, true)
+			p := NewProvider(componentsEnabledAuthzPolicy, true, "proxy-principals")
 			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["svc"], labels["app"])
 			configSpec := (convertedAuthzPolicy[0].Spec).(*v1beta1.AuthorizationPolicy)
 			sort.Slice(configSpec.Rules, func(i, j int) bool {
@@ -306,6 +312,128 @@ func getExpectedAuthzPolicy() []model.Config {
 	return []model.Config{out}
 }
 
+func getExpectedAuthzPolicyCombinationPolicy() []model.Config {
+	var out model.Config
+	schema := collections.IstioSecurityV1Beta1Authorizationpolicies
+	createTimestamp, err := time.Parse(time.RFC3339, "2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
+	out.ConfigMeta = model.ConfigMeta{
+		Type:              schema.Resource().Kind(),
+		Group:             schema.Resource().Group(),
+		Version:           schema.Resource().Version(),
+		Namespace:         "test-namespace",
+		Name:              "onboarded-service",
+		CreationTimestamp: createTimestamp,
+	}
+	out.Spec = &v1beta1.AuthorizationPolicy{
+		Selector: &workloadv1beta1.WorkloadSelector{
+			MatchLabels: map[string]string{"app": "productpage"},
+		},
+		Rules: []*v1beta1.Rule{
+			{
+				From: []*v1beta1.Rule_From{
+					{
+						Source: &v1beta1.Source{
+							Principals: []string{
+								"*",
+								"user/sa/groupOneuser",
+								"test.namespace/ra/productpage-reader",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							Namespaces: []string{
+								"test--domain-namespace2",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							RequestPrincipals: []string{
+								"*",
+								"athenz/user.groupOneuser",
+							},
+						},
+					},
+				},
+				To: []*v1beta1.Rule_To{
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"GET",
+							},
+						},
+					},
+				},
+			},
+			{
+				From: []*v1beta1.Rule_From{
+					{
+						Source: &v1beta1.Source{
+							Principals: []string{
+								"user/sa/name",
+								"user/sa/groupTwouser",
+								"test.namespace/ra/productpage-writer",
+								"user/sa/test-tag-value-1",
+								"user/sa/test-tag-value-2",
+							},
+							RequestPrincipals: []string{
+								"athenz/user.name",
+								"athenz/user.groupTwouser",
+							},
+						},
+					},
+					{
+						Source: &v1beta1.Source{
+							NotRequestPrincipals: []string{
+								"*",
+							},
+							Principals: []string{
+								"user/sa/name",
+								"user/sa/groupTwouser",
+								"test.namespace/ra/productpage-writer",
+							},
+						},
+					},
+				},
+				To: []*v1beta1.Rule_To{
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+						},
+					},
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+							Paths: []string{
+								"/api/query",
+							},
+						},
+					},
+					{
+						Operation: &v1beta1.Operation{
+							Methods: []string{
+								"POST",
+							},
+							Paths: []string{
+								"/api/query",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return []model.Config{out}
+}
+
 func getFakeOnboardedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
 	timestamp, err := rdl.TimestampParse("2012-11-01T22:08:41+00:00")
@@ -402,6 +530,142 @@ func getFakeOnboardedDomain() zms.SignedDomain {
 						},
 						{
 							MemberName: domainName + ":group.two",
+						},
+					},
+				},
+			},
+			Groups: []*zms.Group{
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":group.one",
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: usernameOneInGroup,
+						},
+					},
+				},
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":group.two",
+					GroupMembers: []*zms.GroupMember{
+						{
+							MemberName: usernameTwoInGroup,
+						},
+					},
+				},
+			},
+			Services: []*zms.ServiceIdentity{},
+			Entities: []*zms.Entity{},
+		},
+		KeyId:     "colo-env-1.1",
+		Signature: "signature",
+	}
+}
+
+func getFakeOnboardedDomainCombinationPolicy() zms.SignedDomain {
+	allow := zms.ALLOW
+	timestamp, err := rdl.TimestampParse("2012-11-01T22:08:41+00:00")
+	if err != nil {
+		panic(err)
+	}
+
+	return zms.SignedDomain{
+		Domain: &zms.DomainData{
+			Modified: timestamp,
+			Name:     domainName,
+			Policies: &zms.SignedPolicies{
+				Contents: &zms.DomainPolicies{
+					Domain: domainName,
+					Policies: []*zms.Policy{
+						{
+							Assertions: []*zms.Assertion{
+								{
+									Role:     domainName + ":role.admin",
+									Resource: domainName + ":*",
+									Action:   "*",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-reader",
+									Resource: domainName + ":svc.productpage",
+									Action:   "get",
+									Effect:   &allow,
+								},
+							},
+							Modified: &timestamp,
+							Name:     domainName + ":policy.admin",
+						},
+						{
+							Assertions: []*zms.Assertion{
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage",
+									Action:   "post",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage:/api/query?*",
+									Action:   "post",
+									Effect:   &allow,
+								},
+								{
+									Role:     domainName + ":role.productpage-writer",
+									Resource: domainName + ":svc.productpage:/api/query?foo=bar&bar=foo",
+									Action:   "post",
+									Effect:   &allow,
+								},
+							},
+							Modified: &timestamp,
+							Name:     domainName + ":policy.productpage-writer",
+						},
+					},
+				},
+				KeyId:     "col-env-1.1",
+				Signature: "signature-policy",
+			},
+			Roles: []*zms.Role{
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":role.admin",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: username,
+						},
+					},
+				},
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":role.productpage-reader",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: wildcardUsername,
+						},
+						{
+							MemberName: wildcardAllUsersFromDomain,
+						},
+						{
+							MemberName: domainName + ":group.one",
+						},
+					},
+				},
+				{
+					Modified: &timestamp,
+					Name:     domainName + ":role.productpage-writer",
+					RoleMembers: []*zms.RoleMember{
+						{
+							MemberName: username,
+						},
+						{
+							MemberName: domainName + ":group.two",
+						},
+					},
+					Tags: map[zms.CompoundName]*zms.StringList{
+						"proxy-principals": {
+							List: []zms.CompoundName{
+								"user.test-tag-value-1",
+								"user.test-tag-value-2",
+							},
 						},
 					},
 				},

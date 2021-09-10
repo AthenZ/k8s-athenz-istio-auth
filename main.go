@@ -37,6 +37,7 @@ func main() {
 	enableAuthzPolicyController := flag.Bool("enable-ap-controller", true, "enable authzpolicy controller to create authzpolicy dry run resource")
 	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
+	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
@@ -118,7 +119,7 @@ func main() {
 		}
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy)
+	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag)
 
 	stopCh := make(chan struct{})
 	go c.Run(stopCh)

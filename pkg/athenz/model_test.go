@@ -520,6 +520,7 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 				Rules:        RoleAssertions{},
 				Roles:        Roles{},
 				GroupMembers: GroupMembers{},
+				RoleTags:     RoleTags{},
 			},
 		},
 		{
@@ -728,6 +729,7 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 					},
 				},
 				GroupMembers: GroupMembers{},
+				RoleTags:     RoleTags{},
 			},
 		},
 		{
@@ -820,6 +822,7 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 					},
 				},
 				GroupMembers: GroupMembers{},
+				RoleTags:     RoleTags{},
 			},
 		},
 
@@ -1087,6 +1090,294 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 						},
 						{
 							MemberName: "client2-domain-from-group.serviceA",
+						},
+					},
+				},
+				RoleTags: RoleTags{},
+			},
+		},
+		{
+			test: "valid Athenz domain with multiple assertions for multiple roles with tags in different roles",
+			domain: &zms.DomainData{
+				Name: "athenz-domain.name",
+				Roles: []*zms.Role{
+					{
+						Name:     "athenz-domain.name:role.name",
+						Modified: &modified,
+						RoleMembers: []*zms.RoleMember{
+							{
+								MemberName: "client-domain.serviceA",
+							},
+							{
+								MemberName: "client-domain.serviceB",
+							},
+							{
+								MemberName: "client2-domain.serviceA",
+							},
+							{
+								MemberName: "athenz-domain.name:group.name",
+							},
+						},
+						Tags: map[zms.CompoundName]*zms.StringList{
+							"test-tag-key": {
+								List: []zms.CompoundName{
+									"test-tag-value-1",
+									"test-tag-value-2",
+								},
+							},
+						},
+					},
+					{
+						Name:     "athenz-domain.name:role-two.name",
+						Modified: &modified,
+						RoleMembers: []*zms.RoleMember{
+							{
+								MemberName: "client-domain.writer-service",
+							},
+							{
+								MemberName: "client2-domain.serviceA",
+							},
+							{
+								MemberName: "athenz-domain.name:group-two.name",
+							},
+						},
+					},
+					{
+						Name:     "athenz-domain.name:role-three.name",
+						Modified: &modified,
+						RoleMembers: []*zms.RoleMember{
+							{
+								MemberName: "client3-domain.manager-service",
+							},
+							{
+								MemberName: "client3-domain.serviceX",
+							},
+						},
+					},
+					{
+						Name:     "athenz-domain.name:role-four.name",
+						Modified: &modified,
+						RoleMembers: []*zms.RoleMember{
+							{
+								MemberName: "client4-domain.admin-service",
+							},
+						},
+					},
+				},
+				Groups: []*zms.Group{
+					{
+						Name:     "athenz-domain.name:group.name",
+						Modified: &modified,
+						GroupMembers: []*zms.GroupMember{
+							{
+								MemberName: "client-domain-from-group.serviceA",
+							},
+							{
+								MemberName: "client-domain-from-group.serviceB",
+							},
+							{
+								MemberName: "client2-domain-from-group.serviceA",
+							},
+						},
+					},
+					{
+						Name:     "athenz-domain.name:group-two.name",
+						Modified: &modified,
+						GroupMembers: []*zms.GroupMember{
+							{
+								MemberName: "client-domain-from-group.writer-service",
+							},
+							{
+								MemberName: "client2-domain-from-group.serviceA",
+							},
+						},
+					},
+				},
+				Policies: &zms.SignedPolicies{
+					Contents: &zms.DomainPolicies{
+						Domain: zms.DomainName("athenz-domain.name"),
+						Policies: []*zms.Policy{
+							{
+								Name:     "athenz-domain.name:policy.my-services-reader",
+								Modified: &modified,
+								Assertions: []*zms.Assertion{
+									{
+										Role:     "athenz-domain.name:role.name",
+										Resource: "athenz-domain.name:svc.my-service-name:*",
+										Action:   "get",
+										Effect:   &allow,
+									},
+									{
+										Role:     "athenz-domain.name:role-two.name",
+										Resource: "athenz-domain.name:svc.my-service-name",
+										Action:   "post",
+										Effect:   &allow,
+									},
+								},
+							},
+							{
+								Name:     "athenz-domain.name:policy.my-services-writer",
+								Modified: &modified,
+								Assertions: []*zms.Assertion{
+									{
+										Role:     "athenz-domain.name:role-three.name",
+										Resource: "athenz-domain.name:svc.my-service-name:*",
+										Action:   "put",
+										Effect:   &allow,
+									},
+									{
+										Role:     "athenz-domain.name:role.name",
+										Resource: "athenz-domain.name:svc.my-service-two",
+										Action:   "post",
+										Effect:   &allow,
+									},
+									{
+										Role:     "athenz-domain.name:role-two.name",
+										Resource: "athenz-domain.name:svc.my-service-three:*",
+										Action:   "put",
+										Effect:   &allow,
+									},
+								},
+							},
+							{
+								Name:     "athenz-domain.name:policy.my-services-admin",
+								Modified: &modified,
+								Assertions: []*zms.Assertion{
+									{
+										Role:     "athenz-domain.name:role-four.name",
+										Resource: "athenz-domain.name:*:*",
+										Action:   "*",
+										Effect:   &allow,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: Model{
+				Name:      zms.DomainName("athenz-domain.name"),
+				Namespace: "athenz--domain-name",
+				Roles: Roles{
+					zms.ResourceName("athenz-domain.name:role.name"),
+					zms.ResourceName("athenz-domain.name:role-two.name"),
+					zms.ResourceName("athenz-domain.name:role-three.name"),
+					zms.ResourceName("athenz-domain.name:role-four.name"),
+				},
+				Rules: RoleAssertions{
+					zms.ResourceName("athenz-domain.name:role.name"): []*zms.Assertion{
+						{
+							Role:     "athenz-domain.name:role.name",
+							Resource: "athenz-domain.name:svc.my-service-name:*",
+							Action:   "get",
+							Effect:   &allow,
+						},
+						{
+							Role:     "athenz-domain.name:role.name",
+							Resource: "athenz-domain.name:svc.my-service-two",
+							Action:   "post",
+							Effect:   &allow,
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-two.name"): []*zms.Assertion{
+						{
+							Role:     "athenz-domain.name:role-two.name",
+							Resource: "athenz-domain.name:svc.my-service-name",
+							Action:   "post",
+							Effect:   &allow,
+						},
+						{
+							Role:     "athenz-domain.name:role-two.name",
+							Resource: "athenz-domain.name:svc.my-service-three:*",
+							Action:   "put",
+							Effect:   &allow,
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-three.name"): []*zms.Assertion{
+						{
+							Role:     "athenz-domain.name:role-three.name",
+							Resource: "athenz-domain.name:svc.my-service-name:*",
+							Action:   "put",
+							Effect:   &allow,
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-four.name"): []*zms.Assertion{
+						{
+							Role:     "athenz-domain.name:role-four.name",
+							Resource: "athenz-domain.name:*:*",
+							Action:   "*",
+							Effect:   &allow,
+						},
+					},
+				},
+				Members: RoleMembers{
+					zms.ResourceName("athenz-domain.name:role.name"): []*zms.RoleMember{
+						{
+							MemberName: "client-domain.serviceA",
+						},
+						{
+							MemberName: "client-domain.serviceB",
+						},
+						{
+							MemberName: "client2-domain.serviceA",
+						},
+						{
+							MemberName: "athenz-domain.name:group.name",
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-two.name"): []*zms.RoleMember{
+						{
+							MemberName: "client-domain.writer-service",
+						},
+						{
+							MemberName: "client2-domain.serviceA",
+						},
+						{
+							MemberName: "athenz-domain.name:group-two.name",
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-three.name"): []*zms.RoleMember{
+						{
+							MemberName: "client3-domain.manager-service",
+						},
+						{
+							MemberName: "client3-domain.serviceX",
+						},
+					},
+					zms.ResourceName("athenz-domain.name:role-four.name"): []*zms.RoleMember{
+						{
+							MemberName: "client4-domain.admin-service",
+						},
+					},
+				},
+				GroupMembers: GroupMembers{
+					zms.MemberName("athenz-domain.name:group.name"): []*zms.GroupMember{
+						{
+							MemberName: "client-domain-from-group.serviceA",
+						},
+						{
+							MemberName: "client-domain-from-group.serviceB",
+						},
+						{
+							MemberName: "client2-domain-from-group.serviceA",
+						},
+					},
+					zms.MemberName("athenz-domain.name:group-two.name"): []*zms.GroupMember{
+						{
+							MemberName: "client-domain-from-group.writer-service",
+						},
+						{
+							MemberName: "client2-domain-from-group.serviceA",
+						},
+					},
+				},
+				RoleTags: RoleTags{
+					zms.ResourceName("athenz-domain.name:role.name"): map[zms.CompoundName]*zms.StringList{
+						"test-tag-key": {
+							List: []zms.CompoundName{
+								"test-tag-value-1",
+								"test-tag-value-2",
+							},
 						},
 					},
 				},

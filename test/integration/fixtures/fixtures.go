@@ -6,6 +6,8 @@ package fixtures
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
@@ -15,8 +17,7 @@ import (
 	istioTypeV1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pkg/config/schema/collections"
-	"k8s.io/api/core/v1"
-	"strings"
+	v1 "k8s.io/api/core/v1"
 
 	athenzdomain "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -469,7 +470,7 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 	authPolicy := &securityV1beta1.AuthorizationPolicy{
 		Selector: &istioTypeV1beta1.WorkloadSelector{
 			MatchLabels: map[string]string{
-				"svc": serviceName,
+				"app": serviceName,
 			},
 		},
 		Rules: []*securityV1beta1.Rule{
@@ -479,7 +480,7 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 						Source: &securityV1beta1.Source{
 							Principals: []string{
 								"user/sa/foo",
-								"athenz.domain/ra/athenz.domain:role.client-writer-role",
+								"athenz.domain/ra/client-writer-role",
 							},
 						},
 					},
@@ -521,6 +522,7 @@ func GetDefaultService(serviceName string, modifications []func(service *v1.Serv
 	if defaultService.Labels == nil {
 		defaultService.Labels = make(map[string]string)
 	}
+	defaultService.Labels["app"] = defaultService.Name
 	defaultService.Labels["svc"] = defaultService.Name
 	if modifications == nil {
 		modifications = []func(service *v1.Service){}
