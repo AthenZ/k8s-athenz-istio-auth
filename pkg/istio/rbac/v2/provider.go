@@ -295,7 +295,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			for _, proxyPrincipal := range proxyPrincipalsList {
 				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal)
 				if err != nil {
-					log.Errorln("error converting role member to spiffeName: ", err.Error())
+					log.Errorln("error converting proxy principal to spiffeName: ", err.Error())
 					continue
 				}
 				from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, proxySpiffeName)
