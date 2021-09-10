@@ -378,11 +378,13 @@ func getExpectedAuthzPolicyCombinationPolicy() []model.Config {
 								"user/sa/groupTwouser",
 								"test.namespace/ra/productpage-writer",
 								"user/sa/test-tag-value-1",
+								"user/sa/test-tag-value-2",
 							},
 							RequestPrincipals: []string{
 								"athenz/user.name",
 								"athenz/user.groupTwouser",
 								"athenz/user.test-tag-value-1",
+								"athenz/user.test-tag-value-2",
 							},
 						},
 					},
@@ -664,6 +666,7 @@ func getFakeOnboardedDomainCombinationPolicy() zms.SignedDomain {
 						"proxy-principals": {
 							List: []zms.CompoundName{
 								"user.test-tag-value-1",
+								"user.test-tag-value-2",
 							},
 						},
 					},

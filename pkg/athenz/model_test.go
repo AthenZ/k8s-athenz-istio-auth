@@ -1122,6 +1122,7 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 							"test-tag-key": {
 								List: []zms.CompoundName{
 									"test-tag-value-1",
+									"test-tag-value-2",
 								},
 							},
 						},
@@ -1375,6 +1376,7 @@ func TestConvertAthenzPoliciesIntoRbacModel(t *testing.T) {
 						"test-tag-key": {
 							List: []zms.CompoundName{
 								"test-tag-value-1",
+								"test-tag-value-2",
 							},
 						},
 					},
