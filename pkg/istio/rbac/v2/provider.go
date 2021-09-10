@@ -298,14 +298,6 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 					log.Errorln("error converting role member to spiffeName: ", err.Error())
 					continue
 				}
-				if p.enableOriginJwtSubject {
-					originJwtName, err := common.MemberToOriginJwtSubject(proxyPrincipal)
-					if err != nil {
-						log.Errorln(err.Error())
-						continue
-					}
-					from_principalAndRequestPrincipal.Source.RequestPrincipals = append(from_principalAndRequestPrincipal.Source.RequestPrincipals, originJwtName)
-				}
 				from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, proxySpiffeName)
 			}
 			from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals = append(from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals, "*")

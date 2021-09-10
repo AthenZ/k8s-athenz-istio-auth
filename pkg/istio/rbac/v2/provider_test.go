@@ -383,8 +383,6 @@ func getExpectedAuthzPolicyCombinationPolicy() []model.Config {
 							RequestPrincipals: []string{
 								"athenz/user.name",
 								"athenz/user.groupTwouser",
-								"athenz/user.test-tag-value-1",
-								"athenz/user.test-tag-value-2",
 							},
 						},
 					},
