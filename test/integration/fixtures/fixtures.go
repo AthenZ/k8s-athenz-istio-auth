@@ -480,7 +480,7 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 						Source: &securityV1beta1.Source{
 							Principals: []string{
 								"user/sa/foo",
-								"athenz.domain/ra/athenz.domain:role.client-writer-role",
+								"athenz.domain/ra/client-writer-role",
 							},
 						},
 					},
