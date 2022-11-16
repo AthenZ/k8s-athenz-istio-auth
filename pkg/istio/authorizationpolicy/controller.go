@@ -121,13 +121,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
 
-	// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
-	// existing Authorization Policy associated to the service
-	// err := c.cleanUpStaleAP()
-	// if err != nil {
-	//	 log.Panicf("Error while running cleanUpStaleAP: %v", err.Error())
-	//}
-
 	defer c.queue.ShutDown()
 	wait.Until(c.runWorker, 0, stopCh)
 }
