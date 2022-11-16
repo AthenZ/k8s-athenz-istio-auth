@@ -111,6 +111,10 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
+	go c.serviceIndexInformer.Run(stopCh)
+	go c.configStoreCache.Run(stopCh)
+	go c.adIndexInformer.Run(stopCh)
+
 	go c.resync(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
@@ -119,10 +123,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
 	// existing Authorization Policy associated to the service
-	err := c.cleanUpStaleAP()
-	if err != nil {
-		log.Panicf("Error while running cleanUpStaleAP: %v", err.Error())
-	}
+	// err := c.cleanUpStaleAP()
+	// if err != nil {
+	//	 log.Panicf("Error while running cleanUpStaleAP: %v", err.Error())
+	//}
 
 	defer c.queue.ShutDown()
 	wait.Until(c.runWorker, 0, stopCh)
