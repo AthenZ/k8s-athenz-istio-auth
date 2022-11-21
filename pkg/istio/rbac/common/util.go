@@ -30,7 +30,7 @@ const (
 	ServiceRoleKind              = "ServiceRole"
 	AthenzJwtPrefix              = "athenz/"
 	RequestAuthPrincipalProperty = "request.auth.principal"
-	DryRunStoredFilesDirectory   = "/root/authzpolicy/"
+	DryRunStoredFilesDirectory   = "/tmp/dry-run/"
 )
 
 var supportedMethods = map[string]bool{

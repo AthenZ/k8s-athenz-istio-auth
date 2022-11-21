@@ -152,7 +152,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	// If enableAuthzPolicyController is enabled start the authzpolicy controller
 	var apController *authzpolicy.Controller
 	if enableAuthzPolicyController {
-		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag)
+		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, false)
 		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 	}
 

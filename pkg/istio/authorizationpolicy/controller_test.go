@@ -207,6 +207,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
+	c.standAloneMode = false
 	return c
 }
 
@@ -486,13 +487,15 @@ func TestNewController(t *testing.T) {
 	apiHandler := common.ApiHandler{
 		ConfigStoreCache: configStoreCache,
 	}
-	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{}, "proxy-principals")
+	standAloneMode := false
+	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{}, "proxy-principals", standAloneMode)
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
 	assert.Equal(t, fakeAthenzInformer, c.adIndexInformer, "athenz index informer cache should be equal")
 	assert.Equal(t, true, c.enableOriginJwtSubject, "enableOriginJwtSubject bool should be equal")
 	assert.Equal(t, common.DryRunHandler{}, c.dryRunHandler, "dryRun handler should be equal")
 	assert.Equal(t, apiHandler, c.apiHandler, "api handler should be equal")
+	assert.Equal(t, standAloneMode, c.standAloneMode, "stand alone mode should be equal")
 }
 
 func TestCleanUpStaleAP(t *testing.T) {
