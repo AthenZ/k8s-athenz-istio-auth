@@ -113,7 +113,7 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	if c.standAloneMode{
+	if c.standAloneMode {
 		go c.serviceIndexInformer.Run(stopCh)
 		go c.configStoreCache.Run(stopCh)
 		go c.adIndexInformer.Run(stopCh)
