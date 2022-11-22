@@ -69,7 +69,7 @@ func main() {
 	}
 	var configDescriptor collection.Schemas
 	if *authPolicyControllerOnlyMode {
-		configDescriptor = collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+		configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	} else {
 		configDescriptor = collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
 	}
