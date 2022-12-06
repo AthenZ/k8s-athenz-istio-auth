@@ -157,7 +157,7 @@ func (cs *fakeConfigStore) Delete(typ resource.GroupVersionKind, name, namespace
 	return cs.ConfigStore.Delete(typ, name, namespace)
 }
 
-func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fake bool, apEnabledList string, stopCh <-chan struct{}) *Controller {
+func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fake bool, apEnabledList string, stopCh <-chan struct{}, standaloneMode bool) *Controller {
 	c := &Controller{}
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 
@@ -207,7 +207,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
-	c.standAloneMode = false
+	c.standAloneMode = standaloneMode
 	return c
 }
 
@@ -219,6 +219,7 @@ func TestSyncService(t *testing.T) {
 		existingAuthzPolicy *model.Config
 		expectedAuthzPolicy *model.Config
 		item                Item
+		standaloneMode      bool
 	}{
 		{
 			name:                "generate Authorization Policy spec for service with annotation set",
@@ -227,6 +228,7 @@ func TestSyncService(t *testing.T) {
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventAdd, Resource: onboardedService},
+			standaloneMode:      false,
 		},
 		{
 			name:                "not generate Authorization Policy spec for service without annotation set",
@@ -235,6 +237,7 @@ func TestSyncService(t *testing.T) {
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: nil,
 			item:                Item{Operation: model.EventAdd, Resource: notOnboardedService},
+			standaloneMode:      false,
 		},
 		{
 			name:                "delete Authorization Policy spec when there is deletion event of service with annotation set",
@@ -243,6 +246,7 @@ func TestSyncService(t *testing.T) {
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
 			expectedAuthzPolicy: nil,
 			item:                Item{Operation: model.EventDelete, Resource: onboardedService},
+			standaloneMode:      false,
 		},
 		{
 			name:                "create Authorization Policy spec when there is update event of service from no annotation set to annotation set",
@@ -251,6 +255,7 @@ func TestSyncService(t *testing.T) {
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: onboardedService},
+			standaloneMode:      false,
 		},
 		{
 			name:                "create empty Authorization Policy spec when there is create event of service which doesn't have roles / policies defined",
@@ -259,12 +264,58 @@ func TestSyncService(t *testing.T) {
 			existingAuthzPolicy: nil,
 			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
 			item:                Item{Operation: model.EventAdd, Resource: undefinedAthenzRulesServiceWithAnnotationTrue},
+			standaloneMode:      false,
+		},
+		{
+			name:                "generate Authorization Policy spec for service with annotation set",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			item:                Item{Operation: model.EventAdd, Resource: onboardedService},
+			standaloneMode:      true,
+		},
+		{
+			name:                "not generate Authorization Policy spec for service without annotation set",
+			inputService:        notOnboardedService,
+			inputAthenzDomain:   notOnboardedAthenzDomain,
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: nil,
+			item:                Item{Operation: model.EventAdd, Resource: notOnboardedService},
+			standaloneMode:      true,
+		},
+		{
+			name:                "delete Authorization Policy spec when there is deletion event of service with annotation set",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: nil,
+			item:                Item{Operation: model.EventDelete, Resource: onboardedService},
+			standaloneMode:      true,
+		},
+		{
+			name:                "create Authorization Policy spec when there is update event of service from no annotation set to annotation set",
+			inputService:        notOnboardedServiceWithAnnotationFalse,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			item:                Item{Operation: model.EventUpdate, Resource: onboardedService},
+			standaloneMode:      true,
+		},
+		{
+			name:                "create empty Authorization Policy spec when there is create event of service which doesn't have roles / policies defined",
+			inputService:        undefinedAthenzRulesServiceWithAnnotationTrue,
+			inputAthenzDomain:   notOnboardedAthenzDomain,
+			existingAuthzPolicy: nil,
+			expectedAuthzPolicy: getExpectedEmptyAuthzPolicy(),
+			item:                Item{Operation: model.EventAdd, Resource: undefinedAthenzRulesServiceWithAnnotationTrue},
+			standaloneMode:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}), tt.standaloneMode)
 			switch action := tt.item.Operation; action {
 			case model.EventDelete:
 				c.configStoreCache.Create(*tt.existingAuthzPolicy)
@@ -309,22 +360,45 @@ func TestSyncAthenzDomain(t *testing.T) {
 		expectedAuthzPolicy *model.Config
 		item                Item
 		expErr              error
+		standaloneMode      bool
 	}{
 		{
 			name:                "update existing authz policy spec when there is athenz domain crd update",
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: onboardedAthenzDomain},
+			standaloneMode:      false,
 		},
 		{
 			name:                "no action on authz policy when athenz domain crd is deleted",
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventDelete, Resource: onboardedAthenzDomain},
 			expErr:              fmt.Errorf("athenz domain test.namespace.onboarded does not exist in cache"),
+			standaloneMode:      false,
 		},
 		{
 			name:                "when athenz domain crd is created, authz policy should be created",
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			item:                Item{Operation: model.EventAdd, Resource: onboardedAthenzDomain},
+			standaloneMode:      false,
+		},
+		{
+			name:                "update existing authz policy spec when there is athenz domain crd update",
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			item:                Item{Operation: model.EventUpdate, Resource: onboardedAthenzDomain},
+			standaloneMode:      true,
+		},
+		{
+			name:                "no action on authz policy when athenz domain crd is deleted",
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			item:                Item{Operation: model.EventDelete, Resource: onboardedAthenzDomain},
+			expErr:              fmt.Errorf("athenz domain test.namespace.onboarded does not exist in cache"),
+			standaloneMode:      true,
+		},
+		{
+			name:                "when athenz domain crd is created, authz policy should be created",
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			item:                Item{Operation: model.EventAdd, Resource: onboardedAthenzDomain},
+			standaloneMode:      true,
 		},
 	}
 
@@ -334,7 +408,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
-				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh)
+				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh, tt.standaloneMode)
 				_, err := c.configStoreCache.Create(*getExistingAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -349,7 +423,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "updated authorization policy spec should be equal")
 			case model.EventDelete:
-				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh)
+				c := newFakeController(onboardedAthenzDomain, onboardedService, true, "*", stopCh, tt.standaloneMode)
 				_, err := c.configStoreCache.Create(*getExpectedAuthzPolicy())
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -366,7 +440,7 @@ func TestSyncAthenzDomain(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
-				c := newFakeController(&adv1.AthenzDomain{}, onboardedService, true, "*", stopCh)
+				c := newFakeController(&adv1.AthenzDomain{}, onboardedService, true, "*", stopCh, tt.standaloneMode)
 				err := c.adIndexInformer.GetStore().Add(onboardedAthenzDomain)
 				assert.Nil(t, err, "add athenz domain crd to cache should not return error")
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
@@ -393,6 +467,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		initAuthzPolicySpec *model.Config
 		item                Item
 		expectedAuthzPolicy *model.Config
+		standaloneMode      bool
 	}{
 		{
 			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
@@ -401,6 +476,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			initAuthzPolicySpec: getExistingAuthzPolicy(),
 			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			standaloneMode:      false,
 		},
 		{
 			name:                "when there is deletion of authz policy resource, controller will recreate the authz policy",
@@ -409,6 +485,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			initAuthzPolicySpec: getExistingAuthzPolicy(),
 			item:                Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			standaloneMode:      false,
 		},
 		{
 			name:                "when there is manual modification of authz policy resource with override annotation, controller should do nothing",
@@ -417,6 +494,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			initAuthzPolicySpec: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
 			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicyWithOverrideAnnotation()},
 			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			standaloneMode:      false,
 		},
 		{
 			name:                "when there is manual creation of authz policy without override annotation, controller should delete this create resource",
@@ -425,6 +503,43 @@ func TestSyncAuthzPolicy(t *testing.T) {
 			initAuthzPolicySpec: nil,
 			item:                Item{Operation: model.EventAdd, Resource: getModifiedAuthzPolicy()},
 			expectedAuthzPolicy: nil,
+			standaloneMode:      false,
+		},
+		{
+			name:                "when there is manual modification of authz policy resource, controller will revert back to spec matched with athenz domain crd",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getExistingAuthzPolicy(),
+			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicy()},
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			standaloneMode:      true,
+		},
+		{
+			name:                "when there is deletion of authz policy resource, controller will recreate the authz policy",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getExistingAuthzPolicy(),
+			item:                Item{Operation: model.EventDelete, Resource: getModifiedAuthzPolicy()},
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			standaloneMode:      true,
+		},
+		{
+			name:                "when there is manual modification of authz policy resource with override annotation, controller should do nothing",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			item:                Item{Operation: model.EventUpdate, Resource: getModifiedAuthzPolicyWithOverrideAnnotation()},
+			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			standaloneMode:      true,
+		},
+		{
+			name:                "when there is manual creation of authz policy without override annotation, controller should delete this create resource",
+			inputService:        notOnboardedServiceWithAnnotationFalse,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			initAuthzPolicySpec: nil,
+			item:                Item{Operation: model.EventAdd, Resource: getModifiedAuthzPolicy()},
+			expectedAuthzPolicy: nil,
+			standaloneMode:      true,
 		},
 	}
 
@@ -432,7 +547,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			switch action := tt.item.Operation; action {
 			case model.EventUpdate:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}), tt.standaloneMode)
 				_, err := c.configStoreCache.Create(*tt.initAuthzPolicySpec)
 				assert.Nil(t, err, "configstore create resource should not return error")
 				time.Sleep(100 * time.Millisecond)
@@ -447,7 +562,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventDelete:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}), tt.standaloneMode)
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
@@ -459,7 +574,7 @@ func TestSyncAuthzPolicy(t *testing.T) {
 				tt.expectedAuthzPolicy.ConfigMeta.ResourceVersion = genAuthzPolicy.ConfigMeta.ResourceVersion
 				assert.Equal(t, *tt.expectedAuthzPolicy, *genAuthzPolicy, "created authorization policy spec should be equal")
 			case model.EventAdd:
-				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}))
+				c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, "*", make(chan struct{}), tt.standaloneMode)
 				key, err := cache.MetaNamespaceKeyFunc(tt.item.Resource)
 				assert.Nil(t, err, "function convert item interface to key should not return error")
 				err = c.sync(key)
@@ -487,7 +602,7 @@ func TestNewController(t *testing.T) {
 	apiHandler := common.ApiHandler{
 		ConfigStoreCache: configStoreCache,
 	}
-	standAloneMode := false
+	standAloneMode := true
 	c := NewController(configStoreCache, fakeIndexInformer, fakeAthenzInformer, istioClientSet, apResyncInterval, true, &common.ComponentEnabled{}, "proxy-principals", standAloneMode)
 	assert.Equal(t, fakeIndexInformer, c.serviceIndexInformer, "service index informer pointer should be equal")
 	assert.Equal(t, configStoreCache, c.configStoreCache, "config configStoreCache cache pointer should be equal")
@@ -506,6 +621,7 @@ func TestCleanUpStaleAP(t *testing.T) {
 		existingAuthzPolicy *model.Config
 		expectedAuthzPolicy *model.Config
 		apEnabledList       string
+		standaloneMode      bool
 	}{
 		{
 			name:                "delete all authorization policies as apEnabledList has a different namespace than onboarded namespace",
@@ -514,6 +630,7 @@ func TestCleanUpStaleAP(t *testing.T) {
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
 			expectedAuthzPolicy: nil,
 			apEnabledList:       "foobar/*",
+			standaloneMode:      false,
 		},
 		{
 			name:                "existing authorization policy is not deleted as all namespaces are part of apEnabledList",
@@ -522,6 +639,7 @@ func TestCleanUpStaleAP(t *testing.T) {
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			apEnabledList:       "*",
+			standaloneMode:      false,
 		},
 		{
 			name:                "existing authorization policy is not deleted as the same namespace as the existing service is part of apEnabledList",
@@ -530,6 +648,7 @@ func TestCleanUpStaleAP(t *testing.T) {
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
 			expectedAuthzPolicy: getExpectedAuthzPolicy(),
 			apEnabledList:       "test-namespace-onboarded/*",
+			standaloneMode:      false,
 		},
 		{
 			name:                "existing authorization policy is not deleted as the override annotation is enabled even when not in the same namespace",
@@ -538,12 +657,49 @@ func TestCleanUpStaleAP(t *testing.T) {
 			existingAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
 			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
 			apEnabledList:       "foobar/*",
+			standaloneMode:      true,
+		},
+		{
+			name:                "delete all authorization policies as apEnabledList has a different namespace than onboarded namespace",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: nil,
+			apEnabledList:       "foobar/*",
+			standaloneMode:      true,
+		},
+		{
+			name:                "existing authorization policy is not deleted as all namespaces are part of apEnabledList",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			apEnabledList:       "*",
+			standaloneMode:      true,
+		},
+		{
+			name:                "existing authorization policy is not deleted as the same namespace as the existing service is part of apEnabledList",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getExpectedAuthzPolicy(),
+			expectedAuthzPolicy: getExpectedAuthzPolicy(),
+			apEnabledList:       "test-namespace-onboarded/*",
+			standaloneMode:      true,
+		},
+		{
+			name:                "existing authorization policy is not deleted as the override annotation is enabled even when not in the same namespace",
+			inputService:        onboardedService,
+			inputAthenzDomain:   onboardedAthenzDomain,
+			existingAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			expectedAuthzPolicy: getModifiedAuthzPolicyCRWithOverrideAnnotation(),
+			apEnabledList:       "foobar/*",
+			standaloneMode:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, tt.apEnabledList, make(chan struct{}))
+			c := newFakeController(tt.inputAthenzDomain, tt.inputService, true, tt.apEnabledList, make(chan struct{}), tt.standaloneMode)
 			c.configStoreCache.Create(*tt.existingAuthzPolicy)
 			time.Sleep(100 * time.Millisecond)
 
