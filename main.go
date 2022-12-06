@@ -5,18 +5,24 @@ package main
 
 import (
 	"flag"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/tools/cache"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 	crdController "istio.io/istio/pilot/pkg/config/kube/crd/controller"
+	istioController "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/pkg/ledger"
@@ -38,6 +44,7 @@ func main() {
 	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
+	authPolicyControllerOnlyMode := flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
@@ -60,8 +67,12 @@ func main() {
 			log.Panicf("Error when creating authz policy directory: %s", err.Error())
 		}
 	}
-
-	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+	var configDescriptor collection.Schemas
+	if *authPolicyControllerOnlyMode {
+		configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
+	} else {
+		configDescriptor = collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+	}
 	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
 	if *kubeconfig == "" {
 		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
@@ -119,10 +130,20 @@ func main() {
 		}
 	}
 
-	c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag)
-
 	stopCh := make(chan struct{})
-	go c.Run(stopCh)
+	if *authPolicyControllerOnlyMode {
+		configStoreCache := crdController.NewController(istioClient, istioController.Options{})
+		serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+		serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
+		adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
+
+		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode)
+		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
+		go apController.Run(stopCh)
+	} else {
+		c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag)
+		go c.Run(stopCh)
+	}
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)

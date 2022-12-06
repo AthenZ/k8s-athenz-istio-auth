@@ -44,9 +44,10 @@ type Controller struct {
 	dryRunHandler               common.DryRunHandler
 	apiHandler                  common.ApiHandler
 	combinationPolicyTag        string
+	standAloneMode              bool
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -59,6 +60,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		dryRunHandler:               common.DryRunHandler{},
+		standAloneMode:              standAloneMode,
 	}
 
 	c.apiHandler = common.ApiHandler{
@@ -111,11 +113,16 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	go c.resync(stopCh)
+	if c.standAloneMode {
+		go c.serviceIndexInformer.Run(stopCh)
+		go c.configStoreCache.Run(stopCh)
+		go c.adIndexInformer.Run(stopCh)
+	}
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}
+	go c.resync(stopCh)
 
 	// If the service is switching back from Authorization Policy Enabled back to SR/SRB delete the
 	// existing Authorization Policy associated to the service
