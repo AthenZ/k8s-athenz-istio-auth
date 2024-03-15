@@ -24,13 +24,15 @@ import (
 type v2 struct {
 	componentEnabledAuthzPolicy *common.ComponentEnabled
 	enableOriginJwtSubject      bool
+	enableAthenzCloudSpiffee    bool
 	combinationPolicyTag        string
 }
 
-func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool, combinationPolicyTag string) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject, enableAthenzCloudSpiffee bool, combinationPolicyTag string) rbac.Provider {
 	return &v2{
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
+		enableAthenzCloudSpiffee:    enableAthenzCloudSpiffee,
 		combinationPolicyTag:        combinationPolicyTag,
 	}
 }
@@ -245,15 +247,15 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 					continue
 				}
 
-				spiffeName, err := common.MemberToSpiffe(member)
+				spiffeName, err := common.MemberToSpiffe(member, p.enableAthenzCloudSpiffee)
 				if err != nil {
 					log.Errorln("error converting role member to spiffeName: ", err.Error())
 					continue
 				}
 
 				if combinationPolicyFlag {
-					from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, spiffeName)
-					from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, spiffeName)
+					from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, spiffeName...)
+					from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, spiffeName...)
 					if p.enableOriginJwtSubject {
 						originJwtName, err := common.MemberToOriginJwtSubject(member)
 						if err != nil {
@@ -263,7 +265,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 						from_principalAndRequestPrincipal.Source.RequestPrincipals = append(from_principalAndRequestPrincipal.Source.RequestPrincipals, originJwtName)
 					}
 				} else {
-					from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName)
+					from_principal.Source.Principals = append(from_principal.Source.Principals, spiffeName...)
 					if p.enableOriginJwtSubject {
 						originJwtName, err := common.MemberToOriginJwtSubject(member)
 						if err != nil {
@@ -284,25 +286,25 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 
 		//add role spiffe for role certificate
-		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleName))
+		roleSpiffeName, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleName), p.enableAthenzCloudSpiffee)
 		if err != nil {
 			log.Errorln("error when convert role to spiffe name: ", err.Error())
 			continue
 		}
 		if combinationPolicyFlag {
-			from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, roleSpiffeName)
-			from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, roleSpiffeName)
+			from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, roleSpiffeName...)
+			from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, roleSpiffeName...)
 			for _, proxyPrincipal := range proxyPrincipalsList {
-				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal)
+				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal, p.enableAthenzCloudSpiffee)
 				if err != nil {
 					log.Errorln("error converting proxy principal to spiffeName: ", err.Error())
 					continue
 				}
-				from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, proxySpiffeName)
+				from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, proxySpiffeName...)
 			}
 			from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals = append(from_principalAndNotRequestPrincipal.Source.NotRequestPrincipals, "*")
 		} else {
-			from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName)
+			from_principal.Source.Principals = append(from_principal.Source.Principals, roleSpiffeName...)
 		}
 
 		if combinationPolicyFlag {
