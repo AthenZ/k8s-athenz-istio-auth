@@ -8,7 +8,7 @@ jobs:
   build:
     requires: [~pr, ~commit]
     steps:
-      - init: cd $GOPATH/src/github.com/athenz/k8s-athenz-istio-auth
+      - init: cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth
       - build: go build -v -race ./...
       - fmt: |
           gofmt -d . > /tmp/gofmt_diff
@@ -32,7 +32,7 @@ jobs:
           ls
           echo "Environment Information:"
           env
-          cd $GOPATH/src/github.com/athenz/k8s-athenz-istio-auth/test/integration
+          cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
           echo "Changed Directory to Integration Tests Directory:"
           pwd
           ls

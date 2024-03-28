@@ -33,7 +33,7 @@ require (
 )
 
 replace (
-	github.com/yahoo/k8s-athenz-istio-auth => /home/travis/gopath/src/github.com/athenz/k8s-athenz-istio-auth
+	github.com/yahoo/k8s-athenz-istio-auth => /sd/workspace/src/github.com/AthenZ/k8s-athenz-istio-auth
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.3
 	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	k8s.io/api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api
