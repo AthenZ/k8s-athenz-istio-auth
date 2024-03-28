@@ -129,15 +129,15 @@ func (c *Controller) sync(key string) error {
 
 // NewController is responsible for creating the main controller object and
 // initializing all of its dependencies:
-// 1. Rate limiting queue
-// 2. Istio custom resource config store cache for service role, service role
-//    bindings, and cluster rbac config
-// 3. Onboarding controller responsible for creating / updating / deleting the
-//    cluster rbac config object based on a service label
-// 4. Service shared index informer
-// 5. Athenz Domain shared index informer
-// 6. Authorization Policy controller responsible for creating / updating / deleting
-//    the authorization policy object based on service annotation and athenz domain spec
+//  1. Rate limiting queue
+//  2. Istio custom resource config store cache for service role, service role
+//     bindings, and cluster rbac config
+//  3. Onboarding controller responsible for creating / updating / deleting the
+//     cluster rbac config object based on a service label
+//  4. Service shared index informer
+//  5. Athenz Domain shared index informer
+//  6. Authorization Policy controller responsible for creating / updating / deleting
+//     the authorization policy object based on service annotation and athenz domain spec
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
 	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, enableAuthzPolicyController bool, componentsEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
