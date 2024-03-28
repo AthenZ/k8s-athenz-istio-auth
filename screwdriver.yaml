@@ -36,9 +36,5 @@ jobs:
           echo "Changed Directory to Integration Tests Directory:"
           pwd
           ls
-          echo "Running go get"
-          go get
-          echo "Running go mod tidy"
-          go mod tidy
           echo "Running go tests"
           go test -v ./...
