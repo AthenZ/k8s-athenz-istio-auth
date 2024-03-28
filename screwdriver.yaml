@@ -26,15 +26,6 @@ jobs:
           cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
           go mod init
       - integration-test: | 
-          echo "Current Directory:"
-          pwd
-          echo "Contents of Current Directory:"
-          ls
-          echo "Environment Information:"
-          env
           cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
-          echo "Changed Directory to Integration Tests Directory:"
-          pwd
-          ls
           echo "Running go tests"
-          go test -v ./...
+          go test -v -p 1 ./...
