@@ -1,5 +1,5 @@
 shared:
-  image: golang:1.22.1
+  image: golang:1.16
   environment:
     GO111MODULE: on
     GOPATH: /sd/workspace
@@ -22,6 +22,7 @@ jobs:
           git clone https://github.com/kubernetes/kubernetes.git
           cd kubernetes
           git checkout release-1.17
+          GO111MODULE=auto make WHAT=cmd/kube-apiserver
       - k8s-openapi:  | 
           cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
           go mod init
@@ -37,4 +38,5 @@ jobs:
           pwd
           ls
           go get
+          go mod tidy
           go test -v ./...
