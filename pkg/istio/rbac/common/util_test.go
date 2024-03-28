@@ -27,39 +27,53 @@ var (
 
 func TestPrincipalToSPIFFE(t *testing.T) {
 	cases := []struct {
-		test           string
-		principal      string
-		expectedSpiffe string
-		expectedErr    error
+		test                     string
+		principal                string
+		enableAthenzCloudSpiffee bool
+		expectedSpiffe           []string
+		expectedErr              error
 	}{
 		{
 			test:           "empty principal",
 			principal:      "",
-			expectedSpiffe: "",
+			expectedSpiffe: nil,
 			expectedErr:    fmt.Errorf("principal is empty"),
 		},
 		{
-			test:           "valid service principal",
-			principal:      "client.some-domain.dep-svcA",
-			expectedSpiffe: "client.some-domain/sa/dep-svcA",
-			expectedErr:    nil,
+			test:                     "valid service principal",
+			principal:                "client.some-domain.dep-svcA",
+			enableAthenzCloudSpiffee: true,
+			expectedSpiffe: []string{
+				"client.some-domain/sa/dep-svcA",
+				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+			},
+			expectedErr: nil,
 		},
 		{
-			test:           "valid user principal",
-			principal:      "user.myname",
-			expectedSpiffe: "user/sa/myname",
-			expectedErr:    nil,
+			test:                     "valid user principal",
+			principal:                "user.myname",
+			enableAthenzCloudSpiffee: true,
+			expectedSpiffe: []string{
+				"user/sa/myname",
+				"athenz.cloud/ns/user/sa/user.myname",
+				"athenz.cloud/ns/user/sa/user.myname",
+				"athenz.cloud/ns/default/sa/user.myname",
+			},
+			expectedErr: nil,
 		},
 		{
-			test:           "invalid principal",
-			principal:      "someuser",
-			expectedSpiffe: "",
-			expectedErr:    fmt.Errorf("principal:someuser is not of the format <Athenz-domain>.<Athenz-service>"),
+			test:                     "invalid principal",
+			principal:                "someuser",
+			enableAthenzCloudSpiffee: true,
+			expectedSpiffe:           nil,
+			expectedErr:              fmt.Errorf("principal:someuser is not of the format <Athenz-domain>.<Athenz-service>"),
 		},
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
+		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal, c.enableAthenzCloudSpiffee)
 		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
@@ -70,13 +84,13 @@ func TestMemberToSpiffe(t *testing.T) {
 	cases := []struct {
 		test           string
 		member         interface{}
-		expectedMember string
+		expectedMember []string
 		expectedErr    error
 	}{
 		{
 			test:           "nil member",
 			member:         nil,
-			expectedMember: "",
+			expectedMember: nil,
 			expectedErr:    fmt.Errorf("member is nil"),
 		},
 		{
@@ -84,23 +98,33 @@ func TestMemberToSpiffe(t *testing.T) {
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("client.some-domain.dep-svcA"),
 			},
-			expectedMember: "client.some-domain/sa/dep-svcA",
-			expectedErr:    nil,
+			expectedMember: []string{
+				"client.some-domain/sa/dep-svcA",
+				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+			},
+			expectedErr: nil,
 		},
 		{
 			test: "valid user member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("user.somename"),
 			},
-			expectedMember: "user/sa/somename",
-			expectedErr:    nil,
+			expectedMember: []string{
+				"user/sa/somename",
+				"athenz.cloud/ns/user/sa/user.somename",
+				"athenz.cloud/ns/user/sa/user.somename",
+				"athenz.cloud/ns/default/sa/user.somename",
+			},
+			expectedErr: nil,
 		},
 		{
 			test: "valid wildcard member",
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("user.*"),
 			},
-			expectedMember: "*",
+			expectedMember: []string{"*"},
 			expectedErr:    nil,
 		},
 		{
@@ -108,7 +132,7 @@ func TestMemberToSpiffe(t *testing.T) {
 			member: &zms.RoleMember{
 				MemberName: zms.MemberName("not-a-valid-principal"),
 			},
-			expectedMember: "",
+			expectedMember: nil,
 			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
 		},
 		{
@@ -116,23 +140,33 @@ func TestMemberToSpiffe(t *testing.T) {
 			member: &zms.GroupMember{
 				MemberName: zms.GroupMemberName("client.some-domain.dep-svcA"),
 			},
-			expectedMember: "client.some-domain/sa/dep-svcA",
-			expectedErr:    nil,
+			expectedMember: []string{
+				"client.some-domain/sa/dep-svcA",
+				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
+				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+			},
+			expectedErr: nil,
 		},
 		{
 			test: "valid user member in group",
 			member: &zms.GroupMember{
 				MemberName: zms.GroupMemberName("user.somename"),
 			},
-			expectedMember: "user/sa/somename",
-			expectedErr:    nil,
+			expectedMember: []string{
+				"user/sa/somename",
+				"athenz.cloud/ns/user/sa/user.somename",
+				"athenz.cloud/ns/user/sa/user.somename",
+				"athenz.cloud/ns/default/sa/user.somename",
+			},
+			expectedErr: nil,
 		},
 		{
 			test: "valid wildcard member in group",
 			member: &zms.GroupMember{
 				MemberName: zms.GroupMemberName("user.*"),
 			},
-			expectedMember: "*",
+			expectedMember: []string{"*"},
 			expectedErr:    nil,
 		},
 		{
@@ -140,13 +174,13 @@ func TestMemberToSpiffe(t *testing.T) {
 			member: &zms.GroupMember{
 				MemberName: zms.GroupMemberName("not-a-valid-principal"),
 			},
-			expectedMember: "",
+			expectedMember: nil,
 			expectedErr:    fmt.Errorf("principal:not-a-valid-principal is not of the format <Athenz-domain>.<Athenz-service>"),
 		},
 	}
 
 	for _, c := range cases {
-		gotMember, gotErr := MemberToSpiffe(c.member)
+		gotMember, gotErr := MemberToSpiffe(c.member, true)
 		assert.Equal(t, c.expectedMember, gotMember, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
