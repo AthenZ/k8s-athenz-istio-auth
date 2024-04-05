@@ -173,9 +173,10 @@ func (c *Controller) processNextItem() bool {
 
 // sync function receives a key string function, key can have two format:
 // Case 1: for athenzdomain crd, key string is in format: <athenz domain name>, perform a service list scan.
-//         Compute, compare and update authz policy specs based on current state in cluster
+//	Compute, compare and update authz policy specs based on current state in cluster
+//
 // Case 2: for service resource and authorization policy, key string is in format: <namespace name>/<service name>,
-//         look up svc in cache and generate corresponding authz policy, update based on current state in cluster
+//	look up svc in cache and generate corresponding authz policy, update based on current state in cluster
 func (c *Controller) sync(key string) error {
 	var serviceName, athenzDomainName string
 

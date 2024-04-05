@@ -33,30 +33,30 @@ require (
 )
 
 replace (
-	github.com/yahoo/k8s-athenz-istio-auth => /home/travis/gopath/src/github.com/yahoo/k8s-athenz-istio-auth
+	github.com/yahoo/k8s-athenz-istio-auth => /sd/workspace/src/github.com/AthenZ/k8s-athenz-istio-auth
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.3
 	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
-	k8s.io/api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/api
-	k8s.io/apiextensions-apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver
-	k8s.io/apimachinery => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
-	k8s.io/apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
-	k8s.io/cli-runtime => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
-	k8s.io/client-go => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
-	k8s.io/cloud-provider => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cloud-provider
-	k8s.io/cluster-bootstrap => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap
-	k8s.io/code-generator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/code-generator
-	k8s.io/component-base => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/component-base
-	k8s.io/cri-api => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/cri-api
-	k8s.io/csi-translation-lib => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib
-	k8s.io/kube-aggregator => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
-	k8s.io/kube-controller-manager => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager
-	k8s.io/kube-openapi => /home/travis/gopath/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
-	k8s.io/kube-proxy => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-proxy
-	k8s.io/kube-scheduler => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler
-	k8s.io/kubectl => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kubectl
-	k8s.io/kubelet => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/kubelet
-	k8s.io/kubernetes => /home/travis/gopath/src/k8s.io/kubernetes
-	k8s.io/legacy-cloud-providers => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers
-	k8s.io/metrics => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/metrics
-	k8s.io/sample-apiserver => /home/travis/gopath/src/k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver
+	k8s.io/api => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/api
+	k8s.io/apiextensions-apiserver => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver
+	k8s.io/apimachinery => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/apimachinery
+	k8s.io/apiserver => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
+	k8s.io/cli-runtime => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
+	k8s.io/client-go => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
+	k8s.io/cloud-provider => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cloud-provider
+	k8s.io/cluster-bootstrap => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap
+	k8s.io/code-generator => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/code-generator
+	k8s.io/component-base => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/component-base
+	k8s.io/cri-api => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cri-api
+	k8s.io/csi-translation-lib => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/csi-translation-lib
+	k8s.io/kube-aggregator => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kube-aggregator
+	k8s.io/kube-controller-manager => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kube-controller-manager
+	k8s.io/kube-openapi => /sd/workspace/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
+	k8s.io/kube-proxy => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kube-proxy
+	k8s.io/kube-scheduler => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kube-scheduler
+	k8s.io/kubectl => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kubectl
+	k8s.io/kubelet => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/kubelet
+	k8s.io/kubernetes => /sd/workspace/src/k8s.io/kubernetes
+	k8s.io/legacy-cloud-providers => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/legacy-cloud-providers
+	k8s.io/metrics => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/metrics
+	k8s.io/sample-apiserver => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/sample-apiserver
 )
