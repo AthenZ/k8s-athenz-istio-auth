@@ -1,29 +1,33 @@
 shared:
-  image: golang:1.22.1
+  image: golang:1.16
+  annotations:
+    screwdriver.cd/ram: 8
   environment:
     GO111MODULE: on
+    GOPATH: /sd/workspace
 
 jobs:
   build:
     requires: [~pr, ~commit]
     steps:
-      - init: cd $GOPATH/src/github.com/athenz/k8s-athenz-istio-auth
+      - init: cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth
       - build: go build -v -race ./...
-      - fmt: diff -u <(echo -n) <(gofmt -d .)
+      - fmt: |
+          gofmt -d . > /tmp/gofmt_diff
+          [ ! -s /tmp/gofmt_diff ] || { echo "Code not properly formatted by gofmt"; cat /tmp/gofmt_diff; exit 1; }
       - vet: go vet ./...
       - test: go test -v -race ./...
-      - k8s: |
+      - integration-tests: |
           cd $GOPATH/src
           mkdir -p k8s.io
           cd k8s.io
           git clone https://github.com/kubernetes/kubernetes.git
           cd kubernetes
+          apt-get update && apt-get install rsync -y
           git checkout release-1.17
+          echo "make kube-apiserver"
           GO111MODULE=auto make WHAT=cmd/kube-apiserver
-      - k8s-cli: cd $GOPATH/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
-      - k8s-openapi:  | 
           cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
           go mod init
-      - integration-test: | 
-          cd $GOPATH/src/github.com/athenz/k8s-athenz-istio-auth/test/integration
-          go test -v ./...
+          cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
+          go test -v -p 1 ./...
