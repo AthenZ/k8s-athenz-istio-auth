@@ -11,6 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -45,6 +46,10 @@ func main() {
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
 	authPolicyControllerOnlyMode := flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
+
+	klog.InitFlags(nil)
+	flag.Set("logtostderr", "false")
+	flag.Set("logtostdout", "false")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 

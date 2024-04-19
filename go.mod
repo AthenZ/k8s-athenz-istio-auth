@@ -4,7 +4,6 @@ go 1.12
 
 require (
 	github.com/ardielle/ardielle-go v1.5.2
-	github.com/davecgh/go-spew v1.1.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/sirupsen/logrus v1.4.2
@@ -19,4 +18,5 @@ require (
 	k8s.io/api v0.17.14
 	k8s.io/apimachinery v0.17.14
 	k8s.io/client-go v0.17.14
+	k8s.io/klog/v2 v2.2.0
 )
