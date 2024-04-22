@@ -21,11 +21,12 @@ func init() {
 func TestGetServiceRoleBindingSpec(t *testing.T) {
 
 	type input struct {
-		athenzDomainName       string
-		roleName               string
-		k8sRoleName            string
-		members                []*zms.RoleMember
-		enableOriginJwtSubject bool
+		athenzDomainName        string
+		roleName                string
+		k8sRoleName             string
+		members                 []*zms.RoleMember
+		enableOriginJwtSubject  bool
+		enableSpiffeTrustDomain bool
 	}
 	cases := []struct {
 		test         string
@@ -36,11 +37,12 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "empty args",
 			input: input{
-				athenzDomainName:       "",
-				roleName:               "",
-				k8sRoleName:            "",
-				members:                nil,
-				enableOriginJwtSubject: true,
+				athenzDomainName:        "",
+				roleName:                "",
+				k8sRoleName:             "",
+				members:                 nil,
+				enableOriginJwtSubject:  true,
+				enableSpiffeTrustDomain: true,
 			},
 			expectedSpec: nil,
 			expectedErr:  fmt.Errorf("athenzDomainName is empty"),
@@ -48,11 +50,12 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 		{
 			test: "empty roleName args",
 			input: input{
-				athenzDomainName:       "abc",
-				roleName:               "",
-				k8sRoleName:            "",
-				members:                nil,
-				enableOriginJwtSubject: true,
+				athenzDomainName:        "abc",
+				roleName:                "",
+				k8sRoleName:             "",
+				members:                 nil,
+				enableOriginJwtSubject:  true,
+				enableSpiffeTrustDomain: true,
 			},
 			expectedSpec: nil,
 			expectedErr:  fmt.Errorf("roleName is empty"),
@@ -71,7 +74,8 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						MemberName: "user.athenzuser",
 					},
 				},
-				enableOriginJwtSubject: true,
+				enableOriginJwtSubject:  true,
+				enableSpiffeTrustDomain: true,
 			},
 			expectedSpec: &v1alpha1.ServiceRoleBinding{
 				RoleRef: &v1alpha1.RoleRef{
@@ -116,7 +120,8 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						MemberName: "another-not-valid-service",
 					},
 				},
-				enableOriginJwtSubject: true,
+				enableOriginJwtSubject:  true,
+				enableSpiffeTrustDomain: true,
 			},
 			expectedSpec: &v1alpha1.ServiceRoleBinding{
 				RoleRef: &v1alpha1.RoleRef{
@@ -145,7 +150,8 @@ func TestGetServiceRoleBindingSpec(t *testing.T) {
 						MemberName: "user.athenzuser",
 					},
 				},
-				enableOriginJwtSubject: false,
+				enableOriginJwtSubject:  false,
+				enableSpiffeTrustDomain: true,
 			},
 			expectedSpec: &v1alpha1.ServiceRoleBinding{
 				RoleRef: &v1alpha1.RoleRef{

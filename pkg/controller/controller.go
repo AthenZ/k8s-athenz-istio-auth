@@ -139,7 +139,9 @@ func (c *Controller) sync(key string) error {
 //  6. Authorization Policy controller responsible for creating / updating / deleting
 //     the authorization policy object based on service annotation and athenz domain spec
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
-	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool, enableAuthzPolicyController bool, componentsEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string) *Controller {
+	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool,
+	enableAuthzPolicyController bool, componentsEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, enableSpiffeTrustDomain bool,
+	systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -152,7 +154,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	// If enableAuthzPolicyController is enabled start the authzpolicy controller
 	var apController *authzpolicy.Controller
 	if enableAuthzPolicyController {
-		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, false)
+		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, false, enableSpiffeTrustDomain, systemNamespaces, serviceAccountMap, adminDomain)
 		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 	}
 
