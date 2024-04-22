@@ -31,6 +31,7 @@ const (
 	AthenzJwtPrefix              = "athenz/"
 	RequestAuthPrincipalProperty = "request.auth.principal"
 	DryRunStoredFilesDirectory   = "/root/authzpolicy/"
+	istioSystemNamespace         = "istio-system"
 )
 
 var supportedMethods = map[string]bool{
@@ -167,19 +168,19 @@ func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.Domain
 
 // MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member interface{}) (string, error) {
+func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) ([]string, error) {
 	if member == nil {
-		return "", fmt.Errorf("member is nil")
+		return nil, fmt.Errorf("member is nil")
 	}
 
 	memberStr := GetMemberName(member)
 
 	// special condition: if member == 'user.*', return '*'
 	if memberStr == allUsers {
-		return WildCardAll, nil
+		return []string{WildCardAll}, nil
 	}
 
-	return PrincipalToSpiffe(memberStr)
+	return PrincipalToSpiffe(memberStr, enableSpiffeTrustDomain, systemNamespaces, serviceAccountMap, adminDomain)
 }
 
 // MemberToOriginSubject parses the Athenz role/group member into the request.auth.principal
@@ -202,30 +203,73 @@ func MemberToOriginJwtSubject(member interface{}) (string, error) {
 
 // RoleToSpiffe reads athenz role name string, and generates the SPIFFE name of it
 // SPIFFE name format: <athenz domain name>/ra/<role name>
-func RoleToSpiffe(athenzDomainName string, roleName string) (string, error) {
+func RoleToSpiffe(athenzDomainName string, roleName string, enableSpiffeTrustDomain bool) ([]string, error) {
 	if len(athenzDomainName) == 0 {
-		return "", fmt.Errorf("athenzDomainName is empty")
+		return nil, fmt.Errorf("athenzDomainName is empty")
 	}
 	if len(roleName) == 0 {
-		return "", fmt.Errorf("roleName is empty")
+		return nil, fmt.Errorf("roleName is empty")
 	}
-	spiffeName := fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName)
-	return spiffeName, nil
+
+	spiffeNames := []string{
+		fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName),
+	}
+	if enableSpiffeTrustDomain {
+		newSpiffeNames := []string{
+			fmt.Sprintf("athenz.cloud/ns/%s/ra/%s", athenzDomainName, roleName),
+			fmt.Sprintf("athenz.cloud/ns/default/ra/%s.%s", athenzDomainName, roleName),
+		}
+		spiffeNames = append(spiffeNames, newSpiffeNames...)
+	}
+	return spiffeNames, nil
+}
+
+// containsSystemNamespace ranges over systemNamespaces list, the flag we pass in and checks if the domain ends with any of the namespace suffix
+func containsSystemNamespace(domain string, systemNamespaces []string) bool {
+	for _, ns := range systemNamespaces {
+		if strings.HasSuffix(domain, "."+ns) {
+			return true
+		}
+	}
+	return false
 }
 
 // PrincipalToSpiffe converts the Athenz principal into a SPIFFE compliant format
 // e.g. client-domain.frontend.some-app -> client-domain.frontend/sa/some-app
-func PrincipalToSpiffe(principal string) (string, error) {
+func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) ([]string, error) {
 	if len(principal) == 0 {
-		return "", fmt.Errorf("principal is empty")
+		return nil, fmt.Errorf("principal is empty")
 	}
 	i := strings.LastIndex(principal, ".")
 	if i < 0 {
-		return "", fmt.Errorf("principal:%s is not of the format <Athenz-domain>.<Athenz-service>", principal)
+		return nil, fmt.Errorf("principal:%s is not of the format <Athenz-domain>.<Athenz-service>", principal)
 	}
+
 	memberDomain, memberService := principal[:i], principal[i+1:]
-	spiffeName := fmt.Sprintf("%s/sa/%s", memberDomain, memberService)
-	return spiffeName, nil
+	var namespace string
+	systemNamespaceVal, isSystemNamespaceAvailable := serviceAccountMap[memberService]
+
+	if isSystemNamespaceAvailable && strings.HasPrefix(memberDomain, adminDomain) {
+		namespace = systemNamespaceVal
+	} else {
+		if containsSystemNamespace(memberDomain, systemNamespaces) {
+			namespace = athenz.DomainToNamespaceForSystemComponents(memberDomain)
+		} else {
+			namespace = athenz.DomainToNamespace(memberDomain)
+		}
+	}
+	spiffeNames := []string{
+		fmt.Sprintf("%s/sa/%s", memberDomain, memberService),
+	}
+	if enableSpiffeTrustDomain {
+		newSpiffeNames := []string{
+			fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", namespace, principal),
+			fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", memberDomain, principal),
+			fmt.Sprintf("athenz.cloud/ns/default/sa/%s", principal),
+		}
+		spiffeNames = append(spiffeNames, newSpiffeNames...)
+	}
+	return spiffeNames, nil
 }
 
 // ParseAssertionEffect parses the effect of an assertion into a supported Istio RBAC action

@@ -117,7 +117,6 @@ func validateAuthorizationPolicy(t *testing.T, authorizationPolicies []*model.Co
 			if got == nil {
 				return false, nil
 			}
-
 			if !reflect.DeepEqual(got.Spec, policy.Spec) {
 				return false, nil
 			}
@@ -230,9 +229,13 @@ func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
-					policy.Rules[0].From[0].Source.Principals = append(policy.Rules[0].From[0].Source.Principals, "user/sa/bar")
-					principals := policy.Rules[0].From[0].Source.Principals
-					principals[1], principals[2] = principals[2], principals[1]
+					updatedPrinciples := []string{
+						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar",
+					}
+					policy.Rules[0].From[0].Source.Principals = append(
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
+					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/user.bar"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
 				},
@@ -405,9 +408,13 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
-					policy.Rules[0].From[0].Source.Principals = append(policy.Rules[0].From[0].Source.Principals, "user/sa/bar")
-					principals := policy.Rules[0].From[0].Source.Principals
-					principals[1], principals[2] = principals[2], principals[1]
+					updatedPrinciples := []string{
+						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar",
+					}
+					policy.Rules[0].From[0].Source.Principals = append(
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
+					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/user.bar"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
 				},
@@ -423,6 +430,82 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 	// So validate that the user has been removed from the Authorization policy
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, noop, noop)
 	cleanupAuthorizationRbac(t, e)
+}
+
+func TestUpdateAthenzDomainContainingSystemNamespaceUpdatesAuthorizationPolicy(t *testing.T) {
+	// Initial set up
+	e := fixtures.GetBasicRbacV2Case(nil)
+	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
+
+	// Get updated fixtures
+	newUserName := "k8s.omega.stage1-bf1.istio-system.istio-ingressgateway"
+	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
+		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
+				signedDomain.Domain.Roles[0].Members = append(signedDomain.Domain.Roles[0].Members, zms.MemberName(newUserName))
+				signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, &zms.RoleMember{MemberName: zms.MemberName(newUserName)})
+			},
+		},
+		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
+			[]func(policy *v1beta1.AuthorizationPolicy){
+				func(policy *v1beta1.AuthorizationPolicy) {
+					updatedPrinciples := []string{
+						"k8s.omega.stage1-bf1.istio-system/sa/istio-ingressgateway",
+						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
+						"athenz.cloud/ns/k8s.omega.stage1-bf1.istio-system/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
+						"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
+					}
+					policy.Rules[0].From[0].Source.Principals = append(
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
+					)
+					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway"}
+					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
+				},
+			},
+		},
+	})
+
+	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
+	cleanupAuthorizationRbac(t, modified)
+}
+
+func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
+	// Initial set up
+	e := fixtures.GetBasicRbacV2Case(nil)
+	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
+
+	// Get updated fixtures
+	newUserName := "k8s.omega.aws-prod.istio-ingressgateway-service-account"
+	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
+		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
+			func(signedDomain *zms.SignedDomain) {
+				signedDomain.Domain.Roles[0].Members = append(signedDomain.Domain.Roles[0].Members, zms.MemberName(newUserName))
+				signedDomain.Domain.Roles[0].RoleMembers = append(signedDomain.Domain.Roles[0].RoleMembers, &zms.RoleMember{MemberName: zms.MemberName(newUserName)})
+			},
+		},
+		ModifyAuthorizationPolicies: [][]func(policy *v1beta1.AuthorizationPolicy){
+			[]func(policy *v1beta1.AuthorizationPolicy){
+				func(policy *v1beta1.AuthorizationPolicy) {
+					updatedPrinciples := []string{
+						"k8s.omega.aws-prod/sa/istio-ingressgateway-service-account",
+						"athenz.cloud/ns/istio-system/sa/k8s.omega.aws-prod.istio-ingressgateway-service-account",
+						"athenz.cloud/ns/k8s.omega.aws-prod/sa/k8s.omega.aws-prod.istio-ingressgateway-service-account",
+						"athenz.cloud/ns/default/sa/k8s.omega.aws-prod.istio-ingressgateway-service-account",
+					}
+					policy.Rules[0].From[0].Source.Principals = append(
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
+					)
+					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.aws-prod.istio-ingressgateway-service-account"}
+					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
+				},
+			},
+		},
+	})
+
+	rolloutAndValidateAuthorizationPolicyScenario(t, modified, update, noop)
+	cleanupAuthorizationRbac(t, modified)
 }
 
 // Initial: Existing service with annotation, AP

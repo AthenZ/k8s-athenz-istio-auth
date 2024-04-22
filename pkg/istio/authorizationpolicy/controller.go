@@ -47,7 +47,7 @@ type Controller struct {
 	standAloneMode              bool
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool, enableSpiffeTrustDomain bool, systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -55,7 +55,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		serviceIndexInformer:        serviceIndexInformer,
 		adIndexInformer:             adIndexInformer,
 		queue:                       queue,
-		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject, combinationPolicyTag),
+		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject, enableSpiffeTrustDomain, combinationPolicyTag, systemNamespaces, serviceAccountMap, adminDomain),
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
@@ -173,9 +173,11 @@ func (c *Controller) processNextItem() bool {
 
 // sync function receives a key string function, key can have two format:
 // Case 1: for athenzdomain crd, key string is in format: <athenz domain name>, perform a service list scan.
+//
 //	Compute, compare and update authz policy specs based on current state in cluster
 //
 // Case 2: for service resource and authorization policy, key string is in format: <namespace name>/<service name>,
+//
 //	look up svc in cache and generate corresponding authz policy, update based on current state in cluster
 func (c *Controller) sync(key string) error {
 	var serviceName, athenzDomainName string
