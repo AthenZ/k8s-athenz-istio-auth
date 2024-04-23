@@ -141,7 +141,7 @@ func (c *Controller) sync(key string) error {
 func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernetes.Interface, adClient adClientset.Interface,
 	istioClientSet versioned.Interface, adResyncInterval, crcResyncInterval, apResyncInterval time.Duration, enableOriginJwtSubject bool,
 	enableAuthzPolicyController bool, componentsEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, enableSpiffeTrustDomain bool,
-	systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) *Controller {
+	systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	configStoreCache := crd.NewController(istioClient, controller.Options{})
 
@@ -154,7 +154,7 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	// If enableAuthzPolicyController is enabled start the authzpolicy controller
 	var apController *authzpolicy.Controller
 	if enableAuthzPolicyController {
-		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, false, enableSpiffeTrustDomain, systemNamespaces, serviceAccountMap, adminDomain)
+		apController = authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, false, enableSpiffeTrustDomain, systemNamespaces, customServiceAccountMap, adminDomain)
 		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 	}
 

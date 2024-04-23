@@ -33,7 +33,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 		expectedSpiffe          []string
 		expectedErr             error
 		systemNamespaces        []string
-		serviceAccountMap       map[string]string
+		customServiceAccountMap       map[string]string
 		adminDomain             string
 	}{
 		{
@@ -104,7 +104,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 			},
 			expectedErr:       nil,
 			systemNamespaces:  []string{"istio-system"},
-			serviceAccountMap: map[string]string{"istio-ingressgateway": "istio-system"},
+			customServiceAccountMap: map[string]string{"istio-ingressgateway": "istio-system"},
 		},
 		{
 			test:                    "invalid principal",
@@ -116,7 +116,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal, c.enableSpiffeTrustDomain, c.systemNamespaces, c.serviceAccountMap, "")
+		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal, c.enableSpiffeTrustDomain, c.systemNamespaces, c.customServiceAccountMap, "")
 		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
