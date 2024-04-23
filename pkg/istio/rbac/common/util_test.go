@@ -33,7 +33,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 		expectedSpiffe          []string
 		expectedErr             error
 		systemNamespaces        []string
-		customServiceAccountMap       map[string]string
+		customServiceAccountMap map[string]string
 		adminDomain             string
 	}{
 		{
@@ -102,8 +102,8 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 				"athenz.cloud/ns/k8s.omega.stage1-bf1/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 			},
-			expectedErr:       nil,
-			systemNamespaces:  []string{"istio-system"},
+			expectedErr:             nil,
+			systemNamespaces:        []string{"istio-system"},
 			customServiceAccountMap: map[string]string{"istio-ingressgateway": "istio-system"},
 		},
 		{

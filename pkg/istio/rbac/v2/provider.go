@@ -27,7 +27,7 @@ type v2 struct {
 	enableSpiffeTrustDomain     bool
 	combinationPolicyTag        string
 	systemNamespaces            []string
-	customServiceAccountMap           map[string]string
+	customServiceAccountMap     map[string]string
 	adminDomain                 string
 }
 
@@ -38,7 +38,7 @@ func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOri
 		enableSpiffeTrustDomain:     enableSpiffeTrustDomain,
 		combinationPolicyTag:        combinationPolicyTag,
 		systemNamespaces:            systemNamespaces,
-		customServiceAccountMap:           customServiceAccountMap,
+		customServiceAccountMap:     customServiceAccountMap,
 		adminDomain:                 adminDomain,
 	}
 }
