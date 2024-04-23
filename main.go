@@ -51,7 +51,7 @@ func main() {
 	enableSpiffeTrustDomain := flag.Bool("enable-spiffe-trust-domain", true, "Allow new SPIFFE ID's")
 	adminDomain := flag.String("admin-domain", "k8s.omega.aws-prod", "admin domain")
 	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-yahoo", "list of cluster system namespaces")
-	serviceAccountMap := flag.String("service-account-map", "istio-ingressgateway-service-account:istio-system", "for cloud cluster trace the namespace based on the sa")
+	customServiceAccountMap := flag.String("service-account-map", "istio-ingressgateway:istio-system", "for cloud cluster trace the namespace based on the sa")
 
 	klog.InitFlags(nil)
 	flag.Set("logtostderr", "false")
@@ -144,7 +144,7 @@ func main() {
 	stopCh := make(chan struct{})
 	namespaces := strings.Split(*systemNamespaces, ",")
 	serviceAccountNamespaceMap := map[string]string{}
-	for _, serviceAccount := range strings.Split(*serviceAccountMap, ",") {
+	for _, serviceAccount := range strings.Split(*customServiceAccountMap, ",") {
 		key, value := strings.Split(serviceAccount, ":")[0], strings.Split(serviceAccount, ":")[1]
 		serviceAccountNamespaceMap[key] = value
 	}

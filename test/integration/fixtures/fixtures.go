@@ -485,7 +485,6 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 								"athenz.cloud/ns/default/sa/user.foo",
 								"athenz.domain/ra/client-writer-role",
 								"athenz.cloud/ns/athenz.domain/ra/client-writer-role",
-								"athenz.cloud/ns/default/ra/athenz.domain.client-writer-role",
 							},
 						},
 					},

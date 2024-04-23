@@ -168,7 +168,7 @@ func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.Domain
 
 // MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) ([]string, error) {
+func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) ([]string, error) {
 	if member == nil {
 		return nil, fmt.Errorf("member is nil")
 	}
@@ -180,7 +180,7 @@ func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemName
 		return []string{WildCardAll}, nil
 	}
 
-	return PrincipalToSpiffe(memberStr, enableSpiffeTrustDomain, systemNamespaces, serviceAccountMap, adminDomain)
+	return PrincipalToSpiffe(memberStr, enableSpiffeTrustDomain, systemNamespaces, customServiceAccountMap, adminDomain)
 }
 
 // MemberToOriginSubject parses the Athenz role/group member into the request.auth.principal
@@ -217,7 +217,6 @@ func RoleToSpiffe(athenzDomainName string, roleName string, enableSpiffeTrustDom
 	if enableSpiffeTrustDomain {
 		newSpiffeNames := []string{
 			fmt.Sprintf("athenz.cloud/ns/%s/ra/%s", athenzDomainName, roleName),
-			fmt.Sprintf("athenz.cloud/ns/default/ra/%s.%s", athenzDomainName, roleName),
 		}
 		spiffeNames = append(spiffeNames, newSpiffeNames...)
 	}
@@ -236,7 +235,7 @@ func containsSystemNamespace(domain string, systemNamespaces []string) bool {
 
 // PrincipalToSpiffe converts the Athenz principal into a SPIFFE compliant format
 // e.g. client-domain.frontend.some-app -> client-domain.frontend/sa/some-app
-func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNamespaces []string, serviceAccountMap map[string]string, adminDomain string) ([]string, error) {
+func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) ([]string, error) {
 	if len(principal) == 0 {
 		return nil, fmt.Errorf("principal is empty")
 	}
@@ -247,7 +246,7 @@ func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNam
 
 	memberDomain, memberService := principal[:i], principal[i+1:]
 	var namespace string
-	systemNamespaceVal, isSystemNamespaceAvailable := serviceAccountMap[memberService]
+	systemNamespaceVal, isSystemNamespaceAvailable := customServiceAccountMap[memberService]
 
 	if isSystemNamespaceAvailable && strings.HasPrefix(memberDomain, adminDomain) {
 		namespace = systemNamespaceVal
