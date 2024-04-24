@@ -58,17 +58,14 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 	}
 
 	//add role spiffee for role certificate
-	roleSpiffeNames, err := RoleToSpiffe(athenzDomainName, roleName, false)
+	roleSpiffeName, err := RoleToSpiffe(athenzDomainName, roleName)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, roleSpiffeName := range roleSpiffeNames {
-		spiffeSubject := &v1alpha1.Subject{
-			User: roleSpiffeName,
-		}
-		subjects = append(subjects, spiffeSubject)
-	}
+	subjects = append(subjects, &v1alpha1.Subject{
+		User: roleSpiffeName,
+	})
 
 	roleRef := &v1alpha1.RoleRef{
 		Kind: ServiceRoleKind,

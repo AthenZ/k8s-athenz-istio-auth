@@ -30,10 +30,55 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 		test                    string
 		principal               string
 		enableSpiffeTrustDomain bool
+		expectedSpiffe          string
+		expectedErr             error
+	}{
+		{
+			test:           "empty principal",
+			principal:      "",
+			expectedSpiffe: "",
+			expectedErr:    fmt.Errorf("principal is empty"),
+		},
+		{
+			test:                    "valid service principal",
+			principal:               "client.some-domain.dep-svcA",
+			enableSpiffeTrustDomain: true,
+			expectedSpiffe:          "client.some-domain/sa/dep-svcA",
+			expectedErr:             nil,
+		},
+		{
+			test:                    "valid user principal",
+			principal:               "user.myname",
+			enableSpiffeTrustDomain: true,
+			expectedSpiffe:          "user/sa/myname",
+			expectedErr:             nil,
+		},
+		{
+			test:                    "invalid principal",
+			principal:               "someuser",
+			enableSpiffeTrustDomain: true,
+			expectedSpiffe:          "",
+			expectedErr:             fmt.Errorf("principal:someuser is not of the format <Athenz-domain>.<Athenz-service>"),
+		},
+	}
+
+	for _, c := range cases {
+		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
+
+		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
+		assert.Equal(t, c.expectedErr, gotErr, c.test)
+	}
+}
+
+func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
+	cases := []struct {
+		test                    string
+		principal               string
+		enableSpiffeTrustDomain bool
 		expectedSpiffe          []string
 		expectedErr             error
 		systemNamespaces        []string
-		customServiceAccountMap map[string]string
+		customServicetMap       map[string]string
 		adminDomain             string
 	}{
 		{
@@ -47,9 +92,7 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 			principal:               "client.some-domain.dep-svcA",
 			enableSpiffeTrustDomain: true,
 			expectedSpiffe: []string{
-				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
-				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
@@ -59,52 +102,37 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 			principal:               "client.some-domain.dep-svcA",
 			enableSpiffeTrustDomain: true,
 			expectedSpiffe: []string{
-				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/some-domain/sa/client.some-domain.dep-svcA",
-				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"some-domain"},
-		},
-		{
-			test:                    "valid user principal",
-			principal:               "user.myname",
-			enableSpiffeTrustDomain: true,
-			expectedSpiffe: []string{
-				"user/sa/myname",
-				"athenz.cloud/ns/user/sa/user.myname",
-				"athenz.cloud/ns/user/sa/user.myname",
-				"athenz.cloud/ns/default/sa/user.myname",
-			},
-			expectedErr: nil,
+			adminDomain:      "client",
 		},
 		{
 			test:                    "valid user principal",
 			principal:               "k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
 			enableSpiffeTrustDomain: true,
 			expectedSpiffe: []string{
-				"k8s.omega.stage1-bf1.istio-system/sa/istio-ingressgateway",
 				"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
-				"athenz.cloud/ns/k8s.omega.stage1-bf1.istio-system/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
+			adminDomain:      "k8s.omega.stage1-bf1",
 		},
 		{
 			test:                    "valid user principal for cloud",
 			principal:               "k8s.omega.stage1-bf1.istio-ingressgateway",
 			enableSpiffeTrustDomain: true,
 			expectedSpiffe: []string{
-				"k8s.omega.stage1-bf1/sa/istio-ingressgateway",
 				"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
-				"athenz.cloud/ns/k8s.omega.stage1-bf1/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 			},
-			expectedErr:             nil,
-			systemNamespaces:        []string{"istio-system"},
-			customServiceAccountMap: map[string]string{"istio-ingressgateway": "istio-system"},
+			expectedErr:       nil,
+			systemNamespaces:  []string{"istio-system"},
+			customServicetMap: map[string]string{"istio-ingressgateway": "istio-system"},
+			adminDomain:       "k8s.omega.stage1-bf1",
 		},
 		{
 			test:                    "invalid principal",
@@ -116,7 +144,8 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal, c.enableSpiffeTrustDomain, c.systemNamespaces, c.customServiceAccountMap, "")
+		gotSpiffe, gotErr := PrincipalToTrustDomainSpiffe(c.principal, c.systemNamespaces, c.customServicetMap, c.adminDomain)
+
 		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
@@ -130,6 +159,7 @@ func TestMemberToSpiffe(t *testing.T) {
 		expectedMember   []string
 		expectedErr      error
 		systemNamespaces []string
+		adminDomain      string
 	}{
 		{
 			test:           "nil member",
@@ -145,7 +175,6 @@ func TestMemberToSpiffe(t *testing.T) {
 			expectedMember: []string{
 				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
-				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
@@ -157,7 +186,6 @@ func TestMemberToSpiffe(t *testing.T) {
 			},
 			expectedMember: []string{
 				"user/sa/somename",
-				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/default/sa/user.somename",
 			},
@@ -187,7 +215,6 @@ func TestMemberToSpiffe(t *testing.T) {
 			expectedMember: []string{
 				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
-				"athenz.cloud/ns/client.some-domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
@@ -199,7 +226,6 @@ func TestMemberToSpiffe(t *testing.T) {
 			},
 			expectedMember: []string{
 				"user/sa/somename",
-				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/default/sa/user.somename",
 			},
@@ -213,11 +239,11 @@ func TestMemberToSpiffe(t *testing.T) {
 			expectedMember: []string{
 				"client.istio-system/sa/dep-svcA",
 				"athenz.cloud/ns/istio-system/sa/client.istio-system.dep-svcA",
-				"athenz.cloud/ns/client.istio-system/sa/client.istio-system.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.istio-system.dep-svcA",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
+			adminDomain:      "client",
 		},
 		{
 			test: "valid wildcard member in group",
@@ -238,7 +264,7 @@ func TestMemberToSpiffe(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotMember, gotErr := MemberToSpiffe(c.member, true, c.systemNamespaces, map[string]string{}, "")
+		gotMember, gotErr := MemberToSpiffe(c.member, true, c.systemNamespaces, map[string]string{}, c.adminDomain)
 		assert.Equal(t, c.expectedMember, gotMember, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}
