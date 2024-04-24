@@ -202,7 +202,7 @@ func newFakeController(athenzDomain *adv1.AthenzDomain, service *v1.Service, fak
 		panic(err)
 	}
 	c.componentEnabledAuthzPolicy = componentsEnabledAuthzPolicy
-	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject, false, "proxy-principals", []string{}, map[string]string{}, "")
+	c.rbacProvider = rbacv2.NewProvider(componentsEnabledAuthzPolicy, c.enableOriginJwtSubject, "proxy-principals", false, []string{}, map[string]string{}, "")
 	c.dryRunHandler = common.DryRunHandler{}
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,

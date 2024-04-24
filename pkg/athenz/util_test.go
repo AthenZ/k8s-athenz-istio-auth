@@ -15,10 +15,3 @@ func TestDomainNamespaceMap(t *testing.T) {
 	assert.Equal(t, "foo.bar.baz", NamespaceToDomain("foo-bar-baz"))
 	assert.Equal(t, "foo.bar-baz", NamespaceToDomain("foo-bar--baz"))
 }
-
-func TestDomainNamespaceMapForCloud(t *testing.T) {
-	assert.Equal(t, "bar-baz", DomainToNamespaceForSystemComponents("foo.bar-baz"))
-	assert.Equal(t, "bar--baz", DomainToNamespaceForSystemComponents("foo.bar--baz"))
-	assert.Equal(t, "bar", DomainToNamespaceForSystemComponents("foo.bar"))
-	assert.Equal(t, "bar", DomainToNamespaceForSystemComponents("bar"))
-}

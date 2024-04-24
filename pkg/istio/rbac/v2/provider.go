@@ -27,18 +27,18 @@ type v2 struct {
 	enableSpiffeTrustDomain     bool
 	combinationPolicyTag        string
 	systemNamespaces            []string
-	customServiceAccountMap     map[string]string
+	customServicetMap           map[string]string
 	adminDomain                 string
 }
 
-func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject, enableSpiffeTrustDomain bool, combinationPolicyTag string, systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool, combinationPolicyTag string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServicetMap map[string]string, adminDomain string) rbac.Provider {
 	return &v2{
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		enableSpiffeTrustDomain:     enableSpiffeTrustDomain,
 		combinationPolicyTag:        combinationPolicyTag,
 		systemNamespaces:            systemNamespaces,
-		customServiceAccountMap:     customServiceAccountMap,
+		customServicetMap:           customServicetMap,
 		adminDomain:                 adminDomain,
 	}
 }
@@ -253,7 +253,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 					continue
 				}
 
-				spiffeNames, err := common.MemberToSpiffe(member, p.enableSpiffeTrustDomain, p.systemNamespaces, p.customServiceAccountMap, p.adminDomain)
+				spiffeNames, err := common.MemberToSpiffe(member, p.enableSpiffeTrustDomain, p.systemNamespaces, p.customServicetMap, p.adminDomain)
 				if err != nil {
 					log.Errorln("error converting role member to spiffeName: ", err.Error())
 					continue
@@ -292,16 +292,25 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 		}
 
 		//add role spiffe for role certificate
-		roleSpiffeNames, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleName), p.enableSpiffeTrustDomain)
+		roleSpiffe, err := common.RoleToSpiffe(string(athenzModel.Name), string(roleName))
 		if err != nil {
 			log.Errorln("error when convert role to spiffe name: ", err.Error())
 			continue
+		}
+		roleSpiffeNames := []string{roleSpiffe}
+		if p.enableSpiffeTrustDomain {
+			roleTrustDomainSpiffe, err := common.RoleToTrustDomainSpiffe(string(athenzModel.Name), string(roleName))
+			if err != nil {
+				log.Errorln("error when convert role to spiffe name: ", err.Error())
+				continue
+			}
+			roleSpiffeNames = append(roleSpiffeNames, roleTrustDomainSpiffe)
 		}
 		if combinationPolicyFlag {
 			from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, roleSpiffeNames...)
 			from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, roleSpiffeNames...)
 			for _, proxyPrincipal := range proxyPrincipalsList {
-				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal, p.enableSpiffeTrustDomain, p.systemNamespaces, p.customServiceAccountMap, p.adminDomain)
+				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal, p.enableSpiffeTrustDomain, p.systemNamespaces, p.customServicetMap, p.adminDomain)
 				if err != nil {
 					log.Errorln("error converting proxy principal to spiffeName: ", err.Error())
 					continue

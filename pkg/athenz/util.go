@@ -20,9 +20,3 @@ func NamespaceToDomain(ns string) (domain string) {
 	dotted := strings.Replace(ns, "-", ".", -1)
 	return strings.Replace(dotted, "..", "-", -1)
 }
-
-func DomainToNamespaceForSystemComponents(domain string) (namespace string) {
-	substring := strings.Split(domain, ".")
-	namespace = substring[len(substring)-1]
-	return
-}

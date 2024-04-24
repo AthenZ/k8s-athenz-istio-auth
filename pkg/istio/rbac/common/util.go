@@ -168,7 +168,7 @@ func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.Domain
 
 // MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) ([]string, error) {
+func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, customServicetMap map[string]string, adminDomain string) ([]string, error) {
 	if member == nil {
 		return nil, fmt.Errorf("member is nil")
 	}
@@ -180,7 +180,15 @@ func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemName
 		return []string{WildCardAll}, nil
 	}
 
-	return PrincipalToSpiffe(memberStr, enableSpiffeTrustDomain, systemNamespaces, customServiceAccountMap, adminDomain)
+	spiffe, err := PrincipalToSpiffe(memberStr)
+	if err != nil {
+		return nil, err
+	}
+	trustDomainSpeffies, err := PrincipalToTrustDomainSpiffe(memberStr, systemNamespaces, customServicetMap, adminDomain)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{spiffe}, trustDomainSpeffies...), nil
 }
 
 // MemberToOriginSubject parses the Athenz role/group member into the request.auth.principal
@@ -201,41 +209,32 @@ func MemberToOriginJwtSubject(member interface{}) (string, error) {
 	return requestAuthPrincipal, nil
 }
 
-// RoleToSpiffe reads athenz role name string, and generates the SPIFFE name of it
-// SPIFFE name format: <athenz domain name>/ra/<role name>
-func RoleToSpiffe(athenzDomainName string, roleName string, enableSpiffeTrustDomain bool) ([]string, error) {
+func RoleToTrustDomainSpiffe(athenzDomainName string, roleName string) (string, error) {
 	if len(athenzDomainName) == 0 {
-		return nil, fmt.Errorf("athenzDomainName is empty")
+		return "", fmt.Errorf("athenzDomainName is empty")
 	}
 	if len(roleName) == 0 {
-		return nil, fmt.Errorf("roleName is empty")
+		return "", fmt.Errorf("roleName is empty")
 	}
 
-	spiffeNames := []string{
-		fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName),
-	}
-	if enableSpiffeTrustDomain {
-		newSpiffeNames := []string{
-			fmt.Sprintf("athenz.cloud/ns/%s/ra/%s", athenzDomainName, roleName),
-		}
-		spiffeNames = append(spiffeNames, newSpiffeNames...)
-	}
-	return spiffeNames, nil
+	return fmt.Sprintf("athenz.cloud/ns/%s/ra/%s", athenzDomainName, roleName), nil
 }
 
-// containsSystemNamespace ranges over systemNamespaces list, the flag we pass in and checks if the domain ends with any of the namespace suffix
-func containsSystemNamespace(domain string, systemNamespaces []string) bool {
-	for _, ns := range systemNamespaces {
-		if strings.HasSuffix(domain, "."+ns) {
-			return true
-		}
+// RoleToSpiffe reads athenz role name string, and generates the SPIFFE name of it
+// SPIFFE name format: <athenz domain name>/ra/<role name>
+func RoleToSpiffe(athenzDomainName string, roleName string) (string, error) {
+	if len(athenzDomainName) == 0 {
+		return "", fmt.Errorf("athenzDomainName is empty")
 	}
-	return false
+	if len(roleName) == 0 {
+		return "", fmt.Errorf("roleName is empty")
+	}
+
+	return fmt.Sprintf("%s/ra/%s", athenzDomainName, roleName), nil
+
 }
 
-// PrincipalToSpiffe converts the Athenz principal into a SPIFFE compliant format
-// e.g. client-domain.frontend.some-app -> client-domain.frontend/sa/some-app
-func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceAccountMap map[string]string, adminDomain string) ([]string, error) {
+func PrincipalToTrustDomainSpiffe(principal string, systemNamespaces []string, customServicetMap map[string]string, adminDomain string) ([]string, error) {
 	if len(principal) == 0 {
 		return nil, fmt.Errorf("principal is empty")
 	}
@@ -246,29 +245,44 @@ func PrincipalToSpiffe(principal string, enableSpiffeTrustDomain bool, systemNam
 
 	memberDomain, memberService := principal[:i], principal[i+1:]
 	var namespace string
-	systemNamespaceVal, isSystemNamespaceAvailable := customServiceAccountMap[memberService]
+	var memberDomainNamesapceIdx = -1
 
-	if isSystemNamespaceAvailable && strings.HasPrefix(memberDomain, adminDomain) {
-		namespace = systemNamespaceVal
+	for idx, namespace := range systemNamespaces {
+		if memberDomain == adminDomain+"."+namespace {
+			memberDomainNamesapceIdx = idx
+			break
+		}
+	}
+	adminNamespace, isAdminNamespace := customServicetMap[memberService]
+
+	if memberDomainNamesapceIdx != -1 {
+		namespace = systemNamespaces[memberDomainNamesapceIdx]
+	} else if isAdminNamespace && memberDomain == adminDomain {
+		namespace = adminNamespace
 	} else {
-		if containsSystemNamespace(memberDomain, systemNamespaces) {
-			namespace = athenz.DomainToNamespaceForSystemComponents(memberDomain)
-		} else {
-			namespace = athenz.DomainToNamespace(memberDomain)
-		}
+		namespace = athenz.DomainToNamespace(memberDomain)
 	}
-	spiffeNames := []string{
-		fmt.Sprintf("%s/sa/%s", memberDomain, memberService),
+
+	return []string{
+		fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", namespace, principal),
+		fmt.Sprintf("athenz.cloud/ns/default/sa/%s", principal),
+	}, nil
+
+}
+
+// PrincipalToSpiffe converts the Athenz principal into a SPIFFE compliant format
+// e.g. client-domain.frontend.some-app -> client-domain.frontend/sa/some-app
+func PrincipalToSpiffe(principal string) (string, error) {
+	if len(principal) == 0 {
+		return "", fmt.Errorf("principal is empty")
 	}
-	if enableSpiffeTrustDomain {
-		newSpiffeNames := []string{
-			fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", namespace, principal),
-			fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", memberDomain, principal),
-			fmt.Sprintf("athenz.cloud/ns/default/sa/%s", principal),
-		}
-		spiffeNames = append(spiffeNames, newSpiffeNames...)
+	i := strings.LastIndex(principal, ".")
+	if i < 0 {
+		return "", fmt.Errorf("principal:%s is not of the format <Athenz-domain>.<Athenz-service>", principal)
 	}
-	return spiffeNames, nil
+
+	memberDomain, memberService := principal[:i], principal[i+1:]
+	return fmt.Sprintf("%s/sa/%s", memberDomain, memberService), nil
 }
 
 // ParseAssertionEffect parses the effect of an assertion into a supported Istio RBAC action
