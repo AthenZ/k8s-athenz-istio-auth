@@ -138,6 +138,9 @@ func main() {
 
 	stopCh := make(chan struct{})
 	namespaces := strings.Split(*systemNamespaces, ",")
+	for i, namespace := range namespaces {
+		namespaces[i] = strings.TrimSpace(namespace)
+	}
 	serviceAccountNamespaceMap := map[string]string{}
 	for _, serviceAccount := range strings.Split(*customServiceMap, ",") {
 		saKeyValue := strings.Split(serviceAccount, ":")
