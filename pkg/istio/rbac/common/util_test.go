@@ -78,7 +78,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 		expectedSpiffe          []string
 		expectedErr             error
 		systemNamespaces        []string
-		customServicetMap       map[string]string
+		customServiceMap        map[string]string
 		adminDomain             string
 	}{
 		{
@@ -129,10 +129,10 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 				"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 			},
-			expectedErr:       nil,
-			systemNamespaces:  []string{"istio-system"},
-			customServicetMap: map[string]string{"istio-ingressgateway": "istio-system"},
-			adminDomain:       "k8s.omega.stage1-bf1",
+			expectedErr:      nil,
+			systemNamespaces: []string{"istio-system"},
+			customServiceMap: map[string]string{"istio-ingressgateway": "istio-system"},
+			adminDomain:      "k8s.omega.stage1-bf1",
 		},
 		{
 			test:                    "invalid principal",
@@ -144,7 +144,9 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToTrustDomainSpiffe(c.principal, c.systemNamespaces, c.customServicetMap, c.adminDomain)
+		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomain)
+		adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomain)
+		gotSpiffe, gotErr := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap, c.adminDomain)
 
 		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
@@ -264,7 +266,8 @@ func TestMemberToSpiffe(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotMember, gotErr := MemberToSpiffe(c.member, true, c.systemNamespaces, map[string]string{}, c.adminDomain)
+		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomain)
+		gotMember, gotErr := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{}, c.adminDomain)
 		assert.Equal(t, c.expectedMember, gotMember, c.test)
 		assert.Equal(t, c.expectedErr, gotErr, c.test)
 	}

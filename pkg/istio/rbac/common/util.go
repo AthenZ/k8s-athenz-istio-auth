@@ -166,9 +166,25 @@ func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.Domain
 	return athenz.DomainToNamespace(memberStr[0 : len(memberStr)-2]), nil
 }
 
+func GetAdminDomainNamespaceMap(systemNamespaces []string, adminDomain string) map[string]string {
+	domainNamespaceMap := make(map[string]string)
+	for _, systemNamespace := range systemNamespaces {
+		domainNamespaceMap[adminDomain+"."+systemNamespace] = systemNamespace
+	}
+	return domainNamespaceMap
+}
+
+func GetAdminPrincipleNamespaceMap(customServiceMap map[string]string, adminDomain string) map[string]string {
+	adminPrincipleNamespaceMap := make(map[string]string)
+	for serviceName, namespace := range customServiceMap {
+		adminPrincipleNamespaceMap[adminDomain+"."+serviceName] = namespace
+	}
+	return adminPrincipleNamespaceMap
+}
+
 // MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemNamespaces []string, customServicetMap map[string]string, adminDomain string) ([]string, error) {
+func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string, adminDomain string) ([]string, error) {
 	if member == nil {
 		return nil, fmt.Errorf("member is nil")
 	}
@@ -184,7 +200,10 @@ func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, systemName
 	if err != nil {
 		return nil, err
 	}
-	trustDomainSpeffies, err := PrincipalToTrustDomainSpiffe(memberStr, systemNamespaces, customServicetMap, adminDomain)
+	if !enableSpiffeTrustDomain {
+		return []string{spiffe}, nil
+	}
+	trustDomainSpeffies, err := PrincipalToTrustDomainSpiffe(memberStr, adminDomainNamespaceMap, adminPrincipleNamespaceMap, adminDomain)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +253,18 @@ func RoleToSpiffe(athenzDomainName string, roleName string) (string, error) {
 
 }
 
-func PrincipalToTrustDomainSpiffe(principal string, systemNamespaces []string, customServicetMap map[string]string, adminDomain string) ([]string, error) {
+func getNamespace(principal, memberDomain string, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string) (namespace string) {
+	if namespace, ok := adminPrincipleNamespaceMap[principal]; ok {
+		return namespace
+	}
+	if namespace, ok := adminDomainNamespaceMap[memberDomain]; ok {
+		return namespace
+	}
+	return athenz.DomainToNamespace(memberDomain)
+}
+
+// Update adminPrincipleNamespaceMap to
+func PrincipalToTrustDomainSpiffe(principal string, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string, adminDomain string) ([]string, error) {
 	if len(principal) == 0 {
 		return nil, fmt.Errorf("principal is empty")
 	}
@@ -243,25 +273,7 @@ func PrincipalToTrustDomainSpiffe(principal string, systemNamespaces []string, c
 		return nil, fmt.Errorf("principal:%s is not of the format <Athenz-domain>.<Athenz-service>", principal)
 	}
 
-	memberDomain, memberService := principal[:i], principal[i+1:]
-	var namespace string
-	var memberDomainNamesapceIdx = -1
-
-	for idx, namespace := range systemNamespaces {
-		if memberDomain == adminDomain+"."+namespace {
-			memberDomainNamesapceIdx = idx
-			break
-		}
-	}
-	adminNamespace, isAdminNamespace := customServicetMap[memberService]
-
-	if memberDomainNamesapceIdx != -1 {
-		namespace = systemNamespaces[memberDomainNamesapceIdx]
-	} else if isAdminNamespace && memberDomain == adminDomain {
-		namespace = adminNamespace
-	} else {
-		namespace = athenz.DomainToNamespace(memberDomain)
-	}
+	namespace := getNamespace(principal, principal[:i], adminDomainNamespaceMap, adminPrincipleNamespaceMap)
 
 	return []string{
 		fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", namespace, principal),

@@ -18,7 +18,7 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 
 		//TODO: handle member.Expiration for expired members, for now ignore expiration
 
-		spiffeNames, err := MemberToSpiffe(member, false, []string{}, map[string]string{}, "")
+		spiffeNames, err := MemberToSpiffe(member, false, map[string]string{}, map[string]string{}, "")
 		if err != nil {
 			log.Warningln(err.Error())
 			continue
