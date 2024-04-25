@@ -31,7 +31,6 @@ const (
 	AthenzJwtPrefix              = "athenz/"
 	RequestAuthPrincipalProperty = "request.auth.principal"
 	DryRunStoredFilesDirectory   = "/root/authzpolicy/"
-	istioSystemNamespace         = "istio-system"
 )
 
 var supportedMethods = map[string]bool{
