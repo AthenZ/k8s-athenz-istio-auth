@@ -438,7 +438,7 @@ func TestUpdateAthenzDomainContainingSystemNamespaceUpdatesAuthorizationPolicy(t
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
 
 	// Get updated fixtures
-	newUserName := "k8s.omega.aws-prod.istio-system.istio-ingressgateway"
+	newUserName := "k8s.omega.stage.istio-system.istio-ingressgateway"
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
 			func(signedDomain *zms.SignedDomain) {
@@ -450,15 +450,15 @@ func TestUpdateAthenzDomainContainingSystemNamespaceUpdatesAuthorizationPolicy(t
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
 					updatedPrinciples := []string{
-						"k8s.omega.aws-prod.istio-system/sa/istio-ingressgateway",
-						"athenz.cloud/ns/istio-system/sa/k8s.omega.aws-prod.istio-system.istio-ingressgateway",
-						"athenz.cloud/ns/default/sa/k8s.omega.aws-prod.istio-system.istio-ingressgateway",
+						"k8s.omega.stage.istio-system/sa/istio-ingressgateway",
+						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
+						"athenz.cloud/ns/default/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
 						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
 					)
-					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.aws-prod.istio-system.istio-ingressgateway"}
+					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.stage.istio-system.istio-ingressgateway"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
 				},
 			},
@@ -475,7 +475,7 @@ func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
 	rolloutAndValidateAuthorizationPolicyScenario(t, e, create, create)
 
 	// Get updated fixtures
-	newUserName := "k8s.omega.aws-prod.istio-ingressgateway-service-account"
+	newUserName := "k8s.omega.stage.istio-ingressgateway"
 	modified := fixtures.GetBasicRbacV2Case(&fixtures.RbacV2Modifications{
 		ModifyAthenzDomain: []func(signedDomain *zms.SignedDomain){
 			func(signedDomain *zms.SignedDomain) {
@@ -487,15 +487,15 @@ func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
 					updatedPrinciples := []string{
-						"k8s.omega.aws-prod/sa/istio-ingressgateway-service-account",
-						"athenz.cloud/ns/istio-system/sa/k8s.omega.aws-prod.istio-ingressgateway-service-account",
-						"athenz.cloud/ns/default/sa/k8s.omega.aws-prod.istio-ingressgateway-service-account",
+						"k8s.omega.stage/sa/istio-ingressgateway",
+						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage.istio-ingressgateway",
+						"athenz.cloud/ns/default/sa/k8s.omega.stage.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
 						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
 					)
-					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.aws-prod.istio-ingressgateway-service-account"}
+					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.stage.istio-ingressgateway"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
 				},
 			},
