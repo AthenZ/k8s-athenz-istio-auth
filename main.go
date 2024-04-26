@@ -49,9 +49,9 @@ func main() {
 	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
 	authPolicyControllerOnlyMode := flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
 	enableSpiffeTrustDomain := flag.Bool("enable-spiffe-trust-domain", true, "Allow new SPIFFE ID's")
-	adminDomain := flag.String("admin-domain", "k8s.omega.stage", "admin domain")
-	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-yahoo", "list of cluster system namespaces")
-	customServiceMap := flag.String("service-account-map", "istio-ingressgateway:istio-system", "for cloud cluster trace the namespace based on the sa")
+	adminDomain := flag.String("admin-domain", "", "admin domain")
+	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-system", "list of cluster system namespaces")
+	customServiceMap := flag.String("service-account-map", "", "for cloud cluster trace the namespace based on the sa")
 
 	klog.InitFlags(nil)
 	flag.Set("logtostderr", "false")
