@@ -43,7 +43,6 @@ replace (
 	k8s.io/apiserver => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/apiserver
 	k8s.io/cli-runtime => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cli-runtime
 	k8s.io/client-go => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/client-go
-	k8s.io/klog/v2 => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/klog/v2
 	k8s.io/cloud-provider => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cloud-provider
 	k8s.io/cluster-bootstrap => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/cluster-bootstrap
 	k8s.io/code-generator => /sd/workspace/src/k8s.io/kubernetes/staging/src/k8s.io/code-generator
