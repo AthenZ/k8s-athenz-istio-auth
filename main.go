@@ -54,6 +54,16 @@ func main() {
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 
+	// Throw error if the admin domain is nil or empty
+	if adminDomain == nil || len(strings.TrimSpace(*adminDomain)) == 0 {
+		log.Panicf("Error admin-domain is nil or empty")
+	}
+
+	// Throw error if service account map is empty of nil
+	if customServiceMap == nil || len(strings.TrimSpace(*customServiceMap)) == 0 {
+		log.Panicf("Error service-account-map is nil or empty")
+	}
+
 	// When enableAuthzPolicyController is set to true create a dry run folder which
 	// would contain the Authorization Policy resource for all the namespaces/services which
 	// are not passed as a parameter in --ap-enabled-list
