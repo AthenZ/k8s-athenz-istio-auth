@@ -18,16 +18,18 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 
 		//TODO: handle member.Expiration for expired members, for now ignore expiration
 
-		spiffeName, err := MemberToSpiffe(member)
+		spiffeNames, err := MemberToSpiffe(member, false, map[string]string{}, map[string]string{}, "")
 		if err != nil {
 			log.Warningln(err.Error())
 			continue
 		}
 
-		spiffeSubject := &v1alpha1.Subject{
-			User: spiffeName,
+		for _, spiffeName := range spiffeNames {
+			spiffeSubject := &v1alpha1.Subject{
+				User: spiffeName,
+			}
+			subjects = append(subjects, spiffeSubject)
 		}
-		subjects = append(subjects, spiffeSubject)
 
 		if enableOriginJwtSubject {
 			originJwtName, err := MemberToOriginJwtSubject(member)
@@ -61,10 +63,9 @@ func GetServiceRoleBindingSpec(athenzDomainName string, roleName string, k8sRole
 		return nil, err
 	}
 
-	spiffeSubject := &v1alpha1.Subject{
+	subjects = append(subjects, &v1alpha1.Subject{
 		User: roleSpiffeName,
-	}
-	subjects = append(subjects, spiffeSubject)
+	})
 
 	roleRef := &v1alpha1.RoleRef{
 		Kind: ServiceRoleKind,

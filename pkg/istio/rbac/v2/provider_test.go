@@ -134,7 +134,7 @@ func TestConvertAthenzModelIntoIstioRbac(t *testing.T) {
 			domainRBAC := athenz.ConvertAthenzPoliciesIntoRbacModel(tt.inputAthenzDomain.Domain, &fakeAthenzInformer)
 			componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
 			assert.Equal(t, nil, err, "ParseComponentsEnabledAuthzPolicy func should not return nil")
-			p := NewProvider(componentsEnabledAuthzPolicy, true, "proxy-principals")
+			p := NewProvider(componentsEnabledAuthzPolicy, true, "proxy-principals", false, []string{}, map[string]string{}, "")
 			convertedAuthzPolicy := p.ConvertAthenzModelIntoIstioRbac(domainRBAC, tt.inputService.Name, labels["svc"], labels["app"])
 			configSpec := (convertedAuthzPolicy[0].Spec).(*v1beta1.AuthorizationPolicy)
 			sort.Slice(configSpec.Rules, func(i, j int) bool {

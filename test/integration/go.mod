@@ -1,6 +1,6 @@
 module github.com/yahoo/k8s-athenz-istio-auth/test/integration
 
-go 1.12
+go 1.16
 
 require (
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
@@ -13,6 +13,7 @@ require (
 	github.com/coreos/etcd v3.3.15+incompatible
 	github.com/hashicorp/go-hclog v0.9.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
+	github.com/kr/pty v1.1.5 // indirect
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.5.1
 	github.com/yahoo/athenz v1.9.30
@@ -28,7 +29,6 @@ require (
 	k8s.io/apimachinery v0.17.14
 	k8s.io/client-go v0.17.14
 	k8s.io/kubernetes v0.17.14
-	github.com/kr/pty v1.1.5 // indirect
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
 

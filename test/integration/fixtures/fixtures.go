@@ -480,7 +480,10 @@ func getExpectedAuthorizationPolicy(serviceName string, modifications []func(*se
 						Source: &securityV1beta1.Source{
 							Principals: []string{
 								"user/sa/foo",
+								"athenz.cloud/ns/user/sa/user.foo",
+								"athenz.cloud/ns/default/sa/user.foo",
 								"athenz.domain/ra/client-writer-role",
+								"athenz.cloud/ns/athenz.domain/ra/client-writer-role",
 							},
 						},
 					},
@@ -530,7 +533,6 @@ func GetDefaultService(serviceName string, modifications []func(service *v1.Serv
 	for _, modify := range modifications {
 		modify(defaultService)
 	}
-
 	return defaultService
 }
 
@@ -589,6 +591,7 @@ func GetBasicRbacV2Case(modifications *RbacV2Modifications) *ExpectedV2Rbac {
 	if modifications.ModifyServices == nil {
 		modifications.ModifyServices = defaultModifyServices
 	}
+
 	for _, serviceModifications := range modifications.ModifyServices {
 		services = append(services, GetDefaultService(serviceName, serviceModifications))
 	}
