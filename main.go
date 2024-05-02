@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -51,6 +52,10 @@ func main() {
 	adminDomain := flag.String("admin-domain", "", "admin domain")
 	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-system", "list of cluster system namespaces")
 	customServiceMap := flag.String("service-account-map", "", "for cloud cluster trace the namespace based on the sa")
+
+	klog.InitFlags(nil)
+	flag.Set("logtostderr", "false")
+	flag.Set("logtostdout", "false")
 	flag.Parse()
 	log.InitLogger(*logFile, *logLevel)
 

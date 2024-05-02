@@ -3,19 +3,11 @@ module github.com/yahoo/k8s-athenz-istio-auth/test/integration
 go 1.16
 
 require (
-	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
+	github.com/Sirupsen/logrus v1.9.3 // indirect
 	github.com/ardielle/ardielle-go v1.5.2
-	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
-	github.com/armon/go-radix v1.0.0 // indirect
-	github.com/chai2010/gettext-go v0.0.0-20170215093142-bf70f2a70fb1 // indirect
-	github.com/coreos/bbolt v1.3.3 // indirect
-	github.com/coreos/etcd v3.3.15+incompatible
-	github.com/hashicorp/go-hclog v0.9.0 // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
-	github.com/kr/pty v1.1.5 // indirect
-	github.com/sirupsen/logrus v1.8.1
-	github.com/stretchr/testify v1.5.1
+	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/stretchr/testify v1.7.0
 	github.com/yahoo/athenz v1.9.30
 	github.com/yahoo/k8s-athenz-istio-auth v0.0.0-00010101000000-000000000000
 	github.com/yahoo/k8s-athenz-syncer v0.1.7
@@ -29,10 +21,10 @@ require (
 	k8s.io/apimachinery v0.17.14
 	k8s.io/client-go v0.17.14
 	k8s.io/kubernetes v0.17.14
-	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
 
 replace (
+	github.com/Sirupsen/logrus v1.9.3 => github.com/sirupsen/logrus v1.9.3
 	github.com/yahoo/k8s-athenz-istio-auth => /sd/workspace/src/github.com/AthenZ/k8s-athenz-istio-auth
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.3
 	go.etcd.io/etcd => go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
