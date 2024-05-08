@@ -154,7 +154,7 @@ func Setup() error {
 		return err
 	}
 
-	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled, "proxy-principals", true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, "k8s.omega.stage")
+	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled, "proxy-principals", true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
 	go c.Run(stopCh)
 
 	Global = &Framework{

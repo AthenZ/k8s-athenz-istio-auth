@@ -163,17 +163,21 @@ func main() {
 			serviceAccountNamespaceMap[saKeyValue[0]] = saKeyValue[1]
 		}
 	}
+	var adminDomains = make([]string, 0)
+	for _, domain := range strings.Split(*adminDomain, ",") {
+		adminDomains = append(adminDomains, strings.TrimSpace(domain))
+	}
 	if *authPolicyControllerOnlyMode {
 		configStoreCache := crdController.NewController(istioClient, istioController.Options{})
 		serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
 		serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 		adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
-		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, *adminDomain)
+		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
 		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 		go apController.Run(stopCh)
 	} else {
-		c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, *adminDomain)
+		c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
 		go c.Run(stopCh)
 	}
 
