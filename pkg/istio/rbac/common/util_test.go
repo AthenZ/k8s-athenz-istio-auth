@@ -63,10 +63,10 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
+		actualSpiffee, err := PrincipalToSpiffe(c.principal)
 
-		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
@@ -146,10 +146,10 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 	for _, c := range cases {
 		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
 		adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomains)
-		gotSpiffe, gotErr := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
+		actualSpiffee, err := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
 
-		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
@@ -267,9 +267,9 @@ func TestMemberToSpiffe(t *testing.T) {
 
 	for _, c := range cases {
 		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
-		gotMember, gotErr := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{})
-		assert.Equal(t, c.expectedMember, gotMember, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		actualMember, err := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{})
+		assert.Equal(t, c.expectedMember, actualMember, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
