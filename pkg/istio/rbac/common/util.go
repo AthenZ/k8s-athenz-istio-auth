@@ -165,25 +165,29 @@ func CheckIfMemberIsAllUsersFromDomain(member interface{}, domainName zms.Domain
 	return athenz.DomainToNamespace(memberStr[0 : len(memberStr)-2]), nil
 }
 
-func GetAdminDomainNamespaceMap(systemNamespaces []string, adminDomain string) map[string]string {
+func GetAdminDomainNamespaceMap(systemNamespaces []string, adminDomains []string) map[string]string {
 	domainNamespaceMap := make(map[string]string)
-	for _, systemNamespace := range systemNamespaces {
-		domainNamespaceMap[adminDomain+"."+systemNamespace] = systemNamespace
+	for _, adminDomain := range adminDomains {
+		for _, systemNamespace := range systemNamespaces {
+			domainNamespaceMap[adminDomain+"."+systemNamespace] = systemNamespace
+		}
 	}
 	return domainNamespaceMap
 }
 
-func GetAdminPrincipleNamespaceMap(customServiceMap map[string]string, adminDomain string) map[string]string {
+func GetAdminPrincipleNamespaceMap(customServiceMap map[string]string, adminDomains []string) map[string]string {
 	adminPrincipleNamespaceMap := make(map[string]string)
-	for serviceName, namespace := range customServiceMap {
-		adminPrincipleNamespaceMap[adminDomain+"."+serviceName] = namespace
+	for _, adminDomain := range adminDomains {
+		for serviceName, namespace := range customServiceMap {
+			adminPrincipleNamespaceMap[adminDomain+"."+serviceName] = namespace
+		}
 	}
 	return adminPrincipleNamespaceMap
 }
 
 // MemberToSpiffe parses the Athenz role/group member into a SPIFFE compliant name.
 // Example: example.domain/sa/service
-func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string, adminDomain string) ([]string, error) {
+func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string) ([]string, error) {
 	if member == nil {
 		return nil, fmt.Errorf("member is nil")
 	}
@@ -202,7 +206,7 @@ func MemberToSpiffe(member interface{}, enableSpiffeTrustDomain bool, adminDomai
 	if !enableSpiffeTrustDomain {
 		return []string{spiffe}, nil
 	}
-	trustDomainSpeffies, err := PrincipalToTrustDomainSpiffe(memberStr, adminDomainNamespaceMap, adminPrincipleNamespaceMap, adminDomain)
+	trustDomainSpeffies, err := PrincipalToTrustDomainSpiffe(memberStr, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +267,7 @@ func getNamespace(principal, memberDomain string, adminDomainNamespaceMap map[st
 }
 
 // Update adminPrincipleNamespaceMap to
-func PrincipalToTrustDomainSpiffe(principal string, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string, adminDomain string) ([]string, error) {
+func PrincipalToTrustDomainSpiffe(principal string, adminDomainNamespaceMap map[string]string, adminPrincipleNamespaceMap map[string]string) ([]string, error) {
 	if len(principal) == 0 {
 		return nil, fmt.Errorf("principal is empty")
 	}

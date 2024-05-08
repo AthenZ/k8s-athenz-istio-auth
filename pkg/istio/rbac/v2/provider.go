@@ -31,14 +31,14 @@ type v2 struct {
 	adminDomain                 string
 }
 
-func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool, combinationPolicyTag string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomain string) rbac.Provider {
+func NewProvider(componentEnabledAuthzPolicy *common.ComponentEnabled, enableOriginJwtSubject bool, combinationPolicyTag string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomains []string) rbac.Provider {
 	return &v2{
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		enableSpiffeTrustDomain:     enableSpiffeTrustDomain,
 		combinationPolicyTag:        combinationPolicyTag,
-		adminDomainNamespaceMap:     common.GetAdminDomainNamespaceMap(systemNamespaces, adminDomain),
-		adminPrincipleNamespaceMap:  common.GetAdminPrincipleNamespaceMap(customServiceMap, adminDomain),
+		adminDomainNamespaceMap:     common.GetAdminDomainNamespaceMap(systemNamespaces, adminDomains),
+		adminPrincipleNamespaceMap:  common.GetAdminPrincipleNamespaceMap(customServiceMap, adminDomains),
 	}
 }
 
@@ -252,7 +252,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 					continue
 				}
 
-				spiffeNames, err := common.MemberToSpiffe(member, p.enableSpiffeTrustDomain, p.adminDomainNamespaceMap, p.adminPrincipleNamespaceMap, p.adminDomain)
+				spiffeNames, err := common.MemberToSpiffe(member, p.enableSpiffeTrustDomain, p.adminDomainNamespaceMap, p.adminPrincipleNamespaceMap)
 				if err != nil {
 					log.Errorln("error converting role member to spiffeName: ", err.Error())
 					continue
@@ -309,7 +309,7 @@ func (p *v2) ConvertAthenzModelIntoIstioRbac(athenzModel athenz.Model, serviceNa
 			from_principalAndRequestPrincipal.Source.Principals = append(from_principalAndRequestPrincipal.Source.Principals, roleSpiffeNames...)
 			from_principalAndNotRequestPrincipal.Source.Principals = append(from_principalAndNotRequestPrincipal.Source.Principals, roleSpiffeNames...)
 			for _, proxyPrincipal := range proxyPrincipalsList {
-				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal, p.enableSpiffeTrustDomain, p.adminDomainNamespaceMap, p.adminPrincipleNamespaceMap, p.adminDomain)
+				proxySpiffeName, err := common.MemberToSpiffe(proxyPrincipal, p.enableSpiffeTrustDomain, p.adminDomainNamespaceMap, p.adminPrincipleNamespaceMap)
 				if err != nil {
 					log.Errorln("error converting proxy principal to spiffeName: ", err.Error())
 					continue

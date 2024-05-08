@@ -47,7 +47,7 @@ type Controller struct {
 	standAloneMode              bool
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomain string) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomains []string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -55,7 +55,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		serviceIndexInformer:        serviceIndexInformer,
 		adIndexInformer:             adIndexInformer,
 		queue:                       queue,
-		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject, combinationPolicyTag, enableSpiffeTrustDomain, systemNamespaces, customServiceMap, adminDomain),
+		rbacProvider:                rbacv2.NewProvider(componentEnabledAuthzPolicy, enableOriginJwtSubject, combinationPolicyTag, enableSpiffeTrustDomain, systemNamespaces, customServiceMap, adminDomains),
 		apResyncInterval:            apResyncInterval,
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,

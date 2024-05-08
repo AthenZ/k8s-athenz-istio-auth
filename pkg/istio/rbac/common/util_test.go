@@ -63,10 +63,10 @@ func TestPrincipalToSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		gotSpiffe, gotErr := PrincipalToSpiffe(c.principal)
+		actualSpiffee, err := PrincipalToSpiffe(c.principal)
 
-		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 		expectedErr             error
 		systemNamespaces        []string
 		customServiceMap        map[string]string
-		adminDomain             string
+		adminDomains            []string
 	}{
 		{
 			test:           "empty principal",
@@ -107,7 +107,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"some-domain"},
-			adminDomain:      "client",
+			adminDomains:     []string{"client"},
 		},
 		{
 			test:                    "valid user principal",
@@ -119,7 +119,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
-			adminDomain:      "k8s.omega.stage1-bf1",
+			adminDomains:     []string{"k8s.omega.stage1-bf1"},
 		},
 		{
 			test:                    "valid user principal for cloud",
@@ -132,7 +132,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
 			customServiceMap: map[string]string{"istio-ingressgateway": "istio-system"},
-			adminDomain:      "k8s.omega.stage1-bf1",
+			adminDomains:     []string{"k8s.omega.stage1-bf1"},
 		},
 		{
 			test:                    "invalid principal",
@@ -144,12 +144,12 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomain)
-		adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomain)
-		gotSpiffe, gotErr := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap, c.adminDomain)
+		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
+		adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomains)
+		actualSpiffee, err := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
 
-		assert.Equal(t, c.expectedSpiffe, gotSpiffe, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestMemberToSpiffe(t *testing.T) {
 		expectedMember   []string
 		expectedErr      error
 		systemNamespaces []string
-		adminDomain      string
+		adminDomains     []string
 	}{
 		{
 			test:           "nil member",
@@ -245,7 +245,7 @@ func TestMemberToSpiffe(t *testing.T) {
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
-			adminDomain:      "client",
+			adminDomains:     []string{"client"},
 		},
 		{
 			test: "valid wildcard member in group",
@@ -266,10 +266,10 @@ func TestMemberToSpiffe(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomain)
-		gotMember, gotErr := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{}, c.adminDomain)
-		assert.Equal(t, c.expectedMember, gotMember, c.test)
-		assert.Equal(t, c.expectedErr, gotErr, c.test)
+		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
+		actualMember, err := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{})
+		assert.Equal(t, c.expectedMember, actualMember, c.test)
+		assert.Equal(t, c.expectedErr, err, c.test)
 	}
 }
 
