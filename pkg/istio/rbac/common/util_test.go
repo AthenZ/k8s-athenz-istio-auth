@@ -94,6 +94,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			expectedSpiffe: []string{
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+				"*/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
 		},
@@ -104,6 +105,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			expectedSpiffe: []string{
 				"athenz.cloud/ns/some-domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+				"*/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"some-domain"},
@@ -116,6 +118,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			expectedSpiffe: []string{
 				"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
+				"*/sa/k8s.omega.stage1-bf1.istio-system.istio-ingressgateway",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
@@ -128,6 +131,7 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 			expectedSpiffe: []string{
 				"athenz.cloud/ns/istio-system/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 				"athenz.cloud/ns/default/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
+				"*/sa/k8s.omega.stage1-bf1.istio-ingressgateway",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
@@ -144,12 +148,14 @@ func TestPrincipalToTrustDomainSPIFFE(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
-		adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomains)
-		actualSpiffee, err := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
+		t.Run(c.test, func(t *testing.T) {
+			adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
+			adminPrincipleNamespaceMap := GetAdminPrincipleNamespaceMap(c.customServiceMap, c.adminDomains)
+			actualSpiffee, err := PrincipalToTrustDomainSpiffe(c.principal, adminDomainNamespaceMap, adminPrincipleNamespaceMap)
 
-		assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
-		assert.Equal(t, c.expectedErr, err, c.test)
+			assert.Equal(t, c.expectedSpiffe, actualSpiffee, c.test)
+			assert.Equal(t, c.expectedErr, err, c.test)
+		})
 	}
 }
 
@@ -178,6 +184,7 @@ func TestMemberToSpiffe(t *testing.T) {
 				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+				"*/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
 		},
@@ -190,6 +197,7 @@ func TestMemberToSpiffe(t *testing.T) {
 				"user/sa/somename",
 				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/default/sa/user.somename",
+				"*/sa/user.somename",
 			},
 			expectedErr: nil,
 		},
@@ -218,6 +226,7 @@ func TestMemberToSpiffe(t *testing.T) {
 				"client.some-domain/sa/dep-svcA",
 				"athenz.cloud/ns/client-some--domain/sa/client.some-domain.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.some-domain.dep-svcA",
+				"*/sa/client.some-domain.dep-svcA",
 			},
 			expectedErr: nil,
 		},
@@ -230,6 +239,7 @@ func TestMemberToSpiffe(t *testing.T) {
 				"user/sa/somename",
 				"athenz.cloud/ns/user/sa/user.somename",
 				"athenz.cloud/ns/default/sa/user.somename",
+				"*/sa/user.somename",
 			},
 			expectedErr: nil,
 		},
@@ -242,6 +252,7 @@ func TestMemberToSpiffe(t *testing.T) {
 				"client.istio-system/sa/dep-svcA",
 				"athenz.cloud/ns/istio-system/sa/client.istio-system.dep-svcA",
 				"athenz.cloud/ns/default/sa/client.istio-system.dep-svcA",
+				"*/sa/client.istio-system.dep-svcA",
 			},
 			expectedErr:      nil,
 			systemNamespaces: []string{"istio-system"},
@@ -266,10 +277,12 @@ func TestMemberToSpiffe(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
-		actualMember, err := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{})
-		assert.Equal(t, c.expectedMember, actualMember, c.test)
-		assert.Equal(t, c.expectedErr, err, c.test)
+		t.Run(c.test, func(t *testing.T) {
+			adminDomainNamespaceMap := GetAdminDomainNamespaceMap(c.systemNamespaces, c.adminDomains)
+			actualMember, err := MemberToSpiffe(c.member, true, adminDomainNamespaceMap, map[string]string{})
+			assert.Equal(t, c.expectedMember, actualMember, c.test)
+			assert.Equal(t, c.expectedErr, err, c.test)
+		})
 	}
 }
 
