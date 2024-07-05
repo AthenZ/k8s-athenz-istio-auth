@@ -230,7 +230,7 @@ func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
 					updatedPrinciples := []string{
-						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar",
+						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar", "*/sa/user.bar",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
@@ -409,7 +409,7 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 			[]func(policy *v1beta1.AuthorizationPolicy){
 				func(policy *v1beta1.AuthorizationPolicy) {
 					updatedPrinciples := []string{
-						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar",
+						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar", "*/sa/user.bar",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
@@ -453,6 +453,7 @@ func TestUpdateAthenzDomainContainingSystemNamespaceUpdatesAuthorizationPolicy(t
 						"k8s.omega.stage.istio-system/sa/istio-ingressgateway",
 						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 						"athenz.cloud/ns/default/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
+						"*/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
@@ -490,6 +491,7 @@ func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
 						"k8s.omega.stage/sa/istio-ingressgateway",
 						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage.istio-ingressgateway",
 						"athenz.cloud/ns/default/sa/k8s.omega.stage.istio-ingressgateway",
+						"*/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:3],
