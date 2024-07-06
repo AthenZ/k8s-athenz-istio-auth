@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  testing:
+    container_name: testing
+    image: ubuntu:latest
+    platform: linux/amd64
+    environment:
+      GO111MODULE: on
+      GOPATH: /sd/workspace
+    volumes:
+      - ../../go/k8s-athenz-istio-auth:/go/src/github.com/AthenZ/k8s-athenz-istio-auth
+    entrypoint: ["/go/src/github.com/AthenZ/k8s-athenz-istio-auth/run_local.sh"]
+
+
