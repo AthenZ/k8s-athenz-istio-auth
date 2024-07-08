@@ -233,8 +233,8 @@ func TestUpdateAthenzDomainUpdatesAuthorizationPolicy(t *testing.T) {
 						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar", "*/sa/user.bar",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
-						policy.Rules[0].From[0].Source.Principals[0:3],
-						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
 					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/user.bar"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
@@ -412,8 +412,8 @@ func TestUpdateAuthorizationPolicyRemovingExpiredMembers(t *testing.T) {
 						"user/sa/bar", "athenz.cloud/ns/user/sa/user.bar", "athenz.cloud/ns/default/sa/user.bar", "*/sa/user.bar",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
-						policy.Rules[0].From[0].Source.Principals[0:3],
-						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
 					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/user.bar"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
@@ -456,8 +456,8 @@ func TestUpdateAthenzDomainContainingSystemNamespaceUpdatesAuthorizationPolicy(t
 						"*/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
-						policy.Rules[0].From[0].Source.Principals[0:3],
-						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
 					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.stage.istio-system.istio-ingressgateway"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
@@ -494,8 +494,8 @@ func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
 						"*/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
-						policy.Rules[0].From[0].Source.Principals[0:3],
-						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[3:]...)...,
+						policy.Rules[0].From[0].Source.Principals[0:4],
+						append(updatedPrinciples, policy.Rules[0].From[0].Source.Principals[4:]...)...,
 					)
 					requestPrincipals := []string{policy.Rules[0].From[1].Source.RequestPrincipals[0], "athenz/k8s.omega.stage.istio-ingressgateway"}
 					policy.Rules[0].From[1].Source.RequestPrincipals = requestPrincipals
