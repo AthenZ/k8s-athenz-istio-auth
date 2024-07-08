@@ -491,7 +491,7 @@ func TestUpdateAthenzCloudDomainUpdatesAuthorizationPolicy(t *testing.T) {
 						"k8s.omega.stage/sa/istio-ingressgateway",
 						"athenz.cloud/ns/istio-system/sa/k8s.omega.stage.istio-ingressgateway",
 						"athenz.cloud/ns/default/sa/k8s.omega.stage.istio-ingressgateway",
-						"*/sa/k8s.omega.stage.istio-system.istio-ingressgateway",
+						"*/sa/k8s.omega.stage.istio-ingressgateway",
 					}
 					policy.Rules[0].From[0].Source.Principals = append(
 						policy.Rules[0].From[0].Source.Principals[0:4],
