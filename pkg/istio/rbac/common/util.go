@@ -281,6 +281,7 @@ func PrincipalToTrustDomainSpiffe(principal string, adminDomainNamespaceMap map[
 	return []string{
 		fmt.Sprintf("athenz.cloud/ns/%s/sa/%s", namespace, principal),
 		fmt.Sprintf("athenz.cloud/ns/default/sa/%s", principal),
+		fmt.Sprintf("*/sa/%s", principal),
 	}, nil
 
 }
