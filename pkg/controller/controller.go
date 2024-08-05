@@ -4,8 +4,8 @@
 package controller
 
 import (
-	"errors"
-	"fmt"
+	// "errors"
+	// "fmt"
 	"time"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
@@ -24,14 +24,14 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	//m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
-	rbacv1 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v1"
+	//"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
+	//rbacv2 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v2"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
-	adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
+	//adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 )
@@ -44,7 +44,6 @@ type Controller struct {
 	processor                   *processor.Controller
 	serviceIndexInformer        cache.SharedIndexInformer
 	adIndexInformer             cache.SharedIndexInformer
-	rbacProvider                rbac.Provider
 	apController                *authzpolicy.Controller
 	queue                       workqueue.RateLimitingInterface
 	adResyncInterval            time.Duration
@@ -80,51 +79,6 @@ func (c *Controller) getCallbackHandler(key string) common.OnCompleteFunc {
 		c.queue.AddRateLimited(key)
 		return nil
 	}
-}
-
-// sync will be ran for each key in the queue and will be responsible for the following:
-// 1. Get the Athenz Domain from the cache for the queue key
-// 2. Convert to Athenz Model to group domain members and policies by role
-// 3. Convert Athenz Model to Service Role and Service Role Binding objects
-// 4. Create / Update / Delete Service Role and Service Role Binding objects
-func (c *Controller) sync(key string) error {
-	athenzDomainRaw, exists, err := c.adIndexInformer.GetIndexer().GetByKey(key)
-	if err != nil {
-		return err
-	}
-
-	if !exists {
-		// TODO, add the non existing athenz domain to the istio custom resource
-		// processing controller to delete them
-		return fmt.Errorf("athenz domain %s does not exist in cache", key)
-	}
-
-	athenzDomain, ok := athenzDomainRaw.(*adv1.AthenzDomain)
-	if !ok {
-		return errors.New("athenz domain cast failed")
-	}
-
-	signedDomain := athenzDomain.Spec.SignedDomain
-	domainRBAC := m.ConvertAthenzPoliciesIntoRbacModel(signedDomain.Domain, &c.adIndexInformer)
-	desiredCRs := c.rbacProvider.ConvertAthenzModelIntoIstioRbac(domainRBAC, "", "", "")
-	currentCRs := c.rbacProvider.GetCurrentIstioRbac(domainRBAC, c.configStoreCache, "")
-	cbHandler := c.getCallbackHandler(key)
-
-	changeList := common.ComputeChangeList(currentCRs, desiredCRs, cbHandler, nil)
-
-	// If change list is empty, nothing to do
-	if len(changeList) == 0 {
-		log.Infof("Everything is up-to-date for key: %s", key)
-		c.queue.Forget(key)
-		return nil
-	}
-
-	for _, item := range changeList {
-		log.Infof("Adding resource action to processor queue: %s on %s for key: %s", item.Operation, item.Resource.Key(), key)
-		c.processor.ProcessConfigChange(item)
-	}
-
-	return nil
 }
 
 // NewController is responsible for creating the main controller object and
@@ -165,7 +119,6 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 		crcController:               crcController,
 		processor:                   processor,
 		apController:                apController,
-		rbacProvider:                rbacv1.NewProvider(enableOriginJwtSubject),
 		queue:                       queue,
 		adResyncInterval:            adResyncInterval,
 		enableAuthzPolicyController: enableAuthzPolicyController,
@@ -254,18 +207,6 @@ func (c *Controller) processNextItem() bool {
 		c.queue.Forget(keyRaw)
 		return true
 	}
-
-	log.Infof("Processing key: %s", key)
-	err := c.sync(key)
-	if err != nil {
-		log.Errorf("Error syncing athenz state for key %s: %s", keyRaw, err)
-		if c.queue.NumRequeues(keyRaw) < queueNumRetries {
-			log.Infof("Retrying key %s due to sync error", keyRaw)
-			c.queue.AddRateLimited(keyRaw)
-			return true
-		}
-	}
-
 	return true
 }
 
