@@ -24,14 +24,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	//m "github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
-	//"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac"
-	//rbacv2 "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/v2"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
-	//adv1 "github.com/yahoo/k8s-athenz-syncer/pkg/apis/athenz/v1"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 )
