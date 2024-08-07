@@ -4,14 +4,17 @@
 package controller
 
 import (
-	// "errors"
-	// "fmt"
 	"time"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collections"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
@@ -23,11 +26,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
-	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/onboarding"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/processor"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	adClientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 )
@@ -109,12 +107,13 @@ func NewController(dnsSuffix string, istioClient *crd.Client, k8sClient kubernet
 	}
 
 	c := &Controller{
-		serviceIndexInformer:        serviceIndexInformer,
-		adIndexInformer:             adIndexInformer,
-		configStoreCache:            configStoreCache,
-		crcController:               crcController,
-		processor:                   processor,
-		apController:                apController,
+		serviceIndexInformer: serviceIndexInformer,
+		adIndexInformer:      adIndexInformer,
+		configStoreCache:     configStoreCache,
+		crcController:        crcController,
+		processor:            processor,
+		apController:         apController,
+
 		queue:                       queue,
 		adResyncInterval:            adResyncInterval,
 		enableAuthzPolicyController: enableAuthzPolicyController,
@@ -203,6 +202,7 @@ func (c *Controller) processNextItem() bool {
 		c.queue.Forget(keyRaw)
 		return true
 	}
+
 	return true
 }
 
