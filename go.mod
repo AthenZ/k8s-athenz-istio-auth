@@ -2,13 +2,12 @@ module github.com/yahoo/k8s-athenz-istio-auth
 
 go 1.22
 
-
 require (
 	github.com/ardielle/ardielle-go v1.5.2
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.8.0
 	github.com/yahoo/athenz v1.9.30
 	github.com/yahoo/k8s-athenz-syncer v0.1.7
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -33,7 +32,6 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
@@ -55,7 +53,6 @@ require (
 	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72 // indirect
 	github.com/spf13/cobra v0.0.5 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/yl2chen/cidranger v0.0.0-20180214081945-928b519e5268 // indirect
 	go.opencensus.io v0.22.2 // indirect
 	go.uber.org/atomic v1.4.0 // indirect
@@ -78,7 +75,7 @@ require (
 	istio.io/gogo-genproto v0.0.0-20200324192310-d3e214cd829a // indirect
 	k8s.io/apiextensions-apiserver v0.17.2 // indirect
 	k8s.io/klog v1.0.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
+	k8s.io/kube-openapi v0.0.0-20200410145947-bcb3869e6f29 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
