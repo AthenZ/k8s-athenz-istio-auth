@@ -2,7 +2,6 @@ module github.com/yahoo/k8s-athenz-istio-auth
 
 go 1.22
 
-
 require (
 	github.com/ardielle/ardielle-go v1.5.2
 	github.com/ghodss/yaml v1.0.0
