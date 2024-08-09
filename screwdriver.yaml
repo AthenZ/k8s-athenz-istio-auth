@@ -1,5 +1,5 @@
 shared:
-  image: golang:1.16
+  image: golang:1.22.6
   annotations:
     screwdriver.cd/ram: 8
   environment:
