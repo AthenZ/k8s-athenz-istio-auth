@@ -9,7 +9,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.9.0
 	github.com/yahoo/athenz v1.9.30
 	github.com/yahoo/k8s-athenz-syncer v0.1.7
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
