@@ -17,16 +17,16 @@ jobs:
           [ ! -s /tmp/gofmt_diff ] || { echo "Code not properly formatted by gofmt"; cat /tmp/gofmt_diff; exit 1; }
       - vet: go vet ./...
       - test: go test -v -race ./...
-      # - integration-tests: |
-      #     cd $GOPATH/src
-      #     mkdir -p k8s.io
-      #     cd k8s.io
-      #     git clone https://github.com/kubernetes/kubernetes.git
-      #     cd kubernetes
-      #     apt-get update && apt-get install rsync -y
-      #     git checkout release-1.21
-      #     echo "make kube-apiserver"
-      #     GO111MODULE=auto make WHAT=cmd/kube-apiserver
-      #     cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
-      #     cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
-      #     go test -v -p 1 ./...
+      - integration-tests: |
+          cd $GOPATH/src
+          mkdir -p k8s.io
+          cd k8s.io
+          git clone https://github.com/kubernetes/kubernetes.git
+          cd kubernetes
+          apt-get update && apt-get install rsync -y
+          git checkout release-1.21
+          echo "make kube-apiserver"
+          GO111MODULE=auto make WHAT=cmd/kube-apiserver
+          cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
+          cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
+          go test -v -p 1 ./...

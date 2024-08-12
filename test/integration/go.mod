@@ -1,6 +1,8 @@
 module github.com/yahoo/k8s-athenz-istio-auth/test/integration
 
-go 1.16
+go 1.22
+
+toolchain go1.22.2
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
