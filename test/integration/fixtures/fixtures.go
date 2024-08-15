@@ -5,14 +5,11 @@
 package fixtures
 
 import (
-	"fmt"
-	"strings"
 
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
-	"istio.io/api/rbac/v1alpha1"
 	securityV1beta1 "istio.io/api/security/v1beta1"
 	istioTypeV1beta1 "istio.io/api/type/v1beta1"
 	"istio.io/istio/pilot/pkg/model"
@@ -232,7 +229,6 @@ type ExpectedRbac struct {
 
 type OverrideRbac struct {
 	ModifyAD           func(signedDomain *zms.SignedDomain)
-	ModifySRAndSRBPair []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding)
 }
 
 // GetExpectedRbac returns an expected resources object which contains the
@@ -249,7 +245,6 @@ func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
 	}
 
 	domainName := string(signedDomain.Domain.Name)
-	ns := athenz.DomainToNamespace(domainName)
 
 	ad := &athenzdomain.AthenzDomain{
 		ObjectMeta: metav1.ObjectMeta{
@@ -260,36 +255,8 @@ func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
 		},
 	}
 
-	if len(o.ModifySRAndSRBPair) == 0 {
-		o.ModifySRAndSRBPair = []func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding){
-			func(sr *v1alpha1.ServiceRole, srb *v1alpha1.ServiceRoleBinding) {
-			},
-		}
-	}
 
 	var modelConfig []model.Config
-	for i, fn := range o.ModifySRAndSRBPair {
-		srSpec := getDefaultServiceRole()
-		srbSpec := getDefaultServiceRoleBinding()
-		fn(srSpec, srbSpec)
-
-		roleFQDN := string(signedDomain.Domain.Roles[i].Name)
-		roleName := strings.TrimPrefix(roleFQDN, fmt.Sprintf("%s:role.", domainName))
-		sr := common.NewConfig(collections.IstioRbacV1Alpha1Serviceroles, ns, roleName, srSpec)
-		modelConfig = append(modelConfig, sr)
-
-		// Every Role has SRB with Spiffe URI
-		if len(signedDomain.Domain.Roles[i].RoleMembers) == 0 {
-			srbSpec.Subjects = []*v1alpha1.Subject{}
-		}
-		srbSpec.Subjects = append(srbSpec.Subjects, &v1alpha1.Subject{
-			User: fmt.Sprintf("%s/ra/%s", signedDomain.Domain.Name, sr.Name),
-		})
-		srbSpec.RoleRef.Name = sr.Name
-		srb := common.NewConfig(collections.IstioRbacV1Alpha1Servicerolebindings, ns, roleName, srbSpec)
-		modelConfig = append(modelConfig, srb)
-	}
-
 	return &ExpectedRbac{
 		AD:           ad,
 		ModelConfigs: modelConfig,
@@ -346,49 +313,6 @@ func getDefaultSignedDomain() zms.SignedDomain {
 		},
 		KeyId:     "colo-env-1.1",
 		Signature: "signature",
-	}
-}
-
-// getDefaultServiceRole returns a default testing spec for a service role object
-func getDefaultServiceRole() *v1alpha1.ServiceRole {
-	return &v1alpha1.ServiceRole{
-		Rules: []*v1alpha1.AccessRule{
-			{
-				Methods: []string{
-					"PUT",
-				},
-				Services: []string{common.WildCardAll},
-				Constraints: []*v1alpha1.AccessRule_Constraint{
-					{
-						Key: common.ConstraintSvcKey,
-						Values: []string{
-							"my-service-name",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// getDefaultServiceRoleBinding returns a default testing spec for a service
-// role binding object
-func getDefaultServiceRoleBinding() *v1alpha1.ServiceRoleBinding {
-	return &v1alpha1.ServiceRoleBinding{
-		RoleRef: &v1alpha1.RoleRef{
-			Name: "client-writer-role",
-			Kind: common.ServiceRoleKind,
-		},
-		Subjects: []*v1alpha1.Subject{
-			{
-				User: "user/sa/foo",
-			},
-			{
-				Properties: map[string]string{
-					common.RequestAuthPrincipalProperty: common.AthenzJwtPrefix + "user.foo",
-				},
-			},
-		},
 	}
 }
 
