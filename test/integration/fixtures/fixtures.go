@@ -222,47 +222,6 @@ func CreateNamespaces(clientset kubernetes.Interface) error {
 	return nil
 }
 
-type ExpectedRbac struct {
-	AD           *athenzdomain.AthenzDomain
-	ModelConfigs []model.Config
-}
-
-type OverrideRbac struct {
-	ModifyAD           func(signedDomain *zms.SignedDomain)
-}
-
-// GetExpectedRbac returns an expected resources object which contains the
-// athenz domain along with its service roles / bindings objects
-func GetExpectedRbac(o *OverrideRbac) *ExpectedRbac {
-	signedDomain := getDefaultSignedDomain()
-
-	if o == nil {
-		o = &OverrideRbac{}
-	}
-
-	if o.ModifyAD != nil {
-		o.ModifyAD(&signedDomain)
-	}
-
-	domainName := string(signedDomain.Domain.Name)
-
-	ad := &athenzdomain.AthenzDomain{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: domainName,
-		},
-		Spec: athenzdomain.AthenzDomainSpec{
-			SignedDomain: signedDomain,
-		},
-	}
-
-
-	var modelConfig []model.Config
-	return &ExpectedRbac{
-		AD:           ad,
-		ModelConfigs: modelConfig,
-	}
-}
-
 // getDefaultSignedDomain returns a default testing spec for a signed domain object
 func getDefaultSignedDomain() zms.SignedDomain {
 	allow := zms.ALLOW
