@@ -7,7 +7,6 @@ package fixtures
 import (
 	"github.com/ardielle/ardielle-go/rdl"
 	"github.com/yahoo/athenz/clients/go/zms"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/athenz"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	securityV1beta1 "istio.io/api/security/v1beta1"
 	istioTypeV1beta1 "istio.io/api/type/v1beta1"
