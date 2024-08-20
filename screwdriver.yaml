@@ -1,5 +1,5 @@
 shared:
-  image: golang:1.22.6
+  image: golang:1.16
   annotations:
     screwdriver.cd/ram: 8
   environment:
@@ -28,5 +28,6 @@ jobs:
           echo "make kube-apiserver"
           GO111MODULE=auto make WHAT=cmd/kube-apiserver
           cd $GOPATH/src/k8s.io/kubernetes/vendor/k8s.io/kube-openapi
+          go mod init
           cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
           go test -v -p 1 ./...
