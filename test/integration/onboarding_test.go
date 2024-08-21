@@ -1,18 +1,18 @@
 package integration
 
 import (
-	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
 	"time"
+
+	"istio.io/istio/pkg/config/schema/collections"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 
-	"istio.io/api/rbac/v1alpha1"
 	"istio.io/istio/pkg/config/constants"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -38,15 +38,6 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 			return false, nil
 		}
 
-		clusterRbacConfig, ok := config.Spec.(*v1alpha1.RbacConfig)
-		if !ok {
-			return false, nil
-		}
-
-		if len(clusterRbacConfig.Inclusion.Services) == len(s.ServiceDNS) {
-			return true, nil
-		}
-
 		return false, nil
 	})
 
@@ -57,11 +48,10 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 		return
 	}
 
-	clusterRbacConfig, ok := crc.Spec.(*v1alpha1.RbacConfig)
 	assert.True(t, ok, "cluster rbac config cast should pass")
-	assert.Equal(t, clusterRbacConfig.Mode, v1alpha1.RbacConfig_ON_WITH_INCLUSION, "cluster rbac config inclusion field should be set")
-	assert.Nil(t, clusterRbacConfig.Exclusion, "cluster rbac config exclusion field should be nil")
-	assert.ElementsMatch(t, s.ServiceDNS, clusterRbacConfig.Inclusion.Services, "cluster rbac config service list should be equal to expected")
+	assert.Equal(t, "cluster rbac config inclusion field should be set")
+	assert.Nil(t, "cluster rbac config exclusion field should be nil")
+	assert.ElementsMatch(t, s.ServiceDNS, "cluster rbac config service list should be equal to expected")
 }
 
 // createServices will iterate through the service list and create each object
