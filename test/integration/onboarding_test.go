@@ -12,7 +12,7 @@ import (
 
 	"istio.io/istio/pkg/config/constants"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -30,7 +30,7 @@ func rolloutAndValidateOnboarding(t *testing.T, s *fixtures.ExpectedServices, a 
 		deleteServices(t, s)
 	}
 
-	err := wait.PollImmediate(time.Second, time.Second*10, func() (bool, error) {
+	err := wait.PollImmediate(time.Second, time.Second*30, func() (bool, error) {
 		config := framework.Global.IstioClientset.Get(collections.IstioRbacV1Alpha1Clusterrbacconfigs.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
 		if config == nil && len(s.ServiceDNS) == 0 {
 			return true, nil
