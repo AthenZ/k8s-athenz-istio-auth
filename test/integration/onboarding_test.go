@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"istio.io/istio/pkg/config/schema/collections"
+	// "istio.io/istio/pkg/config/schema/collections"
 	"testing"
 	//"time"
 
@@ -10,7 +10,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/framework"
 
 	//"istio.io/api/rbac/v1alpha1"
-	"istio.io/istio/pkg/config/constants"
+	// "istio.io/istio/pkg/config/constants"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
