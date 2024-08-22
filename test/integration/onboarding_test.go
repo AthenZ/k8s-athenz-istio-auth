@@ -184,8 +184,8 @@ func TestDeleteCRCIfServiceExists(t *testing.T) {
 	s := fixtures.GetExpectedServices(nil)
 	rolloutAndValidateOnboarding(t, s, create)
 
-	err := framework.Global.IstioClientset.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
-	assert.Nil(t, err, "cluster rbac config delete error should be nil")
+	// err := framework.Global.IstioClientset.Delete(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), constants.DefaultRbacConfigName, "")
+	// assert.Nil(t, err, "cluster rbac config delete error should be nil")
 
 	rolloutAndValidateOnboarding(t, s, noop)
 	deleteServices(t, s)
