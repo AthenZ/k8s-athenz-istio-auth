@@ -3,7 +3,7 @@ package integration
 import (
 	"istio.io/istio/pkg/config/schema/collections"
 	"testing"
-	"time"
+	//"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
@@ -14,7 +14,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	//"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // rolloutAndValidateOnboarding will create / update / delete / noop the service resource and wait for the
