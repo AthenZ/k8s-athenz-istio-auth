@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	v1 "k8s.io/api/core/v1"
@@ -37,8 +36,6 @@ import (
 func main() {
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
-	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
-	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
@@ -126,16 +123,6 @@ func main() {
 
 	istioClientSet, err := versionedclient.NewForConfig(config)
 
-	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
-	if err != nil {
-		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
-	}
-
-	crcResyncInterval, err := time.ParseDuration(*crcResyncIntervalRaw)
-	if err != nil {
-		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
-	}
-
 	apResyncInterval, err := time.ParseDuration(*apResyncIntervalRaw)
 	if err != nil {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
@@ -176,9 +163,6 @@ func main() {
 		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
 		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 		go apController.Run(stopCh)
-	} else {
-		c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
-		go c.Run(stopCh)
 	}
 
 	signalCh := make(chan os.Signal, 1)
