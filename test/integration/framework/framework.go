@@ -17,7 +17,6 @@ import (
 	"istio.io/pkg/ledger"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
