@@ -6,6 +6,7 @@ package framework
 
 import (
 	"flag"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"io/ioutil"
 	"net"
 	"os"
@@ -140,20 +141,26 @@ func Setup() error {
 	}
 
 	log.InitLogger("", "debug")
+	componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
 	//componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
 	if err != nil {
 		return err
 	}
 
+	istioClientSet, err := versionedclient.NewForConfig(restConfig)
 	//istioClientSet, err := versionedclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
 	}
 
+	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled, "proxy-principals", true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
+	go c.Run(stopCh)
+
 	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClient,
+		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}
