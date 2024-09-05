@@ -11,13 +11,11 @@ import (
 	"os"
 	"time"
 
-	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/pkg/ledger"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"go.etcd.io/etcd/embed"
@@ -37,7 +35,6 @@ type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
 	IstioClientset        *crd.Client
-	Controller            *controller.Controller
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -143,24 +140,20 @@ func Setup() error {
 	}
 
 	log.InitLogger("", "debug")
-	componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	//componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
 	if err != nil {
 		return err
 	}
 
-	istioClientSet, err := versionedclient.NewForConfig(restConfig)
+	//istioClientSet, err := versionedclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
 	}
-
-	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled, "proxy-principals", true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
-	go c.Run(stopCh)
 
 	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClient,
-		Controller:            c,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}
