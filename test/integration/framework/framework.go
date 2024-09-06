@@ -48,6 +48,8 @@ type Framework struct {
 }
 
 var (
+	dnsSuffix                    = flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
+	kubeconfig                   = flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	enableOriginJwtSubject       = flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	combinationPolicyTag         = flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
 	authPolicyControllerOnlyMode = flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
@@ -124,6 +126,13 @@ func Setup() error {
 		return err
 	}
 
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
+	configLedger := ledger.Make(time.Hour)
+	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger, "")
+	if err != nil {
+		log.Panicf("Error creating istio crd client: %s", err.Error())
+	}
+
 	crdClientset, err := apiextensionsclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
@@ -149,8 +158,6 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	ledgerValue := ledger.Make(time.Hour)
 	istioClientSet, err := versionedclient.NewForConfig(config)
 	if err != nil {
 		return err
