@@ -12,6 +12,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 	"net"
 	"os"
 	"time"
@@ -156,6 +157,11 @@ func Setup() error {
 	athenzDomainClientset, err := athenzdomainclientset.NewForConfig(restConfig)
 	if err != nil {
 		return err
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
 	}
 
 	istioClientSet, err := versionedclient.NewForConfig(config)
