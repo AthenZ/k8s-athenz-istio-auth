@@ -13,10 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
@@ -28,7 +26,6 @@ import (
 	istioController "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
-	"istio.io/pkg/ledger"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -130,17 +127,10 @@ func Setup() error {
 	}
 
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	configLedger := ledger.Make(time.Hour)
-	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
-	if *kubeconfig == "" {
-		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
-		if _, err := os.Stat(home); err == nil {
-			*kubeconfig = home
-		}
-	}
-	istioClient, err := crd.NewClient(*kubeconfig, "", configDescriptor, *dnsSuffix, configLedger, "")
+	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
-		log.Panicf("Error creating istio crd client: %s", err.Error())
+		return err
+		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
 	}
 
 	crdClientset, err := apiextensionsclient.NewForConfig(restConfig)
