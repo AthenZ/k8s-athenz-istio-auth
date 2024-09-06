@@ -19,6 +19,7 @@ import (
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	"go.etcd.io/etcd/embed"
+	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	istioController "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
@@ -140,7 +141,7 @@ func Setup() error {
 
 	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	ledgerValue := ledger.Make(time.Hour)
-	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
+	istioClient, err := versionedclient.NewForConfig(config)
 	if err != nil {
 		return err
 	}
