@@ -6,20 +6,25 @@ package framework
 
 import (
 	"flag"
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"io/ioutil"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/tools/cache"
 	"net"
 	"os"
 	"time"
 
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
+	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
+	"go.etcd.io/etcd/embed"
+	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
+	istioController "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
 	"istio.io/istio/pkg/config/schema/collection"
 	"istio.io/istio/pkg/config/schema/collections"
 	"istio.io/pkg/ledger"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
-	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
-	"go.etcd.io/etcd/embed"
-	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -35,6 +40,7 @@ type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
 	IstioClientset        *crd.Client
+	Controller            *authzpolicy.Controller
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -139,12 +145,21 @@ func Setup() error {
 		return err
 	}
 
+	configStoreCache := crd.NewController(istioClient, istioController.Options{})
+	serviceListWatch := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
+	adIndexInformer := adInformer.NewAthenzDomainInformer(athenzDomainClientset, 0, cache.Indexers{})
+
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClient, time.Minute, true, true, true, true, true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
+	go apController.Run(stopCh)
+
 	log.InitLogger("", "debug")
 
 	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClient,
+		Controller:            apController,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}
@@ -154,6 +169,7 @@ func Setup() error {
 
 // Teardown will request the api server to shutdown
 func Teardown() {
+	close(Global.stopCh)
 	Global.etcd.Close()
 	err := os.RemoveAll(Global.etcd.Server.Cfg.DataDir)
 	if err != nil {

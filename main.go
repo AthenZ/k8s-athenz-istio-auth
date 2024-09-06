@@ -154,16 +154,14 @@ func main() {
 	for _, domain := range strings.Split(*adminDomain, ",") {
 		adminDomains = append(adminDomains, strings.TrimSpace(domain))
 	}
-	if *authPolicyControllerOnlyMode {
-		configStoreCache := crdController.NewController(istioClient, istioController.Options{})
-		serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
-		serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
-		adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
+	configStoreCache := crdController.NewController(istioClient, istioController.Options{})
+	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
+	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
-		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
-		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
-		go apController.Run(stopCh)
-	}
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
+	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
+	go apController.Run(stopCh)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
