@@ -9,10 +9,10 @@ import (
 	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"io/ioutil"
+	"istio.io/pkg/ledger"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"net"
 	"os"
 	"time"
@@ -126,13 +126,6 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
-	if err != nil {
-		return err
-		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
-	}
-
 	crdClientset, err := apiextensionsclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
@@ -158,10 +151,15 @@ func Setup() error {
 		return err
 	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+	ledgerValue := ledger.Make(time.Hour)
+	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
+		return err
 		log.Panicf("Error creating kubernetes in cluster config: %s", err.Error())
 	}
+
+	log.InitLogger("", "debug")
 
 	istioClientSet, err := versionedclient.NewForConfig(config)
 	if err != nil {
