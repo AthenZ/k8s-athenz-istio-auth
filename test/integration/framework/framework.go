@@ -159,7 +159,7 @@ func Setup() error {
 
 	log.InitLogger("", "debug")
 
-	istioClientSet, err := versionedclient.NewForConfig(config)
+	istioClientSet, err := versionedclient.NewForConfig(restConfig)
 	if err != nil {
 		return err
 	}
