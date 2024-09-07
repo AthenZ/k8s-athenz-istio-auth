@@ -48,8 +48,6 @@ type Framework struct {
 }
 
 var (
-	dnsSuffix                    = flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
-	kubeconfig                   = flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	enableOriginJwtSubject       = flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	combinationPolicyTag         = flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
 	authPolicyControllerOnlyMode = flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
