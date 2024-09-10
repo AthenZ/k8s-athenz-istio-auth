@@ -47,13 +47,6 @@ type Framework struct {
 	stopCh                chan struct{}
 }
 
-var (
-	enableOriginJwtSubject       = flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
-	combinationPolicyTag         = flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
-	authPolicyControllerOnlyMode = flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
-	enableSpiffeTrustDomain      = flag.Bool("enable-spiffe-trust-domain", true, "Allow new SPIFFE ID's")
-)
-
 var componentsEnabledAuthzPolicy *common.ComponentEnabled
 
 // runEtcd will setup up the etcd configuration and run the etcd server
@@ -113,6 +106,10 @@ func Setup() error {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
+	enableOriginJwtSubject := true
+	combinationPolicyTag := ""
+	authPolicyControllerOnlyMode := true
+	enableSpiffeTrustDomain := true
 
 	etcd, err := runEtcd()
 	if err != nil {
@@ -149,7 +146,7 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	ledgerValue := ledger.Make(time.Hour)
 	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
@@ -169,7 +166,7 @@ func Setup() error {
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(athenzDomainClientset, 0, cache.Indexers{})
 
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, authPolicyControllerOnlyMode, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
 	go apController.Run(stopCh)
 
 	log.InitLogger("", "debug")
