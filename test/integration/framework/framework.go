@@ -47,8 +47,6 @@ type Framework struct {
 	stopCh                chan struct{}
 }
 
-var componentsEnabledAuthzPolicy *common.ComponentEnabled
-
 // runEtcd will setup up the etcd configuration and run the etcd server
 func runEtcd() (*embed.Etcd, error) {
 	etcdDataDir, err := ioutil.TempDir(os.TempDir(), "integration_test_etcd_data")
@@ -110,6 +108,15 @@ func Setup() error {
 	combinationPolicyTag := ""
 	authPolicyControllerOnlyMode := true
 	enableSpiffeTrustDomain := true
+	enableAuthzPolicyController := true
+
+	var componentsEnabledAuthzPolicy *common.ComponentEnabled
+	if enableAuthzPolicyController {
+		componentsEnabledAuthzPolicy, err = common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+		if err != nil {
+			log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
+		}
+	}
 
 	etcd, err := runEtcd()
 	if err != nil {
