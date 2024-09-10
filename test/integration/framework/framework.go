@@ -6,13 +6,7 @@ package framework
 
 import (
 	"flag"
-	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"io/ioutil"
-	"istio.io/pkg/ledger"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/tools/cache"
 	"net"
 	"os"
 	"time"
@@ -30,8 +24,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
+	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	"istio.io/pkg/ledger"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 )
@@ -109,11 +109,6 @@ func Setup() error {
 	authPolicyControllerOnlyMode := true
 	enableSpiffeTrustDomain := true
 
-	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
-	if err != nil {
-		return err
-	}
-
 	etcd, err := runEtcd()
 	if err != nil {
 		return err
@@ -157,6 +152,10 @@ func Setup() error {
 	}
 
 	log.InitLogger("", "debug")
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	if err != nil {
+		return err
+	}
 
 	istioClientSet, err := versionedclient.NewForConfig(restConfig)
 	if err != nil {
