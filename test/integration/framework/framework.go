@@ -167,7 +167,7 @@ func Setup() error {
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(athenzDomainClientset, 0, cache.Indexers{})
 
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, authPolicyControllerOnlyMode, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, 30*time.Second, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, authPolicyControllerOnlyMode, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
 	go apController.Run(stopCh)
 
 	log.InitLogger("", "debug")
