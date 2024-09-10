@@ -112,7 +112,7 @@ func Setup() error {
 
 	var componentsEnabledAuthzPolicy *common.ComponentEnabled
 	if enableAuthzPolicyController {
-		componentsEnabledAuthzPolicy, err = common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
+		componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy(*authzPolicyEnabledList)
 		if err != nil {
 			log.Panicf("Error parsing components-enabled-authzpolicy list from command line arguments: %s", err.Error())
 		}
