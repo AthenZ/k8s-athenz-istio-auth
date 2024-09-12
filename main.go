@@ -44,7 +44,6 @@ func main() {
 	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
-	authPolicyControllerOnlyMode := flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
 	enableSpiffeTrustDomain := flag.Bool("enable-spiffe-trust-domain", true, "Allow new SPIFFE ID's")
 	adminDomain := flag.String("admin-domain", "", "admin domain")
 	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-system", "list of cluster system namespaces")
@@ -86,11 +85,8 @@ func main() {
 		}
 	}
 	var configDescriptor collection.Schemas
-	if *authPolicyControllerOnlyMode {
-		configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	} else {
-		configDescriptor = collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
-	}
+	configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
+
 	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
 	if *kubeconfig == "" {
 		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
@@ -159,8 +155,7 @@ func main() {
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
-	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
 	go apController.Run(stopCh)
 
 	signalCh := make(chan os.Signal, 1)

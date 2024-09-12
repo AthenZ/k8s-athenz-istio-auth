@@ -106,7 +106,6 @@ func Setup() error {
 	}
 	enableOriginJwtSubject := true
 	combinationPolicyTag := ""
-	authPolicyControllerOnlyMode := true
 	enableSpiffeTrustDomain := true
 
 	etcd, err := runEtcd()
@@ -167,8 +166,7 @@ func Setup() error {
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(athenzDomainClientset, 0, cache.Indexers{})
 
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, authPolicyControllerOnlyMode, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
-	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
 	go apController.Run(stopCh)
 
 	Global = &Framework{
