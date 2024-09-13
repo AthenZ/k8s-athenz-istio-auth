@@ -17,9 +17,9 @@ A list of steps with the inputs to reproduce the issue.
 A clear and concise description of what you expected to happen.
 
 **Provide the environment context and component versions**
-- Kubernetes version
-- Linux OS/Kernel version
-- Istio/Envoy version
+ - Kubernetes version
+ - Linux OS/Kernel version
+ - Istio/Envoy version
 
 **Additional context**
 Add any other context about the problem here.
