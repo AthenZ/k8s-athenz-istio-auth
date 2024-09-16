@@ -19,7 +19,6 @@ import (
 )
 
 type action int
-
 const (
 	create action = iota
 	update
