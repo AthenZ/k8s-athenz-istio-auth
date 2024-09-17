@@ -18,6 +18,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type action int
+
+const (
+	create action = iota
+	update
+	delete
+	noop
+)
+
 // rolloutAndValidateAuthorizationPolicyScenario will perform the specified actions for the Athenz Domain and k8s services
 // and then validate that the AuthroizationPolicy's Spec created is same as the expected
 func rolloutAndValidateAuthorizationPolicyScenario(t *testing.T, e *fixtures.ExpectedV2Rbac, athenzAction action, serviceAction action) {

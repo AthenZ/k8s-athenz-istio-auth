@@ -21,7 +21,7 @@ jobs:
           cd $GOPATH/src
           mkdir -p k8s.io
           cd k8s.io
-          git clone https://github.com/kubernetes/kubernetes.git
+          git clone https://github.com/kubernetes/kubernetes.git --branch release-1.17 --depth 3
           cd kubernetes
           apt-get update && apt-get install rsync -y
           git checkout release-1.17

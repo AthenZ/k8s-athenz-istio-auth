@@ -11,23 +11,27 @@ import (
 	"os"
 	"time"
 
-	versionedclient "istio.io/client-go/pkg/clientset/versioned"
-	"istio.io/istio/pkg/config/schema/collection"
-	"istio.io/istio/pkg/config/schema/collections"
-	"istio.io/pkg/ledger"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/rbac/common"
 	"github.com/yahoo/k8s-athenz-istio-auth/pkg/log"
 	"github.com/yahoo/k8s-athenz-istio-auth/test/integration/fixtures"
 	"go.etcd.io/etcd/embed"
+	versionedclient "istio.io/client-go/pkg/clientset/versioned"
 	crd "istio.io/istio/pilot/pkg/config/kube/crd/controller"
+	"istio.io/istio/pkg/config/schema/collection"
+	"istio.io/istio/pkg/config/schema/collections"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	athenzdomainclientset "github.com/yahoo/k8s-athenz-syncer/pkg/client/clientset/versioned"
+	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
+	istioController "istio.io/istio/pilot/pkg/serviceregistry/kube/controller"
+	"istio.io/pkg/ledger"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 )
@@ -38,7 +42,7 @@ type Framework struct {
 	K8sClientset          kubernetes.Interface
 	AthenzDomainClientset athenzdomainclientset.Interface
 	IstioClientset        *crd.Client
-	Controller            *controller.Controller
+	Controller            *authzpolicy.Controller
 	etcd                  *embed.Etcd
 	stopCh                chan struct{}
 }
@@ -100,6 +104,9 @@ func Setup() error {
 	if !flag.Parsed() {
 		flag.Parse()
 	}
+	enableOriginJwtSubject := true
+	combinationPolicyTag := ""
+	enableSpiffeTrustDomain := true
 
 	etcd, err := runEtcd()
 	if err != nil {
@@ -136,7 +143,7 @@ func Setup() error {
 		return err
 	}
 
-	configDescriptor := collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
+	configDescriptor := collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
 	ledgerValue := ledger.Make(time.Hour)
 	istioClient, err := crd.NewClient("", "", configDescriptor, "", ledgerValue, "")
 	if err != nil {
@@ -144,7 +151,7 @@ func Setup() error {
 	}
 
 	log.InitLogger("", "debug")
-	componentsEnabled, err := common.ParseComponentsEnabledAuthzPolicy("*")
+	componentsEnabledAuthzPolicy, err := common.ParseComponentsEnabledAuthzPolicy("*")
 	if err != nil {
 		return err
 	}
@@ -154,14 +161,19 @@ func Setup() error {
 		return err
 	}
 
-	c := controller.NewController("svc.cluster.local", istioClient, k8sClientset, athenzDomainClientset, istioClientSet, time.Minute, time.Minute, time.Minute, true, true, componentsEnabled, "proxy-principals", true, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
-	go c.Run(stopCh)
+	configStoreCache := crd.NewController(istioClient, istioController.Options{})
+	serviceListWatch := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
+	adIndexInformer := adInformer.NewAthenzDomainInformer(athenzDomainClientset, 0, cache.Indexers{})
+
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, time.Minute, enableOriginJwtSubject, componentsEnabledAuthzPolicy, combinationPolicyTag, enableSpiffeTrustDomain, []string{"istio-system", "kube-yahoo"}, map[string]string{"istio-ingressgateway": "istio-system"}, []string{"k8s.omega.stage"})
+	go apController.Run(stopCh)
 
 	Global = &Framework{
 		K8sClientset:          k8sClientset,
 		AthenzDomainClientset: athenzDomainClientset,
 		IstioClientset:        istioClient,
-		Controller:            c,
+		Controller:            apController,
 		etcd:                  etcd,
 		stopCh:                stopCh,
 	}
