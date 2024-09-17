@@ -31,3 +31,4 @@ jobs:
           go mod init
           cd $GOPATH/src/github.com/AthenZ/k8s-athenz-istio-auth/test/integration
           go test -v -p 1 ./...
+          
