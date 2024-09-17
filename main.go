@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yahoo/k8s-athenz-istio-auth/pkg/controller"
 	authzpolicy "github.com/yahoo/k8s-athenz-istio-auth/pkg/istio/authorizationpolicy"
 	adInformer "github.com/yahoo/k8s-athenz-syncer/pkg/client/informers/externalversions/athenz/v1"
 	v1 "k8s.io/api/core/v1"
@@ -37,8 +36,6 @@ import (
 func main() {
 	dnsSuffix := flag.String("dns-suffix", "svc.cluster.local", "dns suffix used for service role target services")
 	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
-	adResyncIntervalRaw := flag.String("ad-resync-interval", "1h", "athenz domain resync interval")
-	crcResyncIntervalRaw := flag.String("crc-resync-interval", "1h", "cluster rbac config resync interval")
 	apResyncIntervalRaw := flag.String("ap-resync-interval", "1h", "authorization policy resync interval")
 	enableOriginJwtSubject := flag.Bool("enable-origin-jwt-subject", true, "enable adding origin jwt subject to service role binding")
 	logFile := flag.String("log-file", "/var/log/k8s-athenz-istio-auth/k8s-athenz-istio-auth.log", "log file location")
@@ -47,7 +44,6 @@ func main() {
 	authzPolicyEnabledList := flag.String("ap-enabled-list", "", "List of namespace/service that enabled authz policy, "+
 		"use format 'example-ns1/example-service1' to enable a single service, use format 'example-ns2/*' to enable all services in a namespace, and use '*' to enable all services in the cluster' ")
 	combinationPolicyTag := flag.String("combo-policy-tag", "proxy-principals", "key of tag for proxy principals list")
-	authPolicyControllerOnlyMode := flag.Bool("auth-policy-only-mode", false, "only run authzpolicy controller")
 	enableSpiffeTrustDomain := flag.Bool("enable-spiffe-trust-domain", true, "Allow new SPIFFE ID's")
 	adminDomain := flag.String("admin-domain", "", "admin domain")
 	systemNamespaces := flag.String("system-namespaces", "istio-system,kube-system", "list of cluster system namespaces")
@@ -89,11 +85,8 @@ func main() {
 		}
 	}
 	var configDescriptor collection.Schemas
-	if *authPolicyControllerOnlyMode {
-		configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
-	} else {
-		configDescriptor = collection.SchemasFor(collections.IstioRbacV1Alpha1Serviceroles, collections.IstioRbacV1Alpha1Clusterrbacconfigs, collections.IstioRbacV1Alpha1Servicerolebindings, collections.IstioSecurityV1Beta1Authorizationpolicies)
-	}
+	configDescriptor = collection.SchemasFor(collections.IstioSecurityV1Beta1Authorizationpolicies)
+
 	// If kubeconfig arg is not passed-in, try user $HOME config only if it exists
 	if *kubeconfig == "" {
 		home := filepath.Join(homedir.HomeDir(), ".kube", "config")
@@ -126,16 +119,6 @@ func main() {
 
 	istioClientSet, err := versionedclient.NewForConfig(config)
 
-	adResyncInterval, err := time.ParseDuration(*adResyncIntervalRaw)
-	if err != nil {
-		log.Panicf("Error parsing ad-resync-interval duration: %s", err.Error())
-	}
-
-	crcResyncInterval, err := time.ParseDuration(*crcResyncIntervalRaw)
-	if err != nil {
-		log.Panicf("Error parsing crc-resync-interval duration: %s", err.Error())
-	}
-
 	apResyncInterval, err := time.ParseDuration(*apResyncIntervalRaw)
 	if err != nil {
 		log.Panicf("Error parsing ap-resync-interval duration: %s", err.Error())
@@ -167,19 +150,13 @@ func main() {
 	for _, domain := range strings.Split(*adminDomain, ",") {
 		adminDomains = append(adminDomains, strings.TrimSpace(domain))
 	}
-	if *authPolicyControllerOnlyMode {
-		configStoreCache := crdController.NewController(istioClient, istioController.Options{})
-		serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
-		serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
-		adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
+	configStoreCache := crdController.NewController(istioClient, istioController.Options{})
+	serviceListWatch := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
+	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
-		apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
-		configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
-		go apController.Run(stopCh)
-	} else {
-		c := controller.NewController(*dnsSuffix, istioClient, k8sClient, adClient, istioClientSet, adResyncInterval, crcResyncInterval, apResyncInterval, *enableOriginJwtSubject, *enableAuthzPolicyController, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
-		go c.Run(stopCh)
-	}
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
+	go apController.Run(stopCh)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)

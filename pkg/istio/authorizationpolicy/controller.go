@@ -44,10 +44,9 @@ type Controller struct {
 	dryRunHandler               common.DryRunHandler
 	apiHandler                  common.ApiHandler
 	combinationPolicyTag        string
-	standAloneMode              bool
 }
 
-func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, standAloneMode bool, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomains []string) *Controller {
+func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer cache.SharedIndexInformer, adIndexInformer cache.SharedIndexInformer, istioClientSet versioned.Interface, apResyncInterval time.Duration, enableOriginJwtSubject bool, componentEnabledAuthzPolicy *common.ComponentEnabled, combinationPolicyTag string, enableSpiffeTrustDomain bool, systemNamespaces []string, customServiceMap map[string]string, adminDomains []string) *Controller {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	c := &Controller{
@@ -60,9 +59,8 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		enableOriginJwtSubject:      enableOriginJwtSubject,
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		dryRunHandler:               common.DryRunHandler{},
-		standAloneMode:              standAloneMode,
 	}
-
+	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), c.EventHandler)
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
@@ -113,11 +111,9 @@ func (c *Controller) processEvent(fn cache.KeyFunc, obj interface{}) {
 
 // Run starts the main controller loop running sync at every poll interval.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	if c.standAloneMode {
-		go c.serviceIndexInformer.Run(stopCh)
-		go c.configStoreCache.Run(stopCh)
-		go c.adIndexInformer.Run(stopCh)
-	}
+	go c.serviceIndexInformer.Run(stopCh)
+	go c.configStoreCache.Run(stopCh)
+	go c.adIndexInformer.Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
