@@ -19,7 +19,7 @@ import (
 )
 
 type action int
-const(
+const (
 	create action = iota
 	update
 	delete
