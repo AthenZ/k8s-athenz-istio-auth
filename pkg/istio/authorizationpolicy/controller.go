@@ -60,7 +60,7 @@ func NewController(configStoreCache model.ConfigStoreCache, serviceIndexInformer
 		componentEnabledAuthzPolicy: componentEnabledAuthzPolicy,
 		dryRunHandler:               common.DryRunHandler{},
 	}
-
+	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), c.EventHandler)
 	c.apiHandler = common.ApiHandler{
 		ConfigStoreCache: c.configStoreCache,
 	}
