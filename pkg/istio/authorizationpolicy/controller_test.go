@@ -241,7 +241,7 @@ func TestSyncService(t *testing.T) {
 			inputAthenzDomain:   onboardedAthenzDomain,
 			existingAuthzPolicy: getExpectedAuthzPolicy(),
 			expectedAuthzPolicy: nil,
-			item:                Item{Operation: model.EventDelete, Resource: onboardedService},,
+			item:                Item{Operation: model.EventDelete, Resource: onboardedService},
 		},
 		{
 			name:                "create Authorization Policy spec when there is update event of service from no annotation set to annotation set",
