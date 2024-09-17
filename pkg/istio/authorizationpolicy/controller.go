@@ -114,7 +114,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go c.serviceIndexInformer.Run(stopCh)
 	go c.configStoreCache.Run(stopCh)
 	go c.adIndexInformer.Run(stopCh)
-	
+
 	if !cache.WaitForCacheSync(stopCh, c.configStoreCache.HasSynced, c.serviceIndexInformer.HasSynced, c.adIndexInformer.HasSynced) {
 		log.Panicln("Timed out waiting for namespace cache to sync.")
 	}

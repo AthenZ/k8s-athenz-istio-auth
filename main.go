@@ -154,7 +154,7 @@ func main() {
 	serviceIndexInformer := cache.NewSharedIndexInformer(serviceListWatch, &v1.Service{}, 0, nil)
 	adIndexInformer := adInformer.NewAthenzDomainInformer(adClient, 0, cache.Indexers{})
 
-	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *authPolicyControllerOnlyMode, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
+	apController := authzpolicy.NewController(configStoreCache, serviceIndexInformer, adIndexInformer, istioClientSet, apResyncInterval, *enableOriginJwtSubject, componentsEnabledAuthzPolicy, *combinationPolicyTag, *enableSpiffeTrustDomain, namespaces, serviceAccountNamespaceMap, adminDomains)
 	configStoreCache.RegisterEventHandler(collections.IstioSecurityV1Beta1Authorizationpolicies.Resource().GroupVersionKind(), apController.EventHandler)
 	go apController.Run(stopCh)
 
